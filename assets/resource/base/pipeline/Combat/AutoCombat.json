@@ -1,0 +1,31 @@
+{
+    "AutoCombatMain": {
+        "desc": "自动战斗主入口。用户需自行进入战斗，本节点只把控制权交给 Python，不做任何界面识别与场景跳转",
+        "action": "Custom",
+        "custom_action": "AutoCombat",
+        "custom_action_param": {
+            "preset": "basic_attack"
+        }
+    },
+    "AutoCombatPresetBasicAttack": {
+        "desc": "预设：仅普攻（配置载体，不参与流程）",
+        "enabled": false,
+        "attach": {
+            "preset": "basic_attack"
+        }
+    },
+    "AutoCombatPresetSkillRotation": {
+        "desc": "预设：通用技能循环（配置载体，不参与流程）",
+        "enabled": false,
+        "attach": {
+            "preset": "skill_rotation"
+        }
+    },
+    "AutoCombatPresetTeamRotation": {
+        "desc": "预设：按队伍编成分角色出招（配置载体，不参与流程）",
+        "enabled": false,
+        "attach": {
+            "preset": "team_rotation"
+        }
+    }
+}

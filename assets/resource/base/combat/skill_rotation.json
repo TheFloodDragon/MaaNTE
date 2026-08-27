@@ -1,0 +1,58 @@
+{
+    "name": "skill_rotation",
+    "desc": "通用技能循环：见到敌人就按 E / Q 转技能，冷却期间普攻。冷却时间按“技能可用就用”的保守值设置，不针对特定角色。",
+    "rules": [
+        {
+            "name": "skill_e",
+            "desc": "主技能。8 秒冷却是保守估计，请按自己角色的实际 CD 调整。",
+            "when": {
+                "enemy_visible": true
+            },
+            "actions": [
+                "e"
+            ],
+            "cooldown": 8.0,
+            "priority": 20
+        },
+        {
+            "name": "skill_q",
+            "desc": "副技能/爆发。冷却更长，优先级更高，敌人出现时先用。",
+            "when": {
+                "enemy_visible": true
+            },
+            "actions": [
+                "q"
+            ],
+            "cooldown": 20.0,
+            "priority": 10
+        },
+        {
+            "name": "dodge",
+            "desc": "周期性拉开距离，降低站桩挨打的概率。",
+            "when": {
+                "all": [
+                    {
+                        "enemy_visible": true
+                    },
+                    {
+                        "every": 6.0
+                    }
+                ]
+            },
+            "actions": [
+                "hold:lshift",
+                "wait:0.35",
+                "release:lshift"
+            ],
+            "priority": 40
+        }
+    ],
+    "fallback": [
+        {
+            "type": "click",
+            "key": "left",
+            "duration": 0.05
+        }
+    ],
+    "fallback_interval": 0.35
+}

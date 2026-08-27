@@ -1,0 +1,12 @@
+{
+    "name": "basic_attack",
+    "desc": "最保守的预设：只做普攻。不依赖任何未验证的识别，任何角色任何场景都能用。",
+    "fallback": [
+        {
+            "type": "click",
+            "key": "left",
+            "duration": 0.05
+        }
+    ],
+    "fallback_interval": 0.35
+}

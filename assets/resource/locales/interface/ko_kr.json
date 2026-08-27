@@ -274,5 +274,18 @@
     "task_auto_volleyball_character_4": "잔홍",
     "task_auto_volleyball_character_5": "카오스",
     "task_auto_volleyball_character_6": "진홍",
-    "task_auto_volleyball_character_7": "일로이"
+    "task_auto_volleyball_character_7": "일로이",
+    "task_auto_combat_label": "자동 전투",
+    "task_auto_combat_desc": "규칙 스크립트에 따라 자동으로 스킬을 사용합니다. 전투에 진입한 후 이 작업을 시작하세요. 적 탐색이나 화면 이동은 수행하지 않습니다.",
+    "task_auto_combat_option_preset": "전투 프리셋",
+    "task_auto_combat_option_preset_desc": "내장 전투 스크립트를 선택합니다. \"편성별\"을 사용하려면 프리셋 파일을 실제 파티 배치로 수정해야 합니다.",
+    "task_auto_combat_preset_basic_attack": "기본 공격만",
+    "task_auto_combat_preset_skill_rotation": "범용 스킬 로테이션",
+    "task_auto_combat_preset_team_rotation": "편성별 (설정 필요)",
+    "task_auto_combat_option_duration": "최대 실행 시간(초)",
+    "task_auto_combat_option_duration_desc": "시간이 지나면 자동으로 종료됩니다. 파티 UI를 벗어나도 조기 종료됩니다.",
+    "task_auto_combat_option_stop_when_not_in_team": "전투 화면을 벗어나면 종료",
+    "task_auto_combat_option_stop_when_not_in_team_desc": "활성화하면 파티 UI가 3초 이상 표시되지 않을 때 작업을 종료합니다. 비활성화하면 제한 시간까지 계속 실행합니다.",
+    "task_auto_combat_option_log_decisions": "규칙 발동 로그 출력",
+    "task_auto_combat_option_log_decisions_desc": "발동된 규칙 이름과 조건을 출력합니다. 스크립트가 작동하지 않는 원인을 조사할 때 사용합니다."
 }

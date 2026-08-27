@@ -1,0 +1,88 @@
+{
+    "name": "team_rotation",
+    "desc": "按队伍编成分角色出招的示例。roster 必须改成你自己的实际站位，否则 character 条件会按错误身份求值。槽位号 1~4 对应键盘 1~4。",
+    "roster": {
+        "1": "mint",
+        "2": "skia",
+        "3": "zero",
+        "4": "hotori"
+    },
+    "rules": [
+        {
+            "name": "mint_skill",
+            "desc": "薄荷在场时的技能。",
+            "when": {
+                "all": [
+                    {
+                        "character": "mint"
+                    },
+                    {
+                        "enemy_visible": true
+                    }
+                ]
+            },
+            "actions": [
+                "e"
+            ],
+            "cooldown": 10.0,
+            "priority": 20
+        },
+        {
+            "name": "skia_skill",
+            "desc": "翳在场时的技能。",
+            "when": {
+                "all": [
+                    {
+                        "character": "skia"
+                    },
+                    {
+                        "enemy_visible": true
+                    }
+                ]
+            },
+            "actions": [
+                "e",
+                "wait:0.2",
+                "q"
+            ],
+            "cooldown": 12.0,
+            "priority": 20
+        },
+        {
+            "name": "zero_skill",
+            "desc": "零在场时的技能。",
+            "when": {
+                "all": [
+                    {
+                        "character": "zero"
+                    },
+                    {
+                        "enemy_visible": true
+                    }
+                ]
+            },
+            "actions": [
+                "q"
+            ],
+            "cooldown": 15.0,
+            "priority": 20
+        },
+        {
+            "name": "opener",
+            "desc": "开场只做一次的起手动作。",
+            "actions": [
+                "e"
+            ],
+            "once": true,
+            "priority": 5
+        }
+    ],
+    "fallback": [
+        {
+            "type": "click",
+            "key": "left",
+            "duration": 0.05
+        }
+    ],
+    "fallback_interval": 0.35
+}

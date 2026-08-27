@@ -274,5 +274,18 @@
     "task_auto_volleyball_character_4": "殘虹",
     "task_auto_volleyball_character_5": "卡厄斯",
     "task_auto_volleyball_character_6": "真紅",
-    "task_auto_volleyball_character_7": "伊洛伊"
+    "task_auto_volleyball_character_7": "伊洛伊",
+    "task_auto_combat_label": "自動戰鬥",
+    "task_auto_combat_desc": "依規則腳本自動出招。需自行進入戰鬥後再啟動本任務，腳本不負責尋怪與場景跳轉。",
+    "task_auto_combat_option_preset": "戰鬥預設",
+    "task_auto_combat_option_preset_desc": "選擇內建戰鬥腳本。「依編成出招」需先在預設檔案裡改成自己的實際隊伍站位。",
+    "task_auto_combat_preset_basic_attack": "僅普攻",
+    "task_auto_combat_preset_skill_rotation": "通用技能循環",
+    "task_auto_combat_preset_team_rotation": "依編成出招（需自行設定）",
+    "task_auto_combat_option_duration": "最長執行時間（秒）",
+    "task_auto_combat_option_duration_desc": "到時自動結束。離開隊伍介面也會提前結束。",
+    "task_auto_combat_option_stop_when_not_in_team": "脫離戰鬥介面時結束",
+    "task_auto_combat_option_stop_when_not_in_team_desc": "開啟後，離開隊伍介面超過 3 秒即結束任務。關閉則一直執行到時間上限。",
+    "task_auto_combat_option_log_decisions": "輸出規則觸發記錄",
+    "task_auto_combat_option_log_decisions_desc": "列印每次觸發的規則名稱與條件，用於排查腳本為何不生效。"
 }

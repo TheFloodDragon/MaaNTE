@@ -1,7 +1,14 @@
+# ruff: noqa
+# 这是 pinkpaw_core3.py 在内核提取之前的**逐字快照**，作为等价性测试的基线。
+# 刻意不做任何清理（包括原本就存在的未使用变量），因为一旦修改，
+# 它就不再能证明"提取后的行为与提取前一致"。详见同目录 README.md。
 from __future__ import annotations
 
+import ctypes
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from ctypes import wintypes
 
 from maa.agent.agent_server import AgentServer
 from maa.custom_action import CustomAction
@@ -9,58 +16,15 @@ from maa.context import Context
 
 try:
     import numpy as np
+    from PIL import Image
 except ImportError:
     np = None
+    Image = None
 
 try:
-    from agent.custom.action.Combat.kernel import (
-        CombatKernel,
-        SwitchHooks,
-        TemplateCache,
-        fast_color_match,
-        fast_template_match,
-        is_hit as _is_hit,
-        norm_key as _norm_key,
-        normalize_key_sequence as _normalize_key_sequence,
-        team as _kernel_team,
-    )
-    from agent.custom.action.Combat.kernel.constants import (
-        DEFAULT_DIRECT_INPUT,
-        DEFAULT_HEIGHT,
-        DEFAULT_ROUTE_TIMING_SCALE,
-        DEFAULT_WIDTH,
-        DIRECT_QUICK_PICK_TAP_DURATION,
-        MAX_ROUTE_TIMING_SCALE,
-        MIN_ROUTE_TIMING_SCALE,
-        SWITCH_CHECK_DURATION,
-    )
-    from agent.custom.action.Combat.kernel.errors import (
-        AbortException,
-        TaskerStoppedException,
-    )
+    import cv2
 except ImportError:
-    from ..Combat.kernel import (
-        CombatKernel,
-        SwitchHooks,
-        TemplateCache,
-        fast_color_match,
-        fast_template_match,
-        is_hit as _is_hit,
-        norm_key as _norm_key,
-        normalize_key_sequence as _normalize_key_sequence,
-        team as _kernel_team,
-    )
-    from ..Combat.kernel.constants import (
-        DEFAULT_DIRECT_INPUT,
-        DEFAULT_HEIGHT,
-        DEFAULT_ROUTE_TIMING_SCALE,
-        DEFAULT_WIDTH,
-        DIRECT_QUICK_PICK_TAP_DURATION,
-        MAX_ROUTE_TIMING_SCALE,
-        MIN_ROUTE_TIMING_SCALE,
-        SWITCH_CHECK_DURATION,
-    )
-    from ..Combat.kernel.errors import AbortException, TaskerStoppedException
+    cv2 = None
 
 try:
     from agent.custom.action.pinkpaw.pinkpaw_common import (
@@ -82,18 +46,80 @@ try:
 except ImportError:
     from .pinkpaw_reward_logger import notify_pinkpaw_reward
 
+VK = {
+    "w": 0x57,
+    "a": 0x41,
+    "s": 0x53,
+    "d": 0x44,
+    "space": 0x20,
+    "e": 0x45,
+    "f": 0x46,
+    "1": 0x31,
+    "2": 0x32,
+    "3": 0x33,
+    "4": 0x34,
+    "m": 0x4D,
+    "f5": 0x74,
+    "esc": 0x1B,
+    "lshift": 0xA0,
+    "shift": 0x10,
+}
+
+MOUSE_VK = {
+    "left": 0x01,
+    "right": 0x02,
+    "middle": 0x04,
+}
+
 REWARD_OCR_DELAY_MS = 3000
 POST_REWARD_DELAY_MS = 7000
+DEFAULT_WIDTH = 1280
+DEFAULT_HEIGHT = 720
+DEFAULT_ROUTE_TIMING_SCALE = 1.0
 DEFAULT_INTERACTION_PAUSE = 0.7
+DEFAULT_DIRECT_INPUT = True
+MIN_ROUTE_TIMING_SCALE = 0.25
+MAX_ROUTE_TIMING_SCALE = 1.2
 MIN_INTERACTION_PAUSE = 0.0
 MAX_INTERACTION_PAUSE = 1.0
+MAX_ROUTE_SLEEP_ADJUST = 0.25
+ROUTE_SLEEP_ADJUST_RATIO_CAP = 0.08
+ROUTE_SLEEP_BUSY_WAIT = 0.02
+ROUTE_SLEEP_POLL_INTERVAL = 0.005
 ROUTE_REWARD_CHECK_MIN_SLEEP = 0.5
 REWARD_CHECK_INTERVAL = 1.0
 WAIT_UNTIL_POLL_INTERVAL = 0.02
 INTERAC_OCR_FALLBACK_INTERVAL = 1.0
 FOCUS_LOG_NODE = "_PINKPAW_CORE3_FOCUS_"
-LOG_PREFIX = "[PinkPawHeist/Core3]"
-NODE_PREFIX = "PinkPawHeist"
+TIMING_SENSITIVE_KEYS = {"w", "a", "s", "d", "lshift", "space", "e"}
+TEAM_HEALTH_SLASH_ROI = [620, 654, 95, 42]
+CURRENT_CHAR_MARKER_ROI = [1168, 164, 68, 36]
+CURRENT_CHAR_MARKER_CORE_ROI = [1176, 172, 38, 16]
+CURRENT_CHAR_SLOT_SPACING = 88
+CURRENT_CHAR_MIN_SCORE = 16
+CURRENT_CHAR_MIN_MARGIN = 5
+CURRENT_CHAR_SLOT_WHITE_THRESHOLDS = [205, 188, 205, 205]
+CURRENT_CHAR_SLOT_COLORED_THRESHOLDS = [170, 145, 170, 170]
+CURRENT_CHAR_SLOT_SCORE_BONUS = [0, 4, 0, 0]
+CURRENT_CHAR_SLOT_MIN_SCORE = [16, 12, 16, 16]
+CURRENT_CHAR_SLOT_MIN_MARGIN = [5, 2, 5, 5]
+CURRENT_CHAR_CORE_SCORE_WEIGHT = 3
+CURRENT_CHAR_SLOT2_CORE_MIN_SCORE = 6
+CURRENT_CHAR_SLOT2_CORE_MIN_MARGIN = 2
+SWITCH_DEAD_SETTLE = 0.15
+SWITCH_BLACK_SCREEN_EXTENSION = 0.5
+SWITCH_CONFIRM_RETRY_COUNT = 1
+SWITCH_CONFIRM_RETRY_WINDOW = 0.7
+BLACK_SCREEN_MEAN_THRESHOLD = 18
+BLACK_SCREEN_BRIGHT_PIXEL_THRESHOLD = 80
+BLACK_SCREEN_BRIGHT_PIXEL_COUNT = 300
+FAST_TEMPLATE_SAMPLE_LIMIT = 64
+FAST_TEMPLATE_CANDIDATE_LIMIT = 5000
+FAST_TEMPLATE_ANCHOR_TOLERANCE = 45
+DIRECT_KEY_TAP_DURATION = 0.01
+DIRECT_QUICK_PICK_TAP_DURATION = 0.002
+DIRECT_ACTION_KEY_MIN_TAP_DURATION = 0.05
+DIRECT_ACTION_KEYS = {"space", "lshift", "shift"}
 ENABLE_FAST_COLOR_RECO = True
 FAST_TEMPLATE_RECO_NODES = {
     "PinkPawHeist_Core3_CheckInteractTemplateOnce",
@@ -133,12 +159,81 @@ FAST_RECO_CONFIG = {
     },
 }
 
+_FAST_TEMPLATE_CACHE = {}
 _FAST_IMAGE_DIR = None
-_FAST_TEMPLATE_CACHE_OBJ = None
+
+
+class AbortException(Exception):
+    pass
 
 
 class EarlyExtractException(Exception):
     pass
+
+
+class TaskerStoppedException(Exception):
+    pass
+
+
+@dataclass
+class CharacterSwitchState:
+    role: str
+    keys: list[str]
+    index: int = 0
+    deadline: float = 0
+
+    @property
+    def current_key(self):
+        """返回当前正在尝试切换的角色按键。"""
+        return self.keys[self.index]
+
+    def advance(self):
+        """把角色切换候选推进到下一个按键，并返回是否还有候选可试。"""
+        self.index += 1
+        return self.index < len(self.keys)
+
+
+def _is_hit(result) -> bool:
+    """兼容 MAA 不同返回结构，统一判断识别或任务是否成功命中。"""
+    if result is None:
+        return False
+    status = getattr(result, "status", None)
+    succeeded = getattr(status, "succeeded", None)
+    if succeeded is not None:
+        return bool(succeeded)
+    if status is not None:
+        return status == 0
+    return bool(getattr(result, "hit", True))
+
+
+def _norm_key(key: str) -> str:
+    """把配置里的按键名规范成小写字符串，便于查虚拟键码。"""
+    return str(key).lower()
+
+
+def _normalize_key_sequence(value) -> list[str]:
+    """Normalize one key or a sequence of keys into a de-duplicated key list."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if len(text) > 1 and all(char.lower() in {"w", "a", "s", "d"} for char in text):
+            keys = list(text)
+        else:
+            keys = text.replace("+", " ").replace(",", " ").split()
+    elif isinstance(value, (list, tuple, set)):
+        keys = []
+        for item in value:
+            keys.extend(_normalize_key_sequence(item))
+    else:
+        keys = [str(value)]
+
+    result = []
+    for key in keys:
+        normalized = _norm_key(key)
+        if normalized and normalized not in result:
+            result.append(normalized)
+    return result
 
 
 def _parse_timing_scale(value) -> float:
@@ -179,12 +274,146 @@ def _get_fast_image_dir():
     return _FAST_IMAGE_DIR
 
 
-def _get_fast_template_cache() -> TemplateCache:
-    """惰性创建快速模板缓存，目录沿用粉爪原有查找规则。"""
-    global _FAST_TEMPLATE_CACHE_OBJ
-    if _FAST_TEMPLATE_CACHE_OBJ is None:
-        _FAST_TEMPLATE_CACHE_OBJ = TemplateCache(_get_fast_image_dir())
-    return _FAST_TEMPLATE_CACHE_OBJ
+def _load_fast_template(name):
+    """读取并缓存 OpenCV 模板图，供快速模板匹配复用。"""
+    if np is None or Image is None:
+        return None
+    if name in _FAST_TEMPLATE_CACHE:
+        return _FAST_TEMPLATE_CACHE[name]
+    path = _get_fast_image_dir() / name
+    if not path.exists():
+        _FAST_TEMPLATE_CACHE[name] = None
+        return None
+    rgba = np.asarray(Image.open(path).convert("RGBA"), dtype=np.uint8)
+    alpha = rgba[:, :, 3]
+    rgb = rgba[:, :, :3]
+    brightness = rgb.max(axis=2)
+    saturation = brightness - rgb.min(axis=2)
+    mask = (alpha >= 128) & ((brightness >= 80) | (saturation >= 40))
+    if int(mask.sum()) == 0:
+        mask = alpha >= 128
+    coords = np.argwhere(mask)
+    if coords.size == 0:
+        _FAST_TEMPLATE_CACHE[name] = None
+        return None
+    if len(coords) > FAST_TEMPLATE_SAMPLE_LIMIT:
+        scores = (
+            brightness[coords[:, 0], coords[:, 1]].astype(np.int32)
+            + saturation[coords[:, 0], coords[:, 1]].astype(np.int32) * 2
+        )
+        indices = np.argsort(scores)[-FAST_TEMPLATE_SAMPLE_LIMIT:]
+        coords = coords[indices]
+    gray = (
+        rgb[:, :, 0].astype(np.float32) * 0.299
+        + rgb[:, :, 1].astype(np.float32) * 0.587
+        + rgb[:, :, 2].astype(np.float32) * 0.114
+    )
+    bgr = rgb[:, :, ::-1].astype(np.float32)
+    cv_bgr = np.ascontiguousarray(rgb[:, :, ::-1])
+    cv_mask = np.ascontiguousarray((alpha >= 128).astype(np.uint8) * 255)
+    values = gray[coords[:, 0], coords[:, 1]].astype(np.float32)
+    bgr_values = bgr[coords[:, 0], coords[:, 1]].astype(np.float32)
+    template = {
+        "name": name,
+        "cv_bgr": cv_bgr,
+        "cv_mask": cv_mask,
+        "coords": coords.astype(np.int32),
+        "bgr_values": bgr_values,
+        "height": gray.shape[0],
+        "width": gray.shape[1],
+    }
+    anchor_index = int(np.argmax(values))
+    anchor_bgr = bgr_values[anchor_index]
+    template["anchor_y"] = int(template["coords"][anchor_index, 0])
+    template["anchor_x"] = int(template["coords"][anchor_index, 1])
+    template["anchor_channel"] = int(np.argmax(anchor_bgr))
+    template["anchor_value"] = int(anchor_bgr[template["anchor_channel"]])
+    _FAST_TEMPLATE_CACHE[name] = template
+    return template
+
+
+def _as_bgr_image(image):
+    """把 MAA 截图转换为 OpenCV 使用的 BGR 三通道图。"""
+    if np is None or not isinstance(image, np.ndarray):
+        return None
+    if image.ndim != 3 or image.shape[2] < 3 or image.size == 0:
+        return None
+    return image[:, :, :3]
+
+
+def _crop_roi(image, roi):
+    """按给定坐标裁剪截图区域，并自动处理越界。"""
+    bgr = _as_bgr_image(image)
+    if bgr is None:
+        return None
+    x, y, w, h = [int(v) for v in roi]
+    ih, iw = bgr.shape[:2]
+    x1 = max(0, min(iw, x))
+    y1 = max(0, min(ih, y))
+    x2 = max(x1, min(iw, x + w))
+    y2 = max(y1, min(ih, y + h))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return bgr[y1:y2, x1:x2]
+
+
+def _scale_roi(roi, image):
+    """把以 1280x720 为基准的 ROI 缩放到当前截图尺寸。"""
+    bgr = _as_bgr_image(image)
+    if bgr is None:
+        return roi
+    ih, iw = bgr.shape[:2]
+    sx = iw / DEFAULT_WIDTH
+    sy = ih / DEFAULT_HEIGHT
+    x, y, w, h = roi
+    return [
+        int(round(x * sx)),
+        int(round(y * sy)),
+        max(1, int(round(w * sx))),
+        max(1, int(round(h * sy))),
+    ]
+
+
+def _fast_color_match(image, cfg):
+    """在本地用 OpenCV 做颜色点数量检测，替代对应颜色识别节点。"""
+    roi = _crop_roi(image, cfg["roi"])
+    if roi is None:
+        return False
+    stride = max(1, int(cfg.get("stride", 1)))
+    if stride > 1:
+        roi = roi[::stride, ::stride]
+    lower = np.asarray(cfg["lower_bgr"], dtype=np.uint8)
+    upper = np.asarray(cfg["upper_bgr"], dtype=np.uint8)
+    mask = np.all((roi >= lower) & (roi <= upper), axis=2)
+    count = max(1, int(cfg.get("count", 1)) // (stride * stride))
+    return int(mask.sum()) >= count
+
+
+def _fast_template_match(image, cfg):
+    """在本地用 OpenCV 做模板匹配，减少频繁调用 MAA 节点的延迟。"""
+    if cv2 is None:
+        return None
+    roi = _crop_roi(image, cfg["roi"])
+    if roi is None:
+        return None
+    threshold = float(cfg.get("cv_threshold", cfg["threshold"]))
+    roi = np.ascontiguousarray(roi)
+    for name in cfg["templates"]:
+        template = _load_fast_template(name)
+        if template is None:
+            continue
+        templ = template["cv_bgr"]
+        mask = template["cv_mask"]
+        if roi.shape[0] < templ.shape[0] or roi.shape[1] < templ.shape[1]:
+            continue
+        scores = cv2.matchTemplate(roi, templ, cv2.TM_CCORR_NORMED, mask=mask)
+        finite_scores = scores[np.isfinite(scores)]
+        if finite_scores.size == 0:
+            continue
+        best = float(np.max(finite_scores))
+        if best >= threshold:
+            return True
+    return None
 
 
 def _fast_recognize_node(node_name, image):
@@ -195,12 +424,364 @@ def _fast_recognize_node(node_name, image):
     if cfg["type"] == "color":
         if not ENABLE_FAST_COLOR_RECO:
             return None
-        return fast_color_match(image, cfg)
+        return _fast_color_match(image, cfg)
     if cfg["type"] == "template":
         if node_name not in FAST_TEMPLATE_RECO_NODES:
             return None
-        return fast_template_match(image, cfg, _get_fast_template_cache())
+        if Image is None:
+            return None
+        return _fast_template_match(image, cfg)
     return None
+
+
+ULONG_PTR = (
+    ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
+)
+
+
+class _KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ("wVk", wintypes.WORD),
+        ("wScan", wintypes.WORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
+
+
+class _MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
+
+
+class _INPUT_UNION(ctypes.Union):
+    _fields_ = [("ki", _KEYBDINPUT), ("mi", _MOUSEINPUT)]
+
+
+class _INPUT(ctypes.Structure):
+    _fields_ = [("type", wintypes.DWORD), ("u", _INPUT_UNION)]
+
+
+class DirectInputSender:
+    INPUT_MOUSE = 0
+    INPUT_KEYBOARD = 1
+    KEYEVENTF_KEYUP = 0x0002
+    KEYEVENTF_SCANCODE = 0x0008
+    MAPVK_VK_TO_VSC = 0
+    MOUSE_FLAGS = {
+        "left": (0x0002, 0x0004),
+        "right": (0x0008, 0x0010),
+        "middle": (0x0020, 0x0040),
+    }
+
+    def __init__(self, enabled=True):
+        self.enabled = bool(enabled)
+        self.available = False
+        self.user32 = None
+        if not self.enabled:
+            return
+        try:
+            self.user32 = ctypes.windll.user32
+            self.user32.SendInput.argtypes = [
+                wintypes.UINT,
+                ctypes.POINTER(_INPUT),
+                ctypes.c_int,
+            ]
+            self.user32.SendInput.restype = wintypes.UINT
+            self.available = True
+        except Exception as exc:
+            print(f"[PinkPawHeist/Core3][WARN] direct input unavailable: {exc}")
+
+    def _send(self, input_obj):
+        if not self.available or self.user32 is None:
+            return False
+        sent = self.user32.SendInput(
+            1, ctypes.byref(input_obj), ctypes.sizeof(input_obj)
+        )
+        return sent == 1
+
+    def _keyboard_input(self, vk, is_up=False):
+        scan = int(self.user32.MapVirtualKeyW(int(vk), self.MAPVK_VK_TO_VSC))
+        flags = self.KEYEVENTF_KEYUP if is_up else 0
+        w_vk = int(vk)
+        if scan:
+            flags |= self.KEYEVENTF_SCANCODE
+            w_vk = 0
+        input_obj = _INPUT()
+        input_obj.type = self.INPUT_KEYBOARD
+        input_obj.u.ki = _KEYBDINPUT(
+            wVk=w_vk,
+            wScan=scan,
+            dwFlags=flags,
+            time=0,
+            dwExtraInfo=0,
+        )
+        return input_obj
+
+    def key_down(self, vk):
+        return self._send(self._keyboard_input(vk, is_up=False))
+
+    def key_up(self, vk):
+        return self._send(self._keyboard_input(vk, is_up=True))
+
+    def click_key(self, vk, duration=DIRECT_KEY_TAP_DURATION):
+        if not self.key_down(vk):
+            return False
+        released = False
+        try:
+            time.sleep(max(float(duration), 0.0))
+            released = self.key_up(vk)
+            return released
+        finally:
+            if not released:
+                self.key_up(vk)
+
+    def _mouse_input(self, flags):
+        input_obj = _INPUT()
+        input_obj.type = self.INPUT_MOUSE
+        input_obj.u.mi = _MOUSEINPUT(
+            dx=0,
+            dy=0,
+            mouseData=0,
+            dwFlags=flags,
+            time=0,
+            dwExtraInfo=0,
+        )
+        return input_obj
+
+    def mouse_down(self, key="left"):
+        flags = self.MOUSE_FLAGS.get(key, self.MOUSE_FLAGS["left"])[0]
+        return self._send(self._mouse_input(flags))
+
+    def mouse_up(self, key="left"):
+        flags = self.MOUSE_FLAGS.get(key, self.MOUSE_FLAGS["left"])[1]
+        return self._send(self._mouse_input(flags))
+
+
+class Core3ActionHelper:
+    def __init__(self, ctx: Context, direct_input=True):
+        """保存 MAA 上下文，并初始化鼠标当前位置缓存。"""
+        self.ctx = ctx
+        self.mx, self.my = DEFAULT_WIDTH // 2, DEFAULT_HEIGHT // 2
+        self.direct_input = DirectInputSender(enabled=direct_input)
+
+    @property
+    def controller(self):
+        """取得当前 tasker 的控制器，用于直接发送按键、鼠标和截图请求。"""
+        return getattr(getattr(self.ctx, "tasker", None), "controller", None)
+
+    def is_stopping(self) -> bool:
+        """检查 MAA tasker 是否正在停止任务。"""
+        tasker = getattr(self.ctx, "tasker", None)
+        if tasker is None:
+            return False
+        stopping = getattr(tasker, "stopping", False)
+        if callable(stopping):
+            stopping = stopping()
+        return bool(stopping)
+
+    def raise_if_stopped(self):
+        """任务停止时抛出专用异常，打断正在执行的路线。"""
+        if self.is_stopping():
+            raise TaskerStoppedException(
+                "PinkPawHeistScheme3Action stopped by Maa tasker."
+            )
+
+    def run_task(self, task_name, pipeline_override=None):
+        """运行一个 MAA pipeline 节点，并在调用前后检查停止状态。"""
+        self.raise_if_stopped()
+        if pipeline_override is None:
+            result = self.ctx.run_task(task_name)
+        else:
+            result = self.ctx.run_task(task_name, pipeline_override=pipeline_override)
+        self.raise_if_stopped()
+        return result
+
+    def _call_key(self, node_type, key_str, extra=None):
+        """发送 KeyDown、KeyUp 或 ClickKey；有控制器时走低延迟直发，否则临时跑节点。"""
+        if node_type != "KeyUp":
+            self.raise_if_stopped()
+        vk = VK.get(_norm_key(key_str))
+        if vk is None:
+            return False
+        direct = self.direct_input
+        key_name = _norm_key(key_str)
+        if direct.available:
+            if node_type == "KeyDown" and direct.key_down(vk):
+                if node_type != "KeyUp":
+                    self.raise_if_stopped()
+                return True
+            if node_type == "KeyUp" and direct.key_up(vk):
+                return True
+            if node_type == "ClickKey":
+                duration = DIRECT_KEY_TAP_DURATION
+                if extra and "direct_duration" in extra:
+                    duration = float(extra["direct_duration"])
+                if direct.click_key(vk, duration=duration):
+                    self.raise_if_stopped()
+                    return True
+        controller = self.controller
+        if controller is not None:
+            if node_type == "KeyDown":
+                controller.post_key_down(vk)
+            elif node_type == "KeyUp":
+                controller.post_key_up(vk)
+            elif node_type == "ClickKey":
+                if hasattr(controller, "post_click_key"):
+                    controller.post_click_key(vk)
+                else:
+                    controller.post_key_down(vk)
+                    time.sleep(0.02)
+                    controller.post_key_up(vk)
+            if node_type != "KeyUp":
+                self.raise_if_stopped()
+            return True
+        param = {"key": vk}
+        if extra:
+            param.update(
+                {key: value for key, value in extra.items() if key != "direct_duration"}
+            )
+        node_name = f"PinkPawHeist_{node_type}"
+        override = {node_name: {"action": {"type": node_type, "param": param}}}
+        ret = self.ctx.run_task(node_name, pipeline_override=override) is not None
+        if node_type != "KeyUp":
+            self.raise_if_stopped()
+        return ret
+
+    def click_key(self, key_str, duration=None):
+        """发送一次按键点击。"""
+        key = _norm_key(key_str)
+        if duration is None:
+            duration = (
+                DIRECT_QUICK_PICK_TAP_DURATION
+                if key == "f"
+                else DIRECT_KEY_TAP_DURATION
+            )
+        extra = None
+        if duration is not None:
+            extra = {"direct_duration": max(float(duration), 0.0)}
+        return self._call_key("ClickKey", key_str, extra=extra)
+
+    def key_down(self, key_str):
+        """发送按键按下事件。"""
+        return self._call_key("KeyDown", key_str)
+
+    def key_up(self, key_str):
+        """发送按键抬起事件。"""
+        return self._call_key("KeyUp", key_str)
+
+    def move_to(self, x, y, duration_ms=None):
+        """把鼠标移动到指定坐标，并维护内部鼠标位置缓存。"""
+        self.raise_if_stopped()
+        x, y = int(x), int(y)
+        dx, dy = x - self.mx, y - self.my
+        if dx * dx + dy * dy < 4:
+            self.mx, self.my = x, y
+            return True
+        if duration_ms is None:
+            duration_ms = max(int((dx**2 + dy**2) ** 0.5 / 0.5), 50)
+        override = {
+            "PinkPawHeist_MouseMove": {
+                "action": {
+                    "type": "Swipe",
+                    "param": {
+                        "begin": [self.mx, self.my],
+                        "end": [x, y],
+                        "duration": duration_ms,
+                        "only_hover": True,
+                    },
+                }
+            }
+        }
+        ret = self.ctx.run_task("PinkPawHeist_MouseMove", pipeline_override=override)
+        self.raise_if_stopped()
+        if ret:
+            self.mx, self.my = x, y
+        return ret
+
+    def click(self, x, y):
+        """点击指定坐标；控制器可用时直接点击，否则走 MAA Click 节点。"""
+        self.raise_if_stopped()
+        controller = self.controller
+        if controller is not None and hasattr(controller, "post_click"):
+            controller.post_click(int(x), int(y))
+            self.raise_if_stopped()
+            self.mx, self.my = int(x), int(y)
+            return True
+        self.move_to(x, y)
+        override = {
+            "PinkPawHeist_Click": {
+                "action": {"type": "Click", "param": {"target": [int(x), int(y)]}}
+            }
+        }
+        ret = (
+            self.ctx.run_task("PinkPawHeist_Click", pipeline_override=override)
+            is not None
+        )
+        self.raise_if_stopped()
+        return ret
+
+    def focus_window(self, x=None, y=None):
+        """Use a controller click to bring the game window to foreground."""
+        self.raise_if_stopped()
+        px = DEFAULT_WIDTH // 2 if x is None else int(x)
+        py = DEFAULT_HEIGHT // 2 if y is None else int(y)
+        controller = self.controller
+        if controller is not None and hasattr(controller, "post_click"):
+            ret = controller.post_click(px, py)
+            if hasattr(ret, "wait"):
+                ret.wait()
+            self.mx, self.my = px, py
+            self.raise_if_stopped()
+            return True
+        return self.click(px, py)
+
+    def mouse_down(self, key="left"):
+        """发送鼠标按下事件，主要用于长按攻击或鼠标键操作。"""
+        if self.direct_input.mouse_down(key=key):
+            return
+        vk = MOUSE_VK.get(key, MOUSE_VK["left"])
+        controller = self.controller
+        if controller is not None:
+            controller.post_key_down(vk)
+
+    def mouse_up(self, key="left"):
+        """发送鼠标抬起事件，配合 mouse_down 结束长按。"""
+        if self.direct_input.mouse_up(key=key):
+            return
+        vk = MOUSE_VK.get(key, MOUSE_VK["left"])
+        controller = self.controller
+        if controller is not None:
+            controller.post_key_up(vk)
+
+    def release_controls(self):
+        """释放脚本可能按住的移动键、交互键和鼠标键，防止异常后继续输入。"""
+        for key in ("w", "a", "s", "d", "e", "f", "space", "lshift"):
+            try:
+                self.key_up(key)
+            except Exception as exc:
+                print(f"[PinkPawHeist/Core3] failed to release {key}: {exc}")
+        for key in MOUSE_VK:
+            try:
+                self.direct_input.mouse_up(key)
+            except Exception as exc:
+                print(
+                    f"[PinkPawHeist/Core3] failed to release direct mouse {key}: {exc}"
+                )
+        controller = self.controller
+        if controller is None:
+            return
+        for vk in MOUSE_VK.values():
+            try:
+                controller.post_key_up(vk).wait()
+            except Exception as exc:
+                print(f"[PinkPawHeist/Core3] failed to release mouse {vk}: {exc}")
 
 
 class PinkPawHeistCore3Path:
@@ -215,7 +796,7 @@ class PinkPawHeistCore3Path:
     ROLE_AVOIDER = "avoider"
     AVOID_METHOD_DASH = "dash"
     AVOID_METHOD_ATTACK = "attack"
-    SWITCH_CHECK_DURATION = SWITCH_CHECK_DURATION
+    SWITCH_CHECK_DURATION = 1.0
     QUICK_PICK_START_DELAY = 0.3
     QUICK_PICK_INTERVAL = 0.2
 
@@ -229,6 +810,7 @@ class PinkPawHeistCore3Path:
             params.get("auto_resize_game_window"),
             auto_resize_default,
         )
+        self.ah = Core3ActionHelper(ctx, direct_input=direct_input)
         self.exit_state = {1: False, 2: False, 3: False, 4: False}
         self.avoid_methods = [self.AVOID_METHOD_DASH, self.AVOID_METHOD_ATTACK]
         avoid_method = params.get(self.CONF_AVOID_MTH, self.AVOID_METHOD_DASH)
@@ -241,40 +823,6 @@ class PinkPawHeistCore3Path:
         self.interaction_pause = _parse_interaction_pause(
             params.get("interaction_pause", DEFAULT_INTERACTION_PAUSE)
         )
-        # 共享战斗内核：提供等待、按键、队伍识别与切人确认状态机。
-        # 粉爪的捡箱 / 局内检测 / 交互监听通过 poll 钩子注入，
-        # 调用顺序与提取前的 sleep 完全一致。
-        self.kernel = CombatKernel(
-            ctx,
-            timing_scale=self.route_timing_scale,
-            direct_input=direct_input,
-            node_prefix=NODE_PREFIX,
-            log_prefix=LOG_PREFIX,
-            stop_message="PinkPawHeistScheme3Action stopped by Maa tasker.",
-        )
-        self.kernel.set_poll_hooks(
-            on_poll=self._poll_route_business,
-            on_poll_early=self._poll_quick_pick,
-        )
-        self.kernel.set_switch_hooks(
-            SwitchHooks(
-                screencap=self._screencap,
-                is_black_screen=self._is_black_screen_in_image,
-                is_in_team=self._is_in_team_in_image,
-                is_slot_active=lambda image, index: self.is_char_at_index(
-                    index, image=image
-                ),
-                send_key=self.send_key,
-                ensure_in_team=self.ensure_in_team,
-                sleep=lambda timeout: self.sleep(
-                    timeout, check_reward=False, scaled=False
-                ),
-                log_warning=self.log_warning,
-                on_key_sent=self._on_switch_key_sent,
-                on_candidate_dead=self._on_switch_candidate_dead,
-            )
-        )
-        self.ah = self.kernel.ah
         self.early_extract_exit = {
             1: _parse_bool(params.get(self.CONF_EARLY_EXTRACT_EXIT1), False),
             2: _parse_bool(params.get(self.CONF_EARLY_EXTRACT_EXIT2), False),
@@ -287,9 +835,14 @@ class PinkPawHeistCore3Path:
         }
         self._dead_fighter_keys: list[str] = []
         self._current_fighter_key: str | None = None
+        self._switch_state: CharacterSwitchState | None = None
+        self._handling_switch_state = False
+        self._next_switch_poll_at = 0.0
+        self._held_keys: set[str] = set()
         self._quick_pick_active = False
         self._quick_pick_ready_at = 0.0
         self._next_quick_pick_at = 0.0
+        self._last_action_at: dict[str, float] = {}
         self._interaction_watch_active = False
         self._interaction_watch_found = False
         self._checking_interaction = False
@@ -338,7 +891,14 @@ class PinkPawHeistCore3Path:
 
     def _check_interval(self, name: str, interval: float) -> bool:
         """按动作名做节流，避免同一个按键或点击在短时间内重复触发。"""
-        return self.kernel.check_interval(name, interval)
+        if interval is None or interval < 0:
+            return True
+        now = time.monotonic()
+        last = self._last_action_at.get(name, 0.0)
+        if now - last < interval:
+            return False
+        self._last_action_at[name] = now
+        return True
 
     def _poll_quick_pick(self):
         """自动拾取/撬锁时按固定频率点 F，并用发送完成时间避免连点堆积。"""
@@ -350,25 +910,9 @@ class PinkPawHeistCore3Path:
         self.ah.click_key("f")
         self._next_quick_pick_at = now + self.QUICK_PICK_INTERVAL
 
-    def _poll_route_business(self, info):
-        """内核 sleep 的业务钩子：局内检测 + 移动途中的交互监听。
-
-        与提取前 ``sleep`` 内的判定条件逐一对应：局内检测需要本次等待
-        足够长（``info.allow_slow``），且当前没有按住时序敏感键。
-        """
-        if info.allow_slow and not info.timing_sensitive:
-            self._check_still_in_heist()
-        if (
-            self._interaction_watch_active
-            and not self._interaction_watch_found
-            and not self._checking_interaction
-            and not info.timing_sensitive
-        ):
-            self._interaction_watch_found = self.find_interac()
-
     def _has_timing_sensitive_key_held(self) -> bool:
         """判断当前是否按着移动、冲刺、跳跃等会影响走位精度的键。"""
-        return self.kernel.has_timing_sensitive_key_held()
+        return bool(self._held_keys & TIMING_SENSITIVE_KEYS)
 
     def _check_still_in_heist(self):
         """低频检测本局收益 UI，判断脚本是否仍在粉爪局内。"""
@@ -393,39 +937,79 @@ class PinkPawHeistCore3Path:
 
     def _scale_route_duration(self, duration: float) -> float:
         """按 timing_scale 对路线 sleep 做小幅自适应修正。"""
-        return self.kernel.scale_duration(duration)
+        if duration <= 0 or self.route_timing_scale == 1.0:
+            return max(duration, 0.0)
+
+        wanted_adjust = duration * abs(1.0 - self.route_timing_scale)
+        adaptive_cap = min(
+            MAX_ROUTE_SLEEP_ADJUST,
+            max(0.02, duration * ROUTE_SLEEP_ADJUST_RATIO_CAP),
+        )
+        adjust = min(wanted_adjust, adaptive_cap)
+        if self.route_timing_scale < 1.0:
+            return max(0.0, duration - adjust)
+        return duration + adjust
 
     def sleep(self, timeout, check_reward=True, scaled=True):
         """路线专用等待：保持时间精度，同时轮询拾取、切人、交互监听和局内检测。"""
-        return self.kernel.sleep(timeout, allow_slow_poll=check_reward, scaled=scaled)
+        duration = max(float(timeout), 0.0)
+        if scaled:
+            duration = self._scale_route_duration(duration)
+        target = time.perf_counter() + duration
+        busy_from = target - ROUTE_SLEEP_BUSY_WAIT
+        allow_reward_check = check_reward and duration >= ROUTE_REWARD_CHECK_MIN_SLEEP
+        while time.perf_counter() < busy_from:
+            self.ah.raise_if_stopped()
+            self._poll_quick_pick()
+            self._poll_character_switch()
+            timing_sensitive = self._has_timing_sensitive_key_held()
+            if allow_reward_check and not timing_sensitive:
+                self._check_still_in_heist()
+            if (
+                self._interaction_watch_active
+                and not self._interaction_watch_found
+                and not self._checking_interaction
+                and not timing_sensitive
+            ):
+                self._interaction_watch_found = self.find_interac()
+            remaining = busy_from - time.perf_counter()
+            time.sleep(max(0.0, min(ROUTE_SLEEP_POLL_INTERVAL, remaining)))
+        while time.perf_counter() < target:
+            if self.ah.is_stopping():
+                self.ah.raise_if_stopped()
+        self._poll_quick_pick()
+        self._poll_character_switch()
+        return True
 
     def next_frame(self):
         """等待一个很短的轮询间隔，用在持续检测循环里。"""
-        return self.kernel.next_frame()
+        self.sleep(0.05)
+        return True
 
     def send_key(
         self, key, down_time=0.02, interval=-1, after_sleep=0, action_name=None
     ):
-        """发送短按或长按按键，并支持动作节流和按后等待。
-
-        F 键在粉爪里语义特殊（短脉冲 + 自动连点拾取），因此保留本地处理，
-        其余按键交给内核。
-        """
+        """发送短按或长按按键，并支持动作节流和按后等待。"""
         key = _norm_key(key)
-        if key != "f":
-            return self.kernel.send_key(
-                key,
-                down_time=down_time,
-                interval=interval,
-                after_sleep=after_sleep,
-                action_name=action_name,
-            )
         name = action_name or f"key:{key}"
         if not self._check_interval(name, interval):
             return False
-        self.ah.click_key(key, duration=DIRECT_QUICK_PICK_TAP_DURATION)
+        if key == "f":
+            self.ah.click_key(key, duration=DIRECT_QUICK_PICK_TAP_DURATION)
+            if down_time and down_time > 0.06:
+                self.sleep(down_time)
+            if after_sleep:
+                self.sleep(after_sleep)
+            return True
         if down_time and down_time > 0.06:
+            self.send_key_down(key)
             self.sleep(down_time)
+            self.send_key_up(key)
+        else:
+            tap_duration = max(float(down_time or 0.0), DIRECT_KEY_TAP_DURATION)
+            if key in DIRECT_ACTION_KEYS:
+                tap_duration = max(tap_duration, DIRECT_ACTION_KEY_MIN_TAP_DURATION)
+            self.ah.click_key(key, duration=tap_duration)
         if after_sleep:
             self.sleep(after_sleep)
         return True
@@ -441,7 +1025,11 @@ class PinkPawHeistCore3Path:
                 self._next_quick_pick_at = self._quick_pick_ready_at
             self._quick_pick_active = True
             return True
-        return self.kernel.send_key_down(key, after_sleep=after_sleep)
+        self._held_keys.add(key)
+        ret = self.ah.key_down(key)
+        if after_sleep:
+            self.sleep(after_sleep)
+        return ret
 
     def send_key_up(self, key, after_sleep=0):
         """抬起按键并清理内部状态；F 键会停止自动连点拾取。"""
@@ -449,7 +1037,12 @@ class PinkPawHeistCore3Path:
         if key == "f":
             self._quick_pick_active = False
             return True
-        return self.kernel.send_key_up(key, after_sleep=after_sleep)
+        try:
+            return self.ah.key_up(key)
+        finally:
+            self._held_keys.discard(key)
+            if after_sleep:
+                self.sleep(after_sleep)
 
     def sleep_send_key(self, time_out, key, interval=0.2):
         """在指定时间内按固定间隔重复短按某个键。"""
@@ -479,15 +1072,26 @@ class PinkPawHeistCore3Path:
         after_sleep=0,
     ):
         """点击指定坐标；控制器可用时直接点击，否则走 MAA Click 节点。"""
-        return self.kernel.click(
-            x=x,
-            y=y,
-            name=name,
-            interval=interval,
-            key=key,
-            down_time=down_time,
-            after_sleep=after_sleep,
-        )
+        name = name or f"click:{key}"
+        if not self._check_interval(name, interval):
+            return False
+        if x == -1:
+            x = 0.5
+        if y == -1:
+            y = 0.5
+        px = int(x * DEFAULT_WIDTH) if isinstance(x, float) and x <= 1 else int(x)
+        py = int(y * DEFAULT_HEIGHT) if isinstance(y, float) and y <= 1 else int(y)
+        if key == "left" and down_time <= 0.05:
+            ret = self.ah.click(px, py)
+        else:
+            self.ah.move_to(px, py)
+            self.ah.mouse_down(key=key)
+            self.sleep(max(down_time, 0.01))
+            self.ah.mouse_up(key=key)
+            ret = True
+        if after_sleep:
+            self.sleep(after_sleep)
+        return ret
 
     def wait_until(
         self,
@@ -500,62 +1104,181 @@ class PinkPawHeistCore3Path:
         **kwargs,
     ):
         """通用轮询等待函数，可在每轮检测前后插入动作并要求稳定命中。"""
-        return self.kernel.wait_until(
-            condition,
-            time_out=time_out,
-            pre_action=pre_action,
-            post_action=post_action,
-            settle_time=settle_time,
-            raise_if_not_found=raise_if_not_found,
-        )
+        timeout = 10.0 if not time_out or time_out <= 0 else float(time_out)
+        deadline = time.monotonic() + timeout
+        settled_at = None
+        while time.monotonic() < deadline:
+            self.ah.raise_if_stopped()
+            if pre_action is not None:
+                pre_action()
+            found = bool(condition())
+            if found:
+                if post_action is not None:
+                    post_action()
+                if settle_time is not None and settle_time >= 0:
+                    if settled_at is None:
+                        settled_at = time.monotonic()
+                    if time.monotonic() - settled_at >= settle_time:
+                        return True
+                else:
+                    return True
+            else:
+                settled_at = None
+            self.sleep(WAIT_UNTIL_POLL_INTERVAL, check_reward=False, scaled=False)
+        if raise_if_not_found:
+            raise AbortException("timeout for wait_until")
+        return False
 
     def wait_team_ui_settle(self):
         """等待加载、黑屏或楼层切换结束，直到队伍 UI 重新稳定出现。"""
-        return self.kernel.wait_team_ui_settle()
+        self.wait_until(
+            lambda: not self.is_in_team(),
+            time_out=1,
+            raise_if_not_found=False,
+        )
+        self.wait_until(
+            self.is_in_team,
+            time_out=30,
+            settle_time=0.25,
+            raise_if_not_found=False,
+        )
+        self.sleep(0.1, check_reward=False)
+        return True
 
     def _is_black_screen_in_image(self, image):
         """用画面亮度判断是否处于黑屏/加载状态，避免误判角色死亡。"""
-        return _kernel_team.is_black_screen(image)
+        bgr = _as_bgr_image(image)
+        if bgr is None:
+            return False
+        sample = bgr[::8, ::8]
+        if sample.size == 0:
+            return False
+        max_ch = sample.max(axis=2)
+        return (
+            float(max_ch.mean()) <= BLACK_SCREEN_MEAN_THRESHOLD
+            and int((max_ch >= BLACK_SCREEN_BRIGHT_PIXEL_THRESHOLD).sum())
+            <= BLACK_SCREEN_BRIGHT_PIXEL_COUNT
+        )
 
     def _is_in_team_in_image(self, image):
         """检测底部队伍 UI 特征，判断当前是否已回到可操作界面。"""
-        return _kernel_team.is_in_team(image)
+        if np is None:
+            return True
+        roi = _crop_roi(image, _scale_roi(TEAM_HEALTH_SLASH_ROI, image))
+        if roi is None:
+            return False
+        max_ch = roi.max(axis=2)
+        min_ch = roi.min(axis=2)
+        bright = (max_ch >= 175) & ((max_ch - min_ch) <= 95)
+        return int(bright.sum()) >= 10
 
     def is_in_team(self):
         """截图并判断当前是否处于队伍可操作界面。"""
-        return self.kernel.is_in_team()
+        image = self._screencap()
+        if image is None:
+            return True
+        return self._is_in_team_in_image(image)
 
     def _current_char_roi_score(self, image, roi, index):
         """计算指定角色槽位高亮区域中的亮色/彩色像素分数。"""
-        return _kernel_team.slot_roi_score(image, roi, index)
+        crop = _crop_roi(image, _scale_roi(roi, image))
+        if crop is None:
+            return 0
+        max_ch = crop.max(axis=2)
+        min_ch = crop.min(axis=2)
+        sat = max_ch - min_ch
+        white_threshold = CURRENT_CHAR_SLOT_WHITE_THRESHOLDS[index]
+        colored_threshold = CURRENT_CHAR_SLOT_COLORED_THRESHOLDS[index]
+        white = (max_ch >= white_threshold) & (sat <= 65)
+        colored = (max_ch >= colored_threshold) & (sat >= 55)
+        return int((white | colored).sum())
 
     def _current_char_scores(self, image):
         """计算四个角色槽位的大区域高亮分数，用于判断当前角色。"""
-        return _kernel_team.slot_scores(image)
+        if np is None:
+            return [0, 0, 0, 0]
+        scores = []
+        for index in range(4):
+            broad_roi = list(CURRENT_CHAR_MARKER_ROI)
+            broad_roi[1] += CURRENT_CHAR_SLOT_SPACING * index
+            score = self._current_char_roi_score(image, broad_roi, index)
+            score += CURRENT_CHAR_SLOT_SCORE_BONUS[index]
+            scores.append(score)
+        return scores
 
     def _current_char_core_scores(self, image):
         """计算四个角色槽位的小核心高亮分数，给二号位暗头像兜底。"""
-        return _kernel_team.slot_core_scores(image)
+        if np is None:
+            return [0, 0, 0, 0]
+        scores = []
+        for index in range(4):
+            core_roi = list(CURRENT_CHAR_MARKER_CORE_ROI)
+            core_roi[1] += CURRENT_CHAR_SLOT_SPACING * index
+            scores.append(
+                self._current_char_roi_score(image, core_roi, index)
+                * CURRENT_CHAR_CORE_SCORE_WEIGHT
+            )
+        return scores
 
     def _is_current_char_score_accepted(self, scores, index):
         """用最低分和领先差值判断目标槽位高亮是否可信。"""
-        return _kernel_team.is_slot_score_accepted(scores, index)
+        if not scores or not 0 <= index < len(scores):
+            return False
+        target_score = scores[index]
+        other_scores = [score for idx, score in enumerate(scores) if idx != index]
+        best_other = max(other_scores) if other_scores else 0
+        min_score = CURRENT_CHAR_SLOT_MIN_SCORE[index]
+        min_margin = CURRENT_CHAR_SLOT_MIN_MARGIN[index]
+        return target_score >= min_score and target_score - best_other >= min_margin
 
     def _is_slot2_core_score_accepted(self, image):
         """二号位头像偏暗时，用核心高亮区域单独确认是否切到二号位。"""
-        return _kernel_team.is_slot2_core_accepted(image)
+        scores = self._current_char_core_scores(image)
+        target_score = scores[1]
+        best_other = max(score for idx, score in enumerate(scores) if idx != 1)
+        return (
+            target_score >= CURRENT_CHAR_SLOT2_CORE_MIN_SCORE
+            and target_score - best_other >= CURRENT_CHAR_SLOT2_CORE_MIN_MARGIN
+        )
 
     def get_current_char_index(self, image=None):
         """返回当前高亮的角色槽位索引；无法可靠判断时返回 -1。"""
-        return self.kernel.current_slot_index(image=image)
+        if image is None:
+            image = self._screencap()
+        if image is None:
+            return -1
+        scores = self._current_char_scores(image)
+        if not scores:
+            return -1
+        best_idx = max(range(len(scores)), key=lambda idx: scores[idx])
+        if self._is_current_char_score_accepted(scores, best_idx):
+            return best_idx
+        return -1
 
     def is_char_at_index(self, index, image=None):
         """判断当前高亮角色是否为指定槽位，二号位会额外走核心兜底。"""
-        return self.kernel.is_slot_active(index, image=image)
+        if image is None:
+            image = self._screencap()
+        if image is None:
+            return False
+        index = int(index)
+        if self._is_current_char_score_accepted(
+            self._current_char_scores(image), index
+        ):
+            return True
+        if index == 1:
+            return self._is_slot2_core_score_accepted(image)
+        return False
 
     def ensure_in_team(self, time_out=2.0):
         """尝试按 Esc 关闭弹窗或复活界面，直到回到队伍 UI。"""
-        return self.kernel.ensure_in_team(time_out=time_out)
+        deadline = time.monotonic() + time_out
+        while time.monotonic() < deadline:
+            if self.is_in_team():
+                return True
+            self.send_key("esc", action_name="ensure_in_team", interval=0.3)
+            self.sleep(0.05, check_reward=False, scaled=False)
+        return self.is_in_team()
 
     def _run_check_node(self, node_name, timeout=1.5):
         """在超时时间内反复执行某个单次识别节点，命中即返回。"""
@@ -569,7 +1292,10 @@ class PinkPawHeistCore3Path:
 
     def _screencap(self):
         """通过控制器截取当前游戏画面。"""
-        return self.kernel.screencap()
+        controller = getattr(getattr(self.ctx, "tasker", None), "controller", None)
+        if controller is None:
+            return None
+        return controller.post_screencap().wait().get()
 
     def _recognize_once(self, node_name, image=None):
         """执行一次识别：优先使用本地快速识别，不支持时调用 MAA 节点。"""
@@ -939,27 +1665,148 @@ class PinkPawHeistCore3Path:
             self.sleep(0.2)
         return str(key)
 
-    def _on_switch_key_sent(self, role, key):
-        """切人状态机发出候选键时的业务簿记：记录当前战斗位。"""
-        if role == self.ROLE_FIGHTER:
+    def _send_current_switch_key(self):
+        """发送当前候选角色键，并刷新切换确认截止时间。"""
+        state = self._switch_state
+        if state is None:
+            return None
+        key = state.current_key
+        if state.role == self.ROLE_FIGHTER:
             self._current_fighter_key = key
-
-    def _on_switch_candidate_dead(self, role, key):
-        """候选疑似阵亡时的业务簿记：把战斗位加入死亡名单。"""
-        if role == self.ROLE_FIGHTER and key not in self._dead_fighter_keys:
-            self._dead_fighter_keys.append(key)
+        state.deadline = time.monotonic() + self.SWITCH_CHECK_DURATION
+        self._next_switch_poll_at = time.monotonic() + 0.05
+        self.send_key(key)
+        return key
 
     def _clear_switch_state(self):
         """清空正在进行的角色切换状态。"""
-        self.kernel.switcher.clear()
+        self._switch_state = None
+        self._next_switch_poll_at = 0.0
+
+    def _handle_dead_switch_candidate(self, state: CharacterSwitchState):
+        """切人后疑似不在队伍 UI 时，按角色死亡处理并尝试下一个候选。"""
+        role = state.role
+        key = state.current_key
+        self.log_warning(f"{role} char {key} may be dead, try next")
+        if role == self.ROLE_FIGHTER and key not in self._dead_fighter_keys:
+            self._dead_fighter_keys.append(key)
+        self.ensure_in_team()
+        if not state.advance():
+            self._clear_switch_state()
+            raise AbortException(f"{role} {state.keys} dead or empty")
+        self._send_current_switch_key()
 
     def _poll_character_switch(self):
         """后台监控未确认切人过程，处理黑屏、死亡和复活界面。"""
-        self.kernel.switcher.poll()
+        if self._switch_state is None or self._handling_switch_state:
+            return
+        now = time.monotonic()
+        if now < self._next_switch_poll_at:
+            return
+        self._next_switch_poll_at = now + 0.1
+
+        state = self._switch_state
+        if now > state.deadline:
+            self._clear_switch_state()
+            return
+
+        image = self._screencap()
+        if image is not None and self._is_black_screen_in_image(image):
+            state.deadline = max(
+                state.deadline,
+                time.monotonic() + SWITCH_BLACK_SCREEN_EXTENSION,
+            )
+            return
+        if image is None or self._is_in_team_in_image(image):
+            return
+
+        self._handling_switch_state = True
+        try:
+            self._handle_dead_switch_candidate(state)
+        finally:
+            self._handling_switch_state = False
+
+    def _wait_character_switch_success(self, role, key):
+        """等待目标槽位高亮确认；没确认时重按，疑似死亡时换下一个候选。"""
+        last_key = str(key)
+        retry_count = 0
+        retry_key = last_key
+        not_team_since = None
+        old_handling = self._handling_switch_state
+        self._handling_switch_state = True
+        try:
+            while self._switch_state is not None:
+                state = self._switch_state
+                last_key = state.current_key
+                if retry_key != last_key:
+                    retry_key = last_key
+                    retry_count = 0
+                now = time.monotonic()
+                if now > state.deadline:
+                    if retry_count < SWITCH_CONFIRM_RETRY_COUNT:
+                        retry_count += 1
+                        self.log_warning(
+                            f"{role} switch to {last_key} not confirmed, retry {retry_count}"
+                        )
+                        self.send_key(
+                            last_key,
+                            action_name=f"switch_char_retry:{last_key}",
+                            interval=-1,
+                        )
+                        state.deadline = time.monotonic() + SWITCH_CONFIRM_RETRY_WINDOW
+                        not_team_since = None
+                        continue
+                    self.log_warning(f"{role} switch to {last_key} not confirmed")
+                    self._clear_switch_state()
+                    return last_key
+
+                self.send_key(last_key, action_name="switch_char", interval=0.5)
+                image = self._screencap()
+                if image is not None and self.is_char_at_index(
+                    int(last_key) - 1, image=image
+                ):
+                    self._clear_switch_state()
+                    return last_key
+
+                if image is not None and self._is_black_screen_in_image(image):
+                    state.deadline = max(
+                        state.deadline,
+                        time.monotonic() + SWITCH_BLACK_SCREEN_EXTENSION,
+                    )
+                    not_team_since = None
+                    self.sleep(
+                        WAIT_UNTIL_POLL_INTERVAL,
+                        check_reward=False,
+                        scaled=False,
+                    )
+                    continue
+
+                in_team = True if image is None else self._is_in_team_in_image(image)
+                if in_team:
+                    not_team_since = None
+                else:
+                    if not_team_since is None:
+                        not_team_since = now
+                    elif now - not_team_since >= SWITCH_DEAD_SETTLE:
+                        self._handle_dead_switch_candidate(state)
+                        not_team_since = None
+
+                self.sleep(WAIT_UNTIL_POLL_INTERVAL, check_reward=False, scaled=False)
+        finally:
+            self._handling_switch_state = old_handling
+
+        return last_key
 
     def _begin_character_switch(self, role, keys, check_switched=False):
         """创建切人状态并发出首个候选按键，必要时等待高亮确认。"""
-        return self.kernel.switcher.begin(role, keys, check_switched=check_switched)
+        keys = [str(key) for key in keys]
+        if not keys:
+            raise AbortException(f"{role} {keys} dead or empty")
+        self._switch_state = CharacterSwitchState(role=role, keys=keys)
+        key = self._send_current_switch_key()
+        if check_switched:
+            return self._wait_character_switch_success(role, key)
+        return key
 
     def switch_to_runner(self, check_switched=False):
         """切到跑图角色，默认是三号位薄荷。"""
@@ -1025,7 +1872,13 @@ class PinkPawHeistCore3Path:
 
     def _release_held_keys(self):
         """释放脚本内部记录为按住状态的键，防止异常后持续移动。"""
-        self.kernel.release_held_keys()
+        held = list(self._held_keys)
+        self._held_keys.clear()
+        for key in held:
+            try:
+                self.ah.key_up(key)
+            except Exception as exc:
+                self.log_error(f"release held key {key} failed", exc)
         self._quick_pick_active = False
 
     def goto_lg1(self):

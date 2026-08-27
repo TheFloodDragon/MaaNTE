@@ -141,6 +141,7 @@
         "resource/tasks/OnlineMapNavigation.json",
         "resource/tasks/SoundDodge.json",
         "resource/tasks/AutoFScroll.json",
+        "resource/tasks/AutoCombat.json",
         // group:others
         "resource/tasks/FountainCheckin.json",
         "resource/tasks/AutoPiano.json",

@@ -280,5 +280,18 @@
     "task_auto_volleyball_character_4": "残虹",
     "task_auto_volleyball_character_5": "卡厄斯",
     "task_auto_volleyball_character_6": "真红",
-    "task_auto_volleyball_character_7": "伊洛伊"
+    "task_auto_volleyball_character_7": "伊洛伊",
+    "task_auto_combat_label": "自动战斗",
+    "task_auto_combat_desc": "按规则脚本自动出招。需自行进入战斗后再启动本任务，脚本不负责寻怪与场景跳转。",
+    "task_auto_combat_option_preset": "战斗预设",
+    "task_auto_combat_option_preset_desc": "选择内置战斗脚本。「按编成出招」需先在预设文件里改成自己的实际队伍站位。",
+    "task_auto_combat_preset_basic_attack": "仅普攻",
+    "task_auto_combat_preset_skill_rotation": "通用技能循环",
+    "task_auto_combat_preset_team_rotation": "按编成出招（需自行配置）",
+    "task_auto_combat_option_duration": "最长运行时间（秒）",
+    "task_auto_combat_option_duration_desc": "到时自动结束。离开队伍界面也会提前结束。",
+    "task_auto_combat_option_stop_when_not_in_team": "脱离战斗界面时结束",
+    "task_auto_combat_option_stop_when_not_in_team_desc": "开启后，离开队伍界面超过 3 秒即结束任务。关闭则一直跑到时间上限。",
+    "task_auto_combat_option_log_decisions": "输出规则触发日志",
+    "task_auto_combat_option_log_decisions_desc": "打印每次触发的规则名与条件，用于排查脚本为何不生效。"
 }

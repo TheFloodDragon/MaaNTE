@@ -36,6 +36,7 @@ from .SyncCharacterAbilityCityAbility import *
 from .DatasetCollection.autonomous_driving_dataset_recorder import *
 from .BagelSpam import *
 from .auto_volleyball import *
+from .auto_combat import *
 
 __all__ = [
     "AutoMakeCoffee",
@@ -88,4 +89,5 @@ __all__ = [
     "VolleyballSelectTeammates",
     "VolleyballPlay",
     "VolleyballAdvanceDifficulty",
+    "AutoCombat",
 ]

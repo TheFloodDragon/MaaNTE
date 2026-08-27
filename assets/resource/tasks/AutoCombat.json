@@ -1,0 +1,146 @@
+{
+    "task": [
+        {
+            "name": "AutoCombat",
+            "label": "$task_auto_combat_label",
+            "entry": "AutoCombatMain",
+            "description": "$task_auto_combat_desc",
+            "controller": [
+                "Win32-Front",
+                "CloudGame-Front"
+            ],
+            "group": [
+                "RealTimeAssist"
+            ],
+            "option": [
+                "AutoCombatPreset",
+                "AutoCombatDuration",
+                "AutoCombatStopWhenNotInTeam",
+                "AutoCombatLogDecisions"
+            ]
+        }
+    ],
+    "option": {
+        "AutoCombatPreset": {
+            "type": "select",
+            "label": "$task_auto_combat_option_preset",
+            "description": "$task_auto_combat_option_preset_desc",
+            "default_case": "BasicAttack",
+            "cases": [
+                {
+                    "name": "BasicAttack",
+                    "label": "$task_auto_combat_preset_basic_attack",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "preset": "basic_attack"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "SkillRotation",
+                    "label": "$task_auto_combat_preset_skill_rotation",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "preset": "skill_rotation"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "TeamRotation",
+                    "label": "$task_auto_combat_preset_team_rotation",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "preset": "team_rotation"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "AutoCombatDuration": {
+            "type": "input",
+            "label": "$task_auto_combat_option_duration",
+            "description": "$task_auto_combat_option_duration_desc",
+            "inputs": [
+                {
+                    "name": "duration",
+                    "default": "60",
+                    "pipeline_type": "int",
+                    "verify": "^\\d+$"
+                }
+            ],
+            "pipeline_override": {
+                "AutoCombatMain": {
+                    "custom_action_param": {
+                        "duration": "{duration}"
+                    }
+                }
+            }
+        },
+        "AutoCombatStopWhenNotInTeam": {
+            "type": "switch",
+            "label": "$task_auto_combat_option_stop_when_not_in_team",
+            "description": "$task_auto_combat_option_stop_when_not_in_team_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "stop_when_not_in_team": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "stop_when_not_in_team": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "AutoCombatLogDecisions": {
+            "type": "switch",
+            "label": "$task_auto_combat_option_log_decisions",
+            "description": "$task_auto_combat_option_log_decisions_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "log_decisions": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "log_decisions": false
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

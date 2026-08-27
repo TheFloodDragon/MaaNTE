@@ -61,7 +61,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| 自动战斗 | ⚠ 开发中 |
+| [自动战斗引擎](./combat-engine.md) | 基于 JSON 规则表的自动战斗：分层结构、脚本格式、能力边界与验证（需手动进入战斗） |
 | 自动导航 | ⚠ 开发中 |
 
 ## 任务维护文档
@@ -85,6 +85,7 @@
 | 场景跳转/界面导航 | [scene-manager.md](./scene-manager.md) |
 | 调试单个节点 | [node-testing.md](./node-testing.md) |
 | 维护钓鱼控条算法 | [fishpro-control.md](./fishpro-control.md) |
+| 写自动战斗脚本 / 维护战斗引擎 | [combat-engine.md](./combat-engine.md) |
 | 查阅编码规范 | [coding-standards.md](./coding-standards.md) |
 
 ## 参考

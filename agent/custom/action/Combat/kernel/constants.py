@@ -1,0 +1,131 @@
+"""战斗内核常量。
+
+除 ``VK_COMBAT_EXTRA`` 外，本文件所有取值都从 ``pinkpaw_core3`` 原样搬移，
+逐一对齐，不做任何调整。改动这里等于改动已上线的粉爪路线，请配合
+``tools/verify_combat.py`` 的内核等价性分组一起验证。
+"""
+
+from __future__ import annotations
+
+# --- 分辨率基准（720p，与项目资源规范一致） ---
+DEFAULT_WIDTH = 1280
+DEFAULT_HEIGHT = 720
+
+# --- 虚拟键码 ---
+# 与 pinkpaw_core3.VK 完全一致的部分。
+VK_BASE = {
+    "w": 0x57,
+    "a": 0x41,
+    "s": 0x53,
+    "d": 0x44,
+    "space": 0x20,
+    "e": 0x45,
+    "f": 0x46,
+    "1": 0x31,
+    "2": 0x32,
+    "3": 0x33,
+    "4": 0x34,
+    "m": 0x4D,
+    "f5": 0x74,
+    "esc": 0x1B,
+    "lshift": 0xA0,
+    "shift": 0x10,
+}
+
+# 战斗需要而粉爪路线用不到的键。粉爪从不发送这些键，
+# 因此把它们并入 VK 不会改变粉爪的任何行为（原先返回 None -> False）。
+VK_COMBAT_EXTRA = {
+    "q": 0x51,
+    "r": 0x52,
+    "t": 0x54,
+    "x": 0x58,
+    "c": 0x43,
+    "v": 0x56,
+    "z": 0x5A,
+    "g": 0x47,
+    "h": 0x48,
+    "tab": 0x09,
+    "ctrl": 0x11,
+    "lctrl": 0xA2,
+    "alt": 0x12,
+    "lalt": 0xA4,
+    "rshift": 0xA1,
+    "enter": 0x0D,
+    "5": 0x35,
+    "6": 0x36,
+}
+
+VK = {**VK_BASE, **VK_COMBAT_EXTRA}
+
+MOUSE_VK = {
+    "left": 0x01,
+    "right": 0x02,
+    "middle": 0x04,
+}
+
+# --- 时间微调 ---
+DEFAULT_ROUTE_TIMING_SCALE = 1.0
+MIN_ROUTE_TIMING_SCALE = 0.25
+MAX_ROUTE_TIMING_SCALE = 1.2
+MAX_ROUTE_SLEEP_ADJUST = 0.25
+ROUTE_SLEEP_ADJUST_RATIO_CAP = 0.08
+
+# --- 等待 ---
+ROUTE_SLEEP_BUSY_WAIT = 0.02
+ROUTE_SLEEP_POLL_INTERVAL = 0.005
+ROUTE_REWARD_CHECK_MIN_SLEEP = 0.5
+WAIT_UNTIL_POLL_INTERVAL = 0.02
+NEXT_FRAME_INTERVAL = 0.05
+
+# --- 按键时序 ---
+TIMING_SENSITIVE_KEYS = {"w", "a", "s", "d", "lshift", "space", "e"}
+DIRECT_KEY_TAP_DURATION = 0.01
+DIRECT_QUICK_PICK_TAP_DURATION = 0.002
+DIRECT_ACTION_KEY_MIN_TAP_DURATION = 0.05
+DIRECT_ACTION_KEYS = {"space", "lshift", "shift"}
+LONG_PRESS_THRESHOLD = 0.06
+DEFAULT_DIRECT_INPUT = True
+
+# --- 队伍 UI 判定 ---
+TEAM_HEALTH_SLASH_ROI = [620, 654, 95, 42]
+TEAM_SLASH_BRIGHT_THRESHOLD = 175
+TEAM_SLASH_MAX_SATURATION = 95
+TEAM_SLASH_MIN_PIXELS = 10
+
+# --- 当前角色槽位高亮判定 ---
+CURRENT_CHAR_MARKER_ROI = [1168, 164, 68, 36]
+CURRENT_CHAR_MARKER_CORE_ROI = [1176, 172, 38, 16]
+CURRENT_CHAR_SLOT_SPACING = 88
+CURRENT_CHAR_SLOT_COUNT = 4
+CURRENT_CHAR_MIN_SCORE = 16
+CURRENT_CHAR_MIN_MARGIN = 5
+CURRENT_CHAR_SLOT_WHITE_THRESHOLDS = [205, 188, 205, 205]
+CURRENT_CHAR_SLOT_COLORED_THRESHOLDS = [170, 145, 170, 170]
+CURRENT_CHAR_SLOT_SCORE_BONUS = [0, 4, 0, 0]
+CURRENT_CHAR_SLOT_MIN_SCORE = [16, 12, 16, 16]
+CURRENT_CHAR_SLOT_MIN_MARGIN = [5, 2, 5, 5]
+CURRENT_CHAR_CORE_SCORE_WEIGHT = 3
+CURRENT_CHAR_SLOT2_CORE_MIN_SCORE = 6
+CURRENT_CHAR_SLOT2_CORE_MIN_MARGIN = 2
+CURRENT_CHAR_WHITE_MAX_SATURATION = 65
+CURRENT_CHAR_COLORED_MIN_SATURATION = 55
+
+# --- 切人状态机 ---
+SWITCH_DEAD_SETTLE = 0.15
+SWITCH_BLACK_SCREEN_EXTENSION = 0.5
+SWITCH_CONFIRM_RETRY_COUNT = 1
+SWITCH_CONFIRM_RETRY_WINDOW = 0.7
+SWITCH_CHECK_DURATION = 1.0
+SWITCH_POLL_INTERVAL = 0.1
+SWITCH_FIRST_POLL_DELAY = 0.05
+
+# --- 黑屏判定 ---
+BLACK_SCREEN_MEAN_THRESHOLD = 18
+BLACK_SCREEN_BRIGHT_PIXEL_THRESHOLD = 80
+BLACK_SCREEN_BRIGHT_PIXEL_COUNT = 300
+BLACK_SCREEN_SAMPLE_STRIDE = 8
+
+# --- 快速模板匹配 ---
+FAST_TEMPLATE_SAMPLE_LIMIT = 64
+FAST_TEMPLATE_CANDIDATE_LIMIT = 5000
+FAST_TEMPLATE_ANCHOR_TOLERANCE = 45

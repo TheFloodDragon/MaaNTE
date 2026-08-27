@@ -274,5 +274,18 @@
     "task_auto_volleyball_character_4": "Canhong",
     "task_auto_volleyball_character_5": "Chaos",
     "task_auto_volleyball_character_6": "Zhenhong",
-    "task_auto_volleyball_character_7": "Yiluoyi"
+    "task_auto_volleyball_character_7": "Yiluoyi",
+    "task_auto_combat_label": "Auto Combat",
+    "task_auto_combat_desc": "Executes skills based on a rule script. Enter combat yourself before starting this task; the script does not find enemies or navigate scenes.",
+    "task_auto_combat_option_preset": "Combat preset",
+    "task_auto_combat_option_preset_desc": "Choose a built-in combat script. \"Per team lineup\" requires editing the preset file with your actual party slots first.",
+    "task_auto_combat_preset_basic_attack": "Basic attack only",
+    "task_auto_combat_preset_skill_rotation": "Generic skill rotation",
+    "task_auto_combat_preset_team_rotation": "Per team lineup (needs setup)",
+    "task_auto_combat_option_duration": "Max duration (seconds)",
+    "task_auto_combat_option_duration_desc": "Stops when the time is up. Also stops early if you leave the party UI.",
+    "task_auto_combat_option_stop_when_not_in_team": "Stop when leaving combat UI",
+    "task_auto_combat_option_stop_when_not_in_team_desc": "When on, the task ends after the party UI has been absent for 3 seconds. When off, it runs until the time limit.",
+    "task_auto_combat_option_log_decisions": "Log rule triggers",
+    "task_auto_combat_option_log_decisions_desc": "Prints the name and condition of each triggered rule, for diagnosing why a script is not working."
 }
