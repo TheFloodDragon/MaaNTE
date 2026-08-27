@@ -6,7 +6,8 @@
             "entry": "VolleyballEntrance",
             "description": "$task_auto_volleyball_desc",
             "controller": [
-                "Win32-Front"
+                "Win32-Front",
+                "CloudGame-Front"
             ],
             "group": [
                 "HethereauHobbies"

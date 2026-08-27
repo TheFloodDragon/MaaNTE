@@ -58,8 +58,10 @@
         },
         {
             "name": "CloudGame-Front",
+            "label": "$controller_cloud_game_front_label",
             "type": "Win32",
             "permission_required": true,
+            "display_short_side": 720,
             "win32": {
                 "class_regex": "Qt.*",
                 "window_regex": "^\\s*(云.*?异环)\\s*$",

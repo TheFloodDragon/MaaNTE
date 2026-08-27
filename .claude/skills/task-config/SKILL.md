@@ -38,7 +38,8 @@ description: MaaNTE 任务配置（tasks/*.json）编写指南。覆盖任务入
             ],
             "controller": [                      // 可选：限制控制器类型
                 "Win32",
-                "Win32-Front"
+                "Win32-Front",
+                "CloudGame-Front"
             ]
         }
     ],
@@ -59,7 +60,9 @@ description: MaaNTE 任务配置（tasks/*.json）编写指南。覆盖任务入
 | `entry` | string | ✅ | Pipeline 入口节点名，对应 pipeline JSON 中的节点 key |
 | `description` | string | ❌ | UI 描述，`$i18n_key` 格式（不加 `$` 则为纯文本） |
 | `option` | string[] | ❌ | 启用的选项名列表，对应 `option` 块中的 key |
-| `controller` | string[] | ❌ | 限制可用控制器：`"Win32"` / `"Win32-Front"` / `"Win32-Background"`。不写 = 通用 |
+| `controller` | string[] | ❌ | 限制可用控制器：`"Win32"` / `"Win32-Front"` / `"Win32-Background"` / `"CloudGame-Front"`。不写 = 通用 |
+
+新增或修改前台任务时，应同时评估 `Win32-Front` 与 `CloudGame-Front`。通过 MaaFramework 控制器截图、点击和按键的任务通常可以同时支持；依赖本机游戏进程、游戏网络包、固定原生窗口标题或本地窗口样式的任务，不能仅通过追加 `CloudGame-Front` 白名单宣称兼容。
 
 ## 选项类型
 

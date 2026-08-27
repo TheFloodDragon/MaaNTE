@@ -6,6 +6,7 @@ from maa.custom_action import CustomAction
 from maa.context import Context
 
 from utils.logger import logger
+from utils import pienv
 
 DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
@@ -94,6 +95,12 @@ class ResizeGameWindow(CustomAction):
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             logger.warning("resize_game_window 参数解析失败: %s", exc)
             return CustomAction.RunResult(success=False)
+
+        if pienv.controller_name() == "CloudGame-Front":
+            logger.info(
+                "云异环前台控制器由 MaaFramework 统一画面尺度，跳过本地游戏窗口缩放"
+            )
+            return CustomAction.RunResult(success=True)
 
         if ensure_game_window_resolution is None:
             logger.warning("resize_game_window 仅支持 Windows 或 win32_process 不可用")

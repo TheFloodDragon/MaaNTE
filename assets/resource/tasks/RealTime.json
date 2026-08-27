@@ -12,7 +12,8 @@
                 "RealTimeAutoTeleport"
             ],
             "controller": [
-                "Win32-Front"
+                "Win32-Front",
+                "CloudGame-Front"
             ],
             "group": [
                 "RealTimeAssist"

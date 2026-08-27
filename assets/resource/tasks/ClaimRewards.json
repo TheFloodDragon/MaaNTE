@@ -7,7 +7,8 @@
             "description": "$task_claim_rewards_desc",
             "controller": [
                 "Win32",
-                "Win32-Front"
+                "Win32-Front",
+                "CloudGame-Front"
             ],
             "group": [
                 "Daily"

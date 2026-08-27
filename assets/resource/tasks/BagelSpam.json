@@ -6,7 +6,8 @@
             "entry": "BagelSpamEntrance",
             "description": "$task_bagel_spam_desc",
             "controller": [
-                "Win32-Front"
+                "Win32-Front",
+                "CloudGame-Front"
             ],
             "group": [
                 "HethereauHobbies"

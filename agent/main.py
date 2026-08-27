@@ -447,7 +447,17 @@ def _check_admin_privilege():
 
 
 def _check_game_resolution():
-    """连接控制器后检测游戏窗口分辨率"""
+    """连接控制器后初始化自动化使用的画面尺寸。"""
+    from utils import pienv
+
+    if pienv.controller_name() == "CloudGame-Front":
+        screen.update_screen_size(screen.BASELINE_WIDTH, screen.BASELINE_HEIGHT)
+        logger.info(
+            "云异环前台控制器已启用 1280x720 画面归一化；"
+            "请使用 16:9 串流画面，若存在黑边或识图异常请检查云客户端分辨率设置"
+        )
+        return
+
     from utils.win32_process import find_window_by_process, get_client_size
 
     hwnd = find_window_by_process("HTGame.exe")

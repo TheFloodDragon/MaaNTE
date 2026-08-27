@@ -6,6 +6,8 @@ import sys
 from maa.custom_action import CustomAction
 from maa.context import Context
 
+from utils import pienv
+
 
 DEFAULT_AUTO_RESIZE_GAME_WINDOW = True
 AUTO_RESIZE_CONFIG_NODE = "PinkPawHeist_AutoResizeGameWindowConfig"
@@ -55,6 +57,9 @@ def _get_auto_resize_game_window(
     ctx: Context,
     default=DEFAULT_AUTO_RESIZE_GAME_WINDOW,
 ) -> bool:
+    if pienv.controller_name() == "CloudGame-Front":
+        return False
+
     try:
         node_data = ctx.get_node_data(AUTO_RESIZE_CONFIG_NODE) or {}
     except Exception:

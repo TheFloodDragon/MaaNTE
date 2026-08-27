@@ -6,7 +6,8 @@
             "entry": "SyncCharacterAbilityCityAbilityEntrance",
             "description": "$task.SyncCharacterAbilityCityAbility.description",
             "controller": [
-                "Win32-Front"
+                "Win32-Front",
+                "CloudGame-Front"
             ],
             "group": [
                 "UserInfo"

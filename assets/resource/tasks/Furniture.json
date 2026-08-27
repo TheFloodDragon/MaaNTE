@@ -6,7 +6,8 @@
             "entry": "FurnitureEntrance",
             "description": "$task_furniture_desc",
             "controller": [
-                "Win32-Front"
+                "Win32-Front",
+                "CloudGame-Front"
             ],
             "group": [
                 "Daily",
