@@ -21,6 +21,7 @@
             "description": "$task_fish_new_desc",
             "option": [
                 "FishNewAutoNavi",
+                "FishNewControlEngine",
                 "FishSellAuto",
                 "FishBuyBaitAuto"
             ],
@@ -283,6 +284,104 @@
                     "pipeline_override": {
                         "FishNaviEntrance": {
                             "enabled": false
+                        }
+                    }
+                }
+            ]
+        },
+        "FishNewControlEngine": {
+            "type": "select",
+            "label": "$task_fish_new_option_control_engine",
+            "description": "$task_fish_new_option_control_engine_desc",
+            "default_case": "Legacy",
+            "cases": [
+                {
+                    "name": "Legacy",
+                    "label": "$task_fish_new_option_control_engine_case_legacy",
+                    "pipeline_override": {
+                        "FishNewGaming": {
+                            "enabled": true
+                        },
+                        "FishNewGamingPro": {
+                            "enabled": false
+                        }
+                    }
+                },
+                {
+                    "name": "Pro",
+                    "label": "$task_fish_new_option_control_engine_case_pro",
+                    "pipeline_override": {
+                        "FishNewGaming": {
+                            "enabled": false
+                        },
+                        "FishNewGamingPro": {
+                            "enabled": true
+                        }
+                    },
+                    "option": [
+                        "FishNewProLearning",
+                        "FishNewProDebug"
+                    ]
+                }
+            ]
+        },
+        "FishNewProLearning": {
+            "type": "switch",
+            "label": "$task_fish_new_option_pro_learning",
+            "description": "$task_fish_new_option_pro_learning_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "FishNewGamingPro": {
+                            "custom_action_param": {
+                                "learning_enabled": true,
+                                "learning_replay_history": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "FishNewGamingPro": {
+                            "custom_action_param": {
+                                "learning_enabled": false,
+                                "learning_replay_history": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "FishNewProDebug": {
+            "type": "switch",
+            "label": "$task_fish_new_option_pro_debug",
+            "description": "$task_fish_new_option_pro_debug_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "FishNewGamingPro": {
+                            "custom_action_param": {
+                                "debug_enabled": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "FishNewGamingPro": {
+                            "custom_action_param": {
+                                "debug_enabled": false
+                            }
                         }
                     }
                 }

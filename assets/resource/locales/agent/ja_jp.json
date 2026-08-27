@@ -3,6 +3,7 @@
     "autofish.fish_escape": "魚が逃げました！",
     "autofish.task_end": "釣りタスク終了",
     "autofish.started": "=== 自動釣り開始 ===",
+    "autofish.pro_learning_on": "FishPro のオンライン学習を有効化しました。サンプルとモデルは debug/fishpro/ に書き出されます",
     "autofish.progress": "=== 釣り %d/%d ===",
     "autofish.all_done": "すべての釣りタスクが完了しました。",
     "autofish.buy_bait_started": "=== 自動餌購入開始 ===",

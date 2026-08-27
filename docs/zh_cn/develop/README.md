@@ -70,7 +70,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| 待补充 | 待补充 |
+| [FishPro 控条引擎](./fishpro-control.md) | 钓鱼(新)的可选控条实现：分层结构、关键设计、参数与验证 |
 
 ## 快速跳转
 
@@ -84,6 +84,7 @@
 | 调用本地路线寻路 | [local-route-navigation.md](./local-route-navigation.md) |
 | 场景跳转/界面导航 | [scene-manager.md](./scene-manager.md) |
 | 调试单个节点 | [node-testing.md](./node-testing.md) |
+| 维护钓鱼控条算法 | [fishpro-control.md](./fishpro-control.md) |
 | 查阅编码规范 | [coding-standards.md](./coding-standards.md) |
 
 ## 参考

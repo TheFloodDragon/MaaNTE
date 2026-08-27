@@ -64,6 +64,7 @@
             70 // F
         ],
         "next": [
+            "FishNewGamingPro",
             "FishNewGaming",
             "FishNewFishHooked"
         ],
@@ -101,6 +102,39 @@
             "FishNewEscapeResult",
             "FishNewStart",
             "FishNewGaming"
+        ],
+        "on_error": [
+            "[Anchor]FishNewErrorRestart"
+        ]
+    },
+    "FishNewGamingPro": {
+        "desc": "进行钓鱼游戏（FishPro 控条引擎）",
+        "enabled": false,
+        "recognition": "And",
+        "all_of": [
+            "FishCursor"
+        ],
+        "action": "Custom",
+        "custom_action": "auto_fish_pro",
+        "custom_action_param": {
+            "roi_px": [
+                384,
+                21,
+                512,
+                58
+            ],
+            "control_end_grace_ms": 300,
+            "lost_abort_ms": 1500,
+            "session_timeout_ms": 60000,
+            "learning_enabled": false,
+            "debug_enabled": false
+        },
+        "pre_delay": 0,
+        "next": [
+            "FishNewGameResult",
+            "FishNewEscapeResult",
+            "FishNewStart",
+            "FishNewGamingPro"
         ],
         "on_error": [
             "[Anchor]FishNewErrorRestart"

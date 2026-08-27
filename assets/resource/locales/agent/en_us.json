@@ -3,6 +3,7 @@
     "autofish.fish_escape": "Fish escaped!",
     "autofish.task_end": "Fishing task ended",
     "autofish.started": "=== Auto Fishing Started ===",
+    "autofish.pro_learning_on": "FishPro online learning enabled; samples and model will be written to debug/fishpro/",
     "autofish.progress": "=== Fishing %d/%d ===",
     "autofish.all_done": "All fishing tasks complete.",
     "autofish.buy_bait_started": "=== Auto Buy Bait Started ===",

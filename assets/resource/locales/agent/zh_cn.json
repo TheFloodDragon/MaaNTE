@@ -3,6 +3,7 @@
     "autofish.fish_escape": "鱼逃走了！",
     "autofish.task_end": "钓鱼任务结束",
     "autofish.started": "=== 自动钓鱼已启动 ===",
+    "autofish.pro_learning_on": "FishPro 控条已开启在线学习，样本与模型将写入 debug/fishpro/",
     "autofish.progress": "=== 钓鱼 %d/%d ===",
     "autofish.all_done": "所有钓鱼任务已完成。",
     "autofish.buy_bait_started": "=== 自动买鱼饵已启动 ===",
