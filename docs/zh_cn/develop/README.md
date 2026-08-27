@@ -71,6 +71,7 @@
 | 文档 | 说明 |
 |------|------|
 | [FishPro 控条引擎](./fishpro-control.md) | 钓鱼(新)的可选控条实现：分层结构、关键设计、参数与验证 |
+| [云异环启动任务](./cloud-game.md) | 云客户端自动启动、等待进入游戏、定时跑每日的预设与安全边界 |
 
 ## 快速跳转
 
@@ -86,6 +87,7 @@
 | 调试单个节点 | [node-testing.md](./node-testing.md) |
 | 维护钓鱼控条算法 | [fishpro-control.md](./fishpro-control.md) |
 | 写自动战斗脚本 / 维护战斗引擎 | [combat-engine.md](./combat-engine.md) |
+| 云端定时跑每日 / 维护云异环启动 | [cloud-game.md](./cloud-game.md) |
 | 查阅编码规范 | [coding-standards.md](./coding-standards.md) |
 
 ## 参考

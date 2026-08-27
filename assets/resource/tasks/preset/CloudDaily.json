@@ -1,0 +1,43 @@
+{
+    "preset": [
+        {
+            "name": "CloudDaily",
+            "label": "$preset.CloudDaily.label",
+            "description": "$preset.CloudDaily.description",
+            "task": [
+                {
+                    "name": "CloudGameLaunch",
+                    "option": {
+                        "CloudGameWaitInGame": "Yes",
+                        "CloudGameReadyTimeout": {
+                            "ready_timeout": 300
+                        }
+                    }
+                },
+                {
+                    "name": "Furniture",
+                    "option": {
+                        "FurnitureChooseWienerApartments": "Yes",
+                        "FurnitureChooseEdenApartments": "No",
+                        "FurnitureChooseSkyviewHalls": "No",
+                        "FurnitureChooseGoldenCapital": "No",
+                        "FurnitureChooseFenglinVilla": "No"
+                    }
+                },
+                {
+                    "name": "WithdrawMoney",
+                    "option": {
+                        "Restock": "No"
+                    }
+                },
+                {
+                    "name": "ClaimRewards",
+                    "option": {
+                        "ClaimRewardsActivity": "Yes",
+                        "ClaimRewardsBattlePass": "Yes"
+                    }
+                }
+            ]
+        }
+    ]
+}

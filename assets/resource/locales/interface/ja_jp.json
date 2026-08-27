@@ -287,5 +287,15 @@
     "task_auto_combat_option_stop_when_not_in_team": "戦闘画面を離れたら終了",
     "task_auto_combat_option_stop_when_not_in_team_desc": "有効にすると、パーティ UI が 3 秒以上表示されない場合にタスクを終了します。無効の場合は制限時間まで継続します。",
     "task_auto_combat_option_log_decisions": "ルール発動ログを出力",
-    "task_auto_combat_option_log_decisions_desc": "発動したルール名と条件を出力します。スクリプトが動作しない原因の調査に使用します。"
+    "task_auto_combat_option_log_decisions_desc": "発動したルール名と条件を出力します。スクリプトが動作しない原因の調査に使用します。",
+    "task_cloud_game_launch_label": "クラウド版NTEを起動",
+    "task_cloud_game_launch_desc": "クラウド版NTEクライアントを起動し、ゲームに入るまで待機します。定時デイリーの最初のタスクに適しています。ログインはクラウドクライアント側で行われ、本タスクは認証情報を扱いません。",
+    "task_cloud_game_launch_option_path": "クライアントのパス（空欄で自動検出）",
+    "task_cloud_game_launch_option_path_desc": "空欄の場合はレジストリと一般的なインストール先から自動検出します。NTECloudLauncher.exe のフルパス、またはインストールフォルダーも指定できます。",
+    "task_cloud_game_launch_option_wait_in_game": "ゲーム開始まで待機",
+    "task_cloud_game_launch_option_wait_in_game_desc": "有効にすると、オープンワールドを確認してから完了します。後続タスクがロード中に始まりません。無効の場合はウィンドウ表示で完了します。",
+    "task_cloud_game_launch_option_ready_timeout": "ゲーム開始のタイムアウト（秒）",
+    "task_cloud_game_launch_option_ready_timeout_desc": "ログイン・待機列・ロード完了を待つ最大時間です。待機列が長い場合は増やしてください。",
+    "preset.CloudDaily.label": "クラウド版デイリー",
+    "preset.CloudDaily.description": "クラウドクライアントを起動してデイリーを実行します。ゲームに入るまで待機し、家具・引き出し・報酬受取を順に実行します。フロントエンドのスケジューラと併用で放置運用が可能です。"
 }

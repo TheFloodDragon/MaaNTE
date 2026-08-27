@@ -287,5 +287,15 @@
     "task_auto_combat_option_stop_when_not_in_team": "전투 화면을 벗어나면 종료",
     "task_auto_combat_option_stop_when_not_in_team_desc": "활성화하면 파티 UI가 3초 이상 표시되지 않을 때 작업을 종료합니다. 비활성화하면 제한 시간까지 계속 실행합니다.",
     "task_auto_combat_option_log_decisions": "규칙 발동 로그 출력",
-    "task_auto_combat_option_log_decisions_desc": "발동된 규칙 이름과 조건을 출력합니다. 스크립트가 작동하지 않는 원인을 조사할 때 사용합니다."
+    "task_auto_combat_option_log_decisions_desc": "발동된 규칙 이름과 조건을 출력합니다. 스크립트가 작동하지 않는 원인을 조사할 때 사용합니다.",
+    "task_cloud_game_launch_label": "클라우드 NTE 실행",
+    "task_cloud_game_launch_desc": "클라우드 NTE 클라이언트를 실행하고 게임에 진입할 때까지 대기합니다. 예약된 일일 작업의 첫 번째 작업으로 적합합니다. 로그인은 클라우드 클라이언트가 처리하며, 이 작업은 계정 정보를 다루지 않습니다.",
+    "task_cloud_game_launch_option_path": "클라이언트 경로 (비우면 자동 검색)",
+    "task_cloud_game_launch_option_path_desc": "비워 두면 레지스트리와 일반 설치 폴더에서 자동으로 찾습니다. NTECloudLauncher.exe의 전체 경로나 설치 폴더를 입력할 수도 있습니다.",
+    "task_cloud_game_launch_option_wait_in_game": "게임 진입까지 대기",
+    "task_cloud_game_launch_option_wait_in_game_desc": "켜면 오픈 월드를 확인한 뒤 완료되므로 이후 작업이 로딩 중에 시작되지 않습니다. 끄면 창이 나타나는 즉시 완료됩니다.",
+    "task_cloud_game_launch_option_ready_timeout": "게임 진입 제한 시간 (초)",
+    "task_cloud_game_launch_option_ready_timeout_desc": "로그인, 대기열, 로딩 완료를 기다리는 최대 시간입니다. 대기열이 길면 늘리세요.",
+    "preset.CloudDaily.label": "클라우드 일일",
+    "preset.CloudDaily.description": "클라우드 클라이언트를 실행하고 일일 임무를 수행합니다. 게임 진입을 기다린 뒤 가구, 출금, 보상 수령을 순서대로 실행합니다. 프론트엔드 스케줄러와 함께 사용하면 무인 실행이 가능합니다."
 }

@@ -121,6 +121,7 @@
     "task": [],
     "import": [
         // group:Daily
+        "resource/tasks/CloudGameLaunch.json",
         "resource/tasks/ClaimRewards.json",
         // group:CityTycoon
         "resource/tasks/Furniture.json",
@@ -156,6 +157,7 @@
         "resource/tasks/preset/AFK.json",
         // "resource/tasks/preset/FullDaily.json",
         // "resource/tasks/preset/QuickDaily.json",
+        "resource/tasks/preset/CloudDaily.json",
         "resource/tasks/preset/RealtimeAssistance.json"
     ],
     "option": {}

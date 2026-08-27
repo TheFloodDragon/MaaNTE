@@ -1,0 +1,92 @@
+{
+    "task": [
+        {
+            "name": "CloudGameLaunch",
+            "label": "$task_cloud_game_launch_label",
+            "entry": "CloudGameLaunchMain",
+            "description": "$task_cloud_game_launch_desc",
+            "controller": [
+                "CloudGame-Front"
+            ],
+            "group": [
+                "Daily"
+            ],
+            "option": [
+                "CloudGameLauncherPath",
+                "CloudGameWaitInGame",
+                "CloudGameReadyTimeout"
+            ]
+        }
+    ],
+    "option": {
+        "CloudGameLauncherPath": {
+            "type": "input",
+            "label": "$task_cloud_game_launch_option_path",
+            "description": "$task_cloud_game_launch_option_path_desc",
+            "inputs": [
+                {
+                    "name": "launcher_path",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "CloudGameLaunchMain": {
+                    "custom_action_param": {
+                        "launcher_path": "{launcher_path}"
+                    }
+                }
+            }
+        },
+        "CloudGameWaitInGame": {
+            "type": "switch",
+            "label": "$task_cloud_game_launch_option_wait_in_game",
+            "description": "$task_cloud_game_launch_option_wait_in_game_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CloudGameLaunchMain": {
+                            "custom_action_param": {
+                                "wait_in_game": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CloudGameLaunchMain": {
+                            "custom_action_param": {
+                                "wait_in_game": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CloudGameReadyTimeout": {
+            "type": "input",
+            "label": "$task_cloud_game_launch_option_ready_timeout",
+            "description": "$task_cloud_game_launch_option_ready_timeout_desc",
+            "inputs": [
+                {
+                    "name": "ready_timeout",
+                    "default": "300",
+                    "pipeline_type": "int",
+                    "verify": "^\\d+$"
+                }
+            ],
+            "pipeline_override": {
+                "CloudGameLaunchMain": {
+                    "custom_action_param": {
+                        "ready_timeout": "{ready_timeout}"
+                    }
+                }
+            }
+        }
+    }
+}

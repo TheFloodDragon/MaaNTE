@@ -287,5 +287,15 @@
     "task_auto_combat_option_stop_when_not_in_team": "Stop when leaving combat UI",
     "task_auto_combat_option_stop_when_not_in_team_desc": "When on, the task ends after the party UI has been absent for 3 seconds. When off, it runs until the time limit.",
     "task_auto_combat_option_log_decisions": "Log rule triggers",
-    "task_auto_combat_option_log_decisions_desc": "Prints the name and condition of each triggered rule, for diagnosing why a script is not working."
+    "task_auto_combat_option_log_decisions_desc": "Prints the name and condition of each triggered rule, for diagnosing why a script is not working.",
+    "task_cloud_game_launch_label": "Launch Cloud NTE",
+    "task_cloud_game_launch_desc": "Starts the Cloud NTE client and waits until the game is entered. Useful as the first task of a scheduled daily run. Sign-in is handled by the cloud client itself; this task never touches credentials.",
+    "task_cloud_game_launch_option_path": "Client path (blank = auto-detect)",
+    "task_cloud_game_launch_option_path_desc": "Leave blank to auto-detect via the registry and common install folders. You may also enter the full path to NTECloudLauncher.exe, or the install directory.",
+    "task_cloud_game_launch_option_wait_in_game": "Wait until in game",
+    "task_cloud_game_launch_option_wait_in_game_desc": "When on, finishes only after the open world is confirmed, so later tasks never start during loading. When off, returns as soon as the window appears.",
+    "task_cloud_game_launch_option_ready_timeout": "Enter-game timeout (seconds)",
+    "task_cloud_game_launch_option_ready_timeout_desc": "Maximum time to wait for sign-in, queueing and loading. Increase it if the queue is long.",
+    "preset.CloudDaily.label": "Cloud NTE Daily",
+    "preset.CloudDaily.description": "Launch the cloud client and run dailies: wait until the game is entered, then run furniture, withdraw and reward claim in order. Combine with the launcher's scheduler for unattended runs."
 }

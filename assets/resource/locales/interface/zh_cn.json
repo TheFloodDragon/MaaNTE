@@ -293,5 +293,15 @@
     "task_auto_combat_option_stop_when_not_in_team": "脱离战斗界面时结束",
     "task_auto_combat_option_stop_when_not_in_team_desc": "开启后，离开队伍界面超过 3 秒即结束任务。关闭则一直跑到时间上限。",
     "task_auto_combat_option_log_decisions": "输出规则触发日志",
-    "task_auto_combat_option_log_decisions_desc": "打印每次触发的规则名与条件，用于排查脚本为何不生效。"
+    "task_auto_combat_option_log_decisions_desc": "打印每次触发的规则名与条件，用于排查脚本为何不生效。",
+    "task_cloud_game_launch_label": "启动云异环",
+    "task_cloud_game_launch_desc": "自动启动云异环客户端并等待进入游戏，适合作为定时每日流程的第一个任务。登录由云客户端自身完成，本任务不处理账号密码。",
+    "task_cloud_game_launch_option_path": "客户端路径（留空自动查找）",
+    "task_cloud_game_launch_option_path_desc": "留空时自动从注册表与常见安装目录查找。也可填写 NTECloudLauncher.exe 的完整路径，或云异环安装目录。",
+    "task_cloud_game_launch_option_wait_in_game": "等待进入游戏",
+    "task_cloud_game_launch_option_wait_in_game_desc": "开启后会等到确认进入大世界才算完成，后续任务不会在加载中开始。关闭则窗口出现即返回。",
+    "task_cloud_game_launch_option_ready_timeout": "进入游戏超时（秒）",
+    "task_cloud_game_launch_option_ready_timeout_desc": "等待登录、排队与加载完成的最长时间。排队较久时可适当加大。",
+    "preset.CloudDaily.label": "云异环日常",
+    "preset.CloudDaily.description": "自动启动云异环并完成每日：先拉起云客户端等待进入游戏，再依次跑家具、提现与奖励领取。配合前端定时器可实现无人值守。"
 }

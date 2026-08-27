@@ -287,5 +287,15 @@
     "task_auto_combat_option_stop_when_not_in_team": "脫離戰鬥介面時結束",
     "task_auto_combat_option_stop_when_not_in_team_desc": "開啟後，離開隊伍介面超過 3 秒即結束任務。關閉則一直執行到時間上限。",
     "task_auto_combat_option_log_decisions": "輸出規則觸發記錄",
-    "task_auto_combat_option_log_decisions_desc": "列印每次觸發的規則名稱與條件，用於排查腳本為何不生效。"
+    "task_auto_combat_option_log_decisions_desc": "列印每次觸發的規則名稱與條件，用於排查腳本為何不生效。",
+    "task_cloud_game_launch_label": "啟動雲異環",
+    "task_cloud_game_launch_desc": "自動啟動雲異環客戶端並等待進入遊戲，適合作為定時每日流程的第一個任務。登入由雲客戶端自身完成，本任務不處理帳號密碼。",
+    "task_cloud_game_launch_option_path": "客戶端路徑（留空自動尋找）",
+    "task_cloud_game_launch_option_path_desc": "留空時自動從註冊表與常見安裝目錄尋找。也可填寫 NTECloudLauncher.exe 的完整路徑，或雲異環安裝目錄。",
+    "task_cloud_game_launch_option_wait_in_game": "等待進入遊戲",
+    "task_cloud_game_launch_option_wait_in_game_desc": "開啟後會等到確認進入大世界才算完成，後續任務不會在載入中開始。關閉則視窗出現即返回。",
+    "task_cloud_game_launch_option_ready_timeout": "進入遊戲逾時（秒）",
+    "task_cloud_game_launch_option_ready_timeout_desc": "等待登入、排隊與載入完成的最長時間。排隊較久時可適當加大。",
+    "preset.CloudDaily.label": "雲異環日常",
+    "preset.CloudDaily.description": "自動啟動雲異環並完成每日：先拉起雲客戶端等待進入遊戲，再依次跑家具、提現與獎勵領取。配合前端定時器可實現無人值守。"
 }
