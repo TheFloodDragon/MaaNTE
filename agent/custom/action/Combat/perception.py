@@ -149,10 +149,31 @@ class Perception:
             self._menu_open = False
         return self._menu_open
 
-    def looks_like_open_world(self, image) -> bool:
-        """判断当前是否明显处于大世界（而非战斗场景）。
+    def sees_enemy_once(self, image) -> bool:
+        """不走节流地做一次敌人检测，供启动守卫使用。
 
-        只在会话启动前调用一次，用于拒绝"在大世界误启动自动战斗"。
+        与 ``_check_enemy`` 分开是刻意的：守卫在会话开始前连续探几帧，
+        不能被 ``enemy_check_interval`` 的节流缓存干扰，也不该污染
+        战斗中的 ``_enemy_visible`` 状态。
+
+        识别失败时返回 ``False``（视为没看到敌人）。这不会导致误拒——
+        守卫还要求同时命中 ``InWorld`` 才会拒绝。
+        """
+        if image is None or not self.config.detect_enemy:
+            return False
+        try:
+            return self._recognize(self.config.enemy_node, image)
+        except Exception as exc:
+            self.kernel.log_warning(f"守卫敌人检测失败，视为未发现敌人: {exc}")
+            return False
+
+    def looks_like_open_world(self, image) -> bool:
+        """判断当前画面是否命中大世界判据（ESC 手机按钮 + 任务菜单按钮）。
+
+        **这不等于"不在战斗"**：NTE 的野外战斗就发生在大世界，战斗中这两个
+        按钮同样存在。因此调用方必须结合敌人证据一起判断，不能单独用它
+        拒绝运行（见 ``runtime`` 的启动守卫）。
+
         识别失败时返回 ``False`` —— 宁可放行让用户自己看结果，
         也不要因为识别抖动把一次合法的战斗挡掉。
         """

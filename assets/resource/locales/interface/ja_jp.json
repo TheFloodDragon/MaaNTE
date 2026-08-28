@@ -286,6 +286,8 @@
     "task_auto_combat_option_duration_desc": "時間になると自動終了します。パーティ UI から離れた場合も早期終了します。",
     "task_auto_combat_option_stop_when_not_in_team": "戦闘画面を離れたら終了",
     "task_auto_combat_option_stop_when_not_in_team_desc": "有効にすると、パーティ UI が 3 秒以上表示されない場合にタスクを終了します。無効の場合は制限時間まで継続します。",
+    "task_auto_combat_option_guard_open_world": "開始前に戦闘中か確認",
+    "task_auto_combat_option_guard_open_world_desc": "有効にすると、オープンワールドで敵が見えないと確認された場合は実行を拒否し、無駄なキー入力を防ぎます。敵のいない場面でスクリプトを動かす場合はオフにしてください。",
     "task_auto_combat_option_log_decisions": "ルール発動ログを出力",
     "task_auto_combat_option_log_decisions_desc": "発動したルール名と条件を出力します。スクリプトが動作しない原因の調査に使用します。",
     "task_cloud_game_launch_label": "クラウド版NTEを起動",

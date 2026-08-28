@@ -16,6 +16,7 @@
                 "AutoCombatPreset",
                 "AutoCombatDuration",
                 "AutoCombatStopWhenNotInTeam",
+                "AutoCombatGuardOpenWorld",
                 "AutoCombatLogDecisions"
             ]
         }
@@ -106,6 +107,36 @@
                         "AutoCombatMain": {
                             "custom_action_param": {
                                 "stop_when_not_in_team": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "AutoCombatGuardOpenWorld": {
+            "type": "switch",
+            "label": "$task_auto_combat_option_guard_open_world",
+            "description": "$task_auto_combat_option_guard_open_world_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "guard_open_world": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "custom_action_param": {
+                                "guard_open_world": false
                             }
                         }
                     }

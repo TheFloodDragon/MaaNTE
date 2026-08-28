@@ -286,6 +286,8 @@
     "task_auto_combat_option_duration_desc": "시간이 지나면 자동으로 종료됩니다. 파티 UI를 벗어나도 조기 종료됩니다.",
     "task_auto_combat_option_stop_when_not_in_team": "전투 화면을 벗어나면 종료",
     "task_auto_combat_option_stop_when_not_in_team_desc": "활성화하면 파티 UI가 3초 이상 표시되지 않을 때 작업을 종료합니다. 비활성화하면 제한 시간까지 계속 실행합니다.",
+    "task_auto_combat_option_guard_open_world": "시작 전 전투 중인지 확인",
+    "task_auto_combat_option_guard_open_world_desc": "활성화하면 오픈 월드에서 적이 보이지 않는 것이 확인될 경우 실행을 거부해 헛된 키 입력을 막습니다. 적이 없는 장면에서 스크립트를 실행하려면 끄십시오.",
     "task_auto_combat_option_log_decisions": "규칙 발동 로그 출력",
     "task_auto_combat_option_log_decisions_desc": "발동된 규칙 이름과 조건을 출력합니다. 스크립트가 작동하지 않는 원인을 조사할 때 사용합니다.",
     "task_cloud_game_launch_label": "클라우드 NTE 실행",

@@ -286,6 +286,8 @@
     "task_auto_combat_option_duration_desc": "Stops when the time is up. Also stops early if you leave the party UI.",
     "task_auto_combat_option_stop_when_not_in_team": "Stop when leaving combat UI",
     "task_auto_combat_option_stop_when_not_in_team_desc": "When on, the task ends after the party UI has been absent for 3 seconds. When off, it runs until the time limit.",
+    "task_auto_combat_option_guard_open_world": "Check for combat before starting",
+    "task_auto_combat_option_guard_open_world_desc": "When enabled, refuses to run if the game is confirmed to be in the open world with no enemies in sight, avoiding blind key presses. Turn off to run scripts in enemy-free scenes.",
     "task_auto_combat_option_log_decisions": "Log rule triggers",
     "task_auto_combat_option_log_decisions_desc": "Prints the name and condition of each triggered rule, for diagnosing why a script is not working.",
     "task_cloud_game_launch_label": "Launch Cloud NTE",

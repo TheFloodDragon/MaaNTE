@@ -292,6 +292,8 @@
     "task_auto_combat_option_duration_desc": "到时自动结束。离开队伍界面也会提前结束。",
     "task_auto_combat_option_stop_when_not_in_team": "脱离战斗界面时结束",
     "task_auto_combat_option_stop_when_not_in_team_desc": "开启后，离开队伍界面超过 3 秒即结束任务。关闭则一直跑到时间上限。",
+    "task_auto_combat_option_guard_open_world": "启动前检查是否在战斗中",
+    "task_auto_combat_option_guard_open_world_desc": "开启后，若确认处于大世界且看不到任何敌人，则拒绝运行以免对着空气乱按键。想在无敌人场景下跑脚本时关闭。",
     "task_auto_combat_option_log_decisions": "输出规则触发日志",
     "task_auto_combat_option_log_decisions_desc": "打印每次触发的规则名与条件，用于排查脚本为何不生效。",
     "task_cloud_game_launch_label": "启动云异环",

@@ -286,6 +286,8 @@
     "task_auto_combat_option_duration_desc": "到時自動結束。離開隊伍介面也會提前結束。",
     "task_auto_combat_option_stop_when_not_in_team": "脫離戰鬥介面時結束",
     "task_auto_combat_option_stop_when_not_in_team_desc": "開啟後，離開隊伍介面超過 3 秒即結束任務。關閉則一直執行到時間上限。",
+    "task_auto_combat_option_guard_open_world": "啟動前檢查是否在戰鬥中",
+    "task_auto_combat_option_guard_open_world_desc": "開啟後，若確認處於大世界且看不到任何敵人，則拒絕執行以免對著空氣亂按鍵。想在無敵人場景下跑腳本時關閉。",
     "task_auto_combat_option_log_decisions": "輸出規則觸發記錄",
     "task_auto_combat_option_log_decisions_desc": "列印每次觸發的規則名稱與條件，用於排查腳本為何不生效。",
     "task_cloud_game_launch_label": "啟動雲異環",

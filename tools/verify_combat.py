@@ -1523,6 +1523,94 @@ def group_session_loop():
         result.reason, REASON_TIMEOUT, "黑屏期间不误判脱战"
     )
 
+    # --- 清怪收兵：见过敌人后血条持续消失就结束 ---
+    # 刷本靠它省掉每轮干等 duration。三条必须同时成立：
+    # 打完会收、开局不会误收、没开开关时行为完全不变。
+    from agent.custom.action.Combat.runtime import REASON_NO_ENEMY
+
+    sightings = {"n": 0}
+
+    def enemy_for_first_frames(node, img):
+        """前 3 次敌人检测命中，之后一直看不到（模拟怪被打完）。"""
+        if node != ENEMY_NODE:
+            return False
+        sightings["n"] += 1
+        return sightings["n"] <= 3
+
+    kernel = ScriptedKernel([in_combat], recognize=enemy_for_first_frames)
+    session = make_session(
+        {"rules": [{"name": "r", "when": {"enemy_visible": True}, "actions": ["e"]}]},
+        kernel,
+        duration=60.0,
+        tick_interval=0.2,
+        stop_when_no_enemy=True,
+        no_enemy_grace=1.0,
+    )
+    result = session.run()
+    check_equal(result.reason, REASON_NO_ENEMY, "清怪后自动收兵")
+    check(result.success, "清怪收兵属于正常结束")
+    check(result.elapsed < 60.0, f"没有干等满 duration（实际 {result.elapsed:.1f}s）")
+
+    # 开局就看不到敌人：不能立刻收兵（否则刚进副本就空转结束）
+    kernel = ScriptedKernel([in_combat], recognize=lambda n, i: False)
+    session = make_session(
+        {"rules": [{"name": "r", "actions": ["e"]}]},
+        kernel,
+        duration=3.0,
+        tick_interval=0.2,
+        stop_when_no_enemy=True,
+        no_enemy_grace=0.5,
+    )
+    result = session.run()
+    check_equal(
+        result.reason,
+        REASON_TIMEOUT,
+        "从没见过敌人时不触发清怪收兵（避免开局空转结束）",
+    )
+
+    # 宽限期内血条闪断不算清怪
+    flicker = {"n": 0}
+
+    def flickering_enemy(node, img):
+        if node != ENEMY_NODE:
+            return False
+        flicker["n"] += 1
+        # 交替出现：每隔一帧看不到，但从没连续消失够久
+        return flicker["n"] % 2 == 1
+
+    kernel = ScriptedKernel([in_combat], recognize=flickering_enemy)
+    session = make_session(
+        {"rules": [{"name": "r", "actions": ["e"]}]},
+        kernel,
+        duration=3.0,
+        tick_interval=0.2,
+        stop_when_no_enemy=True,
+        no_enemy_grace=2.0,
+    )
+    result = session.run()
+    check_equal(
+        result.reason,
+        REASON_TIMEOUT,
+        "血条闪断不误判清怪（特效遮挡、镜头转动都会短暂看不见）",
+    )
+
+    # 默认关闭：不开开关时行为与以前完全一致
+    sightings["n"] = 0
+    kernel = ScriptedKernel([in_combat], recognize=enemy_for_first_frames)
+    session = make_session(
+        {"rules": [{"name": "r", "actions": ["e"]}]},
+        kernel,
+        duration=2.0,
+        tick_interval=0.2,
+        stop_when_not_in_team=False,
+    )
+    result = session.run()
+    check_equal(
+        result.reason,
+        REASON_TIMEOUT,
+        "stop_when_no_enemy 默认关闭，普通自动战斗行为不变",
+    )
+
     # --- tasker 停止：必须释放按键且 success=False ---
     kernel = ScriptedKernel(
         [in_combat], recognize=lambda n, i: False, stop_after=3
@@ -1825,8 +1913,8 @@ def group_session_loop():
     )
     check(result.idle_ticks > 0, "菜单期间计入空闲 tick")
 
-    # --- 启动前场景守卫：大世界拒跑 ---
-    from agent.custom.action.Combat.perception import WORLD_NODE
+    # --- 启动前场景守卫：大世界且无敌人才拒跑 ---
+    from agent.custom.action.Combat.perception import ENEMY_NODE, WORLD_NODE
     from agent.custom.action.Combat.runtime import REASON_OPEN_WORLD
 
     kernel = ScriptedKernel(
@@ -1837,7 +1925,7 @@ def group_session_loop():
         kernel, duration=5.0, tick_interval=0.1,
     )
     result = session.run()
-    check_equal(result.reason, REASON_OPEN_WORLD, "大世界启动 -> 拒绝运行")
+    check_equal(result.reason, REASON_OPEN_WORLD, "大世界无敌人 -> 拒绝运行")
     check(not result.success, "拒绝运行时 success=False")
     check_equal(result.ticks, 0, "大世界时一个 tick 都不跑")
     # 关键：一个键都不能发出去
@@ -1897,6 +1985,112 @@ def group_session_loop():
     check(
         any("大世界检测失败" in m for m in kernel.logs), "守卫异常被记录"
     )
+
+    # --- 回归：大世界里正在战斗（有敌人血条）必须放行 ---
+    # 这是守卫最初的致命 bug：NTE 的野外战斗就发生在大世界，只看 InWorld
+    # 会把每一次合法战斗都挡掉，表现为"自动战斗完全没反应"。
+    kernel = ScriptedKernel(
+        [in_combat],
+        recognize=lambda node, img: node in (WORLD_NODE, ENEMY_NODE),
+    )
+    session = make_session(
+        {"rules": [{"name": "atk", "actions": ["e"]}]},
+        kernel, duration=0.5, tick_interval=0.1,
+    )
+    result = session.run()
+    check(
+        result.reason != REASON_OPEN_WORLD,
+        "大世界中有敌人 -> 守卫放行（野外战斗不能被拦）",
+    )
+    check(result.ticks > 0, "大世界战斗正常跑 tick")
+    check(("send_key", "e") in kernel.calls, "大世界战斗正常发键")
+
+    # 守卫必须要求"整个窗口都没有敌人"：中途出现敌人即放行
+    seen = {"n": 0}
+
+    def enemy_appears_later(node, img):
+        if node == WORLD_NODE:
+            return True
+        if node == ENEMY_NODE:
+            seen["n"] += 1
+            return seen["n"] >= 3  # 前两帧没看到敌人，第三帧出现
+        return False
+
+    kernel = ScriptedKernel([in_combat], recognize=enemy_appears_later)
+    session = make_session(
+        {"rules": [{"name": "atk", "actions": ["e"]}]},
+        kernel, duration=0.5, tick_interval=0.1,
+    )
+    result = session.run()
+    check(
+        result.reason != REASON_OPEN_WORLD,
+        "探测窗口内出现敌人 -> 放行（不因首帧漏检误拒）",
+    )
+
+    print(f"     完成，累计断言 {_CHECKS} 项")
+
+
+def group_preset_layout():
+    """预设目录解析必须同时支持开发布局与发布包布局。
+
+    发布包把 ``assets/`` 这一层剥掉（资源在 ``resource/base/combat``），
+    早期实现只认开发布局，导致发布版 AutoCombat 必然报"预设不存在"，
+    而所有测试都在开发布局下跑，完全测不出来。
+    """
+    import os
+    import tempfile
+
+    from agent.custom.action import auto_combat as ac
+
+    print("[12] 预设目录：开发布局与发布包布局都要能找到")
+
+    original_cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+
+        # 发布包布局：<root>/resource/base/combat
+        release = root / "release"
+        (release / "resource" / "base" / "combat").mkdir(parents=True)
+        (release / "resource" / "base" / "combat" / "basic_attack.json").write_text(
+            '{"name":"basic_attack","fallback":["e"]}', encoding="utf-8"
+        )
+
+        # 开发布局：<root>/assets/resource/base/combat
+        dev = root / "dev"
+        (dev / "assets" / "resource" / "base" / "combat").mkdir(parents=True)
+        (dev / "assets" / "resource" / "base" / "combat" / "basic_attack.json").write_text(
+            '{"name":"basic_attack","fallback":["e"]}', encoding="utf-8"
+        )
+
+        try:
+            os.chdir(release)
+            found = ac._preset_dir()
+            check(
+                found == (release / "resource" / "base" / "combat").resolve()
+                or found == release / "resource" / "base" / "combat",
+                "发布包布局能定位预设目录",
+            )
+            raw, source = ac._load_script_source({"preset": "basic_attack"})
+            check(raw is not None, "发布包布局能加载内置预设")
+            check_equal(source, "preset:basic_attack", "发布包布局来源标注正确")
+
+            os.chdir(dev)
+            raw, source = ac._load_script_source({"preset": "basic_attack"})
+            check(raw is not None, "开发布局能加载内置预设")
+
+            # dev 模式会把 cwd 切到 <root>/assets，此时要靠 cwd.parent 兜住
+            os.chdir(dev / "assets")
+            raw, source = ac._load_script_source({"preset": "basic_attack"})
+            check(raw is not None, "cwd=assets（dev 模式）时也能加载预设")
+        finally:
+            os.chdir(original_cwd)
+
+    # 真实仓库布局下内置预设必须可加载
+    raw, source = ac._load_script_source({"preset": "basic_attack"})
+    check(raw is not None, "当前仓库布局能加载 basic_attack")
+    for name in ("basic_attack", "skill_rotation", "team_rotation"):
+        raw, _ = ac._load_script_source({"preset": name})
+        check(raw is not None, f"内置预设可加载: {name}")
 
     print(f"     完成，累计断言 {_CHECKS} 项")
 
@@ -2560,6 +2754,7 @@ def main():
     group_perception()
     group_session_loop()
     group_entry_point()
+    group_preset_layout()
     group_kernel_equivalence()
     group_switch_state_machine()
     group_switch_equivalence()

@@ -42,8 +42,15 @@ except ImportError:
 LOG_PREFIX = "[Combat]"
 NODE_PREFIX = "Combat"
 
-# 内置预设目录（相对项目根）
-PRESET_SUBDIR = ("assets", "resource", "base", "combat")
+# 内置预设目录。两种布局都要支持：
+# - 开发仓库：``<root>/assets/resource/base/combat``
+# - 发布包：  ``<root>/resource/base/combat``（打包时 assets/ 这一层被剥掉）
+# 只认第一种会让所有内置预设在发布包里加载失败，而这恰好是测试覆盖不到的
+# 布局——因此这里必须显式枚举，不能依赖单一相对路径。
+PRESET_SUBDIRS = (
+    ("assets", "resource", "base", "combat"),
+    ("resource", "base", "combat"),
+)
 
 
 def _project_root() -> Path:
@@ -51,12 +58,32 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _preset_search_bases():
+    """返回候选根目录，覆盖开发/发布/dev 模式三种 cwd 情况。
+
+    dev 模式下 ``agent/main.py`` 会把 cwd 切到 ``<root>/assets``，
+    因此 ``cwd.parent`` 也要作为候选，否则只能靠 ``_project_root()`` 兜。
+    """
+    cwd = Path.cwd()
+    bases = [cwd, cwd.parent, _project_root()]
+    seen = set()
+    result = []
+    for base in bases:
+        key = str(base)
+        if key not in seen:
+            seen.add(key)
+            result.append(base)
+    return result
+
+
 def _preset_dir() -> Path:
-    for base in (Path.cwd(), _project_root()):
-        candidate = base.joinpath(*PRESET_SUBDIR)
-        if candidate.exists():
-            return candidate
-    return _project_root().joinpath(*PRESET_SUBDIR)
+    """返回内置预设目录；找不到时返回开发布局路径以便报错信息可读。"""
+    for base in _preset_search_bases():
+        for subdir in PRESET_SUBDIRS:
+            candidate = base.joinpath(*subdir)
+            if candidate.is_dir():
+                return candidate
+    return _project_root().joinpath(*PRESET_SUBDIRS[0])
 
 
 def _load_script_source(params: dict):
