@@ -62,6 +62,7 @@
 | 文档 | 说明 |
 |------|------|
 | [自动战斗引擎](./combat-engine.md) | 基于 JSON 规则表的自动战斗：分层结构、脚本格式、能力边界与验证（需手动进入战斗） |
+| [刷本](./dungeon-farm.md) | 配置驱动的副本循环：阶段顺序、探测循环（前进开战/找出口）、ROI 标定与验证 |
 | 自动导航 | ⚠ 开发中 |
 
 ## 任务维护文档
@@ -87,6 +88,7 @@
 | 调试单个节点 | [node-testing.md](./node-testing.md) |
 | 维护钓鱼控条算法 | [fishpro-control.md](./fishpro-control.md) |
 | 写自动战斗脚本 / 维护战斗引擎 | [combat-engine.md](./combat-engine.md) |
+| 配副本刷取流程 / 维护刷本任务 | [dungeon-farm.md](./dungeon-farm.md) |
 | 云端定时跑每日 / 维护云异环启动 | [cloud-game.md](./cloud-game.md) |
 | 查阅编码规范 | [coding-standards.md](./coding-standards.md) |
 

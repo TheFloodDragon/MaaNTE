@@ -1,0 +1,63 @@
+{
+    "DungeonFarmMain": {
+        "desc": "刷本主入口。传送、副本选择、进入、前进开战、战斗、找出口领奖、循环全部由 Python 按用户配置驱动",
+        "action": "Custom",
+        "custom_action": "DungeonFarm",
+        "custom_action_param": {
+            "dungeon": "rabbit_hole"
+        }
+    },
+
+    "_option_carrier_help": [
+        "下面这些节点不参与流程（enabled: false），只作为界面选项的载体。",
+        "",
+        "为什么不让选项直接覆盖 DungeonFarmMain 的 custom_action_param：",
+        "GUI 合并多个 option 的 pipeline_override 时，custom_action_param 是被",
+        "整体替换而不是逐键合并的。多个选项都改同一个字段时，只有最后一个能活下来——",
+        "实机日志里表现为 Python 只收到 {\"log_decisions\":true}，连 pipeline 里写死的",
+        "dungeon 默认值都被冲掉，任务直接以「未指定副本配置」退出。",
+        "",
+        "让每个选项改各自独立的节点，就不存在互相覆盖：字段路径本来就不同。",
+        "这与 PinkPawHeist_AutoResizeGameWindowConfig 用的是同一套机制（attach + get_node_data）。",
+        "",
+        "attach 一律留空：它表示「用户没有显式选择」。有值的那份来自 option 的",
+        "pipeline_override，Python 侧再与 DungeonFarmMain.custom_action_param 合并，",
+        "空值不参与覆盖。这样 GUI 不下发选项时仍能靠 custom_action_param 跑起来。"
+    ],
+
+    "DungeonFarm_ConfigOption": {
+        "desc": "选项载体：副本配置名（dungeon）",
+        "enabled": false,
+        "attach": {}
+    },
+    "DungeonFarm_StageOption": {
+        "desc": "选项载体：副本名称（stage）",
+        "enabled": false,
+        "attach": {}
+    },
+    "DungeonFarm_DifficultyOption": {
+        "desc": "选项载体：难度档位（difficulty）",
+        "enabled": false,
+        "attach": {}
+    },
+    "DungeonFarm_RoundsOption": {
+        "desc": "选项载体：刷取轮数（rounds）",
+        "enabled": false,
+        "attach": {}
+    },
+    "DungeonFarm_TeleportOption": {
+        "desc": "选项载体：是否先传送（skip_teleport）",
+        "enabled": false,
+        "attach": {}
+    },
+    "DungeonFarm_CombatPresetOption": {
+        "desc": "选项载体：战斗预设（combat_preset）",
+        "enabled": false,
+        "attach": {}
+    },
+    "DungeonFarm_LogDecisionsOption": {
+        "desc": "选项载体：是否输出规则触发日志（log_decisions）",
+        "enabled": false,
+        "attach": {}
+    }
+}

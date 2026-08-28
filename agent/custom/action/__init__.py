@@ -38,6 +38,7 @@ from .BagelSpam import *
 from .auto_volleyball import *
 from .auto_combat import *
 from .CloudGame.action import *
+from .Dungeon.action import *
 
 __all__ = [
     "AutoMakeCoffee",
@@ -92,4 +93,5 @@ __all__ = [
     "VolleyballAdvanceDifficulty",
     "AutoCombat",
     "CloudGameLaunch",
+    "DungeonFarm",
 ]

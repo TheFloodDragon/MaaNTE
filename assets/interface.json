@@ -123,6 +123,7 @@
         // group:Daily
         "resource/tasks/CloudGameLaunch.json",
         "resource/tasks/ClaimRewards.json",
+        "resource/tasks/DungeonFarm.json",
         // group:CityTycoon
         "resource/tasks/Furniture.json",
         "resource/tasks/WithdrawMoney.json",

@@ -1,0 +1,208 @@
+{
+    "name": "兔子洞（异象界域）",
+    "desc": "传送到兔子洞 -> 前进按 F 进入 -> 选副本 -> 进入 -> 前进开战 -> 自动战斗 -> 打完找出口领奖 -> 再次挑战循环",
+
+    "_roi_note": [
+        "所有 roi 按 1280x720 基准写；运行时会自动换算到实际截图尺寸（steps.py 的 scale_roi）。",
+        "流程里所有点击都落在 OCR 命中的文字框中心，roi 只是「在哪一片里找这行字」，",
+        "因此故意留得比文字本身宽——窗口比例略有差异也不会点空。",
+        "唯一用绝对坐标的是难度按钮（difficulty_rects），所以它默认不点：",
+        "界面里 difficulty 选 0 表示沿用游戏记住的上次难度，最安全。",
+        "想核对 roi 是否覆盖目标，用 python tools/calibrate_dungeon.py <截图> rabbit_hole。"
+    ],
+
+    "teleport_point_id": "rabbithole",
+    "rounds": 3,
+    "max_failures": 3,
+    "loop_mode": "again",
+
+    "difficulty_rects": [
+        [16, 671, 34, 36],
+        [64, 671, 34, 36],
+        [113, 671, 34, 36],
+        [161, 671, 34, 36],
+        [210, 671, 34, 36]
+    ],
+
+    "entry": [
+        {
+            "desc": "向前走到兔子洞入口，看到「兔子洞」交互提示就按 F 进去",
+            "type": "search",
+            "until": {
+                "ocr": ["兔子洞"],
+                "roi": [744, 352, 456, 184],
+                "threshold": 0.6
+            },
+            "probe": [
+                {
+                    "hold": "w",
+                    "duration": 0.8
+                }
+            ],
+            "on_found": [
+                {
+                    "key": "f",
+                    "post_wait": 2.0
+                }
+            ],
+            "sweep": [
+                {
+                    "hold": "a",
+                    "duration": 0.25
+                }
+            ],
+            "sweep_every": 8,
+            "timeout": 45
+        },
+        {
+            "desc": "等异象界域选择界面打开",
+            "ocr": ["异象界域"],
+            "roi": [4, 2, 232, 56],
+            "click": false,
+            "timeout": 15
+        },
+        {
+            "desc": "在左侧列表里选中要刷的副本（界面选项 stage 可覆盖这个名字）",
+            "role": "stage",
+            "ocr": ["钟表把戏"],
+            "roi": [8, 6, 196, 646],
+            "threshold": 0.6,
+            "timeout": 12,
+            "post_wait": 1.0
+        },
+        {
+            "desc": "选择难度档位。界面 difficulty=0 时这一步会被整个去掉，沿用上次选择",
+            "role": "difficulty",
+            "click_rect": [210, 671, 34, 36],
+            "required": false,
+            "post_wait": 0.8
+        }
+    ],
+
+    "confirm": [
+        {
+            "desc": "点右下角「进入」开始挑战",
+            "ocr": ["进入"],
+            "roi": [896, 644, 368, 72],
+            "timeout": 12,
+            "post_wait": 1.2
+        },
+        {
+            "desc": "若弹出消耗确认框就点确认；兔子洞通常不弹，所以是可选步骤",
+            "ocr": ["确认", "确定"],
+            "roi": [408, 492, 464, 100],
+            "required": false,
+            "timeout": 3,
+            "post_wait": 1.0
+        },
+        {
+            "desc": "等副本加载结束（复用已验证的公共加载节点）",
+            "node": "SceneLoadingType1"
+        }
+    ],
+
+    "advance": [
+        {
+            "desc": "确认已经进了副本：左上出现「剩余敌人数」计数",
+            "ocr": ["剩余敌人数", "剩余敌人"],
+            "roi": [0, 156, 240, 88],
+            "click": false,
+            "threshold": 0.6,
+            "required": false,
+            "timeout": 20
+        },
+        {
+            "desc": "向前推进直到出现敌人血条 —— 怪在场地另一头，站着不动不会开打",
+            "type": "search",
+            "until": "PinkPawHeist_CheckMonsterOnce",
+            "probe": [
+                {
+                    "hold": "w",
+                    "duration": 1.0
+                }
+            ],
+            "timeout": 40
+        }
+    ],
+
+    "locate": [
+        {
+            "desc": "打完后继续前进找出口，边走边按 F，直到弹出「领取奖励」",
+            "type": "search",
+            "until": {
+                "ocr": ["领取奖励"],
+                "roi": [392, 264, 496, 84]
+            },
+            "probe": [
+                {
+                    "hold": "w",
+                    "duration": 1.2
+                },
+                {
+                    "key": "f",
+                    "post_wait": 0.5
+                }
+            ],
+            "sweep": [
+                {
+                    "hold": "d",
+                    "duration": 0.5
+                }
+            ],
+            "sweep_every": 5,
+            "timeout": 120
+        }
+    ],
+
+    "reward": [
+        {
+            "desc": "点左边的「领取」（消耗 40 本性像素）。右边的「双倍领取」要 80，roi 刻意不覆盖它",
+            "ocr": ["领取"],
+            "roi": [384, 508, 260, 84],
+            "timeout": 15,
+            "post_wait": 2.5
+        }
+    ],
+
+    "exit": [
+        {
+            "desc": "等结算界面出现（「获得道具」）",
+            "ocr": ["获得道具", "获得"],
+            "roi": [472, 76, 336, 88],
+            "click": false,
+            "threshold": 0.6,
+            "timeout": 60
+        },
+        {
+            "desc": "点「再次挑战」让副本原地重开，下一轮直接从前进开战继续",
+            "ocr": ["再次挑战"],
+            "roi": [672, 592, 272, 76],
+            "timeout": 15,
+            "post_wait": 3.0
+        },
+        {
+            "desc": "等重开加载结束",
+            "node": "SceneLoadingType1"
+        }
+    ],
+
+    "recover": [
+        {
+            "desc": "任一阶段失败后的兜底：回到大世界，让下一轮能从头重新走进副本",
+            "node": "SceneAnyEnterWorld"
+        },
+        {
+            "desc": "给界面一点稳定时间",
+            "wait": 2.0
+        }
+    ],
+
+    "combat": {
+        "preset": "basic_attack",
+        "duration": 240,
+        "stop_when_no_enemy": true,
+        "no_enemy_grace": 4.0,
+        "log_decisions": false,
+        "_help": "stop_when_no_enemy 让血条消失 4 秒后就收兵，不用干等满 duration；duration 只是兜底上限。"
+    }
+}

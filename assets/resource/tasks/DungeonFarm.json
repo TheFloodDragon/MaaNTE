@@ -1,0 +1,395 @@
+{
+    "task": [
+        {
+            "name": "DungeonFarm",
+            "label": "$task_dungeon_farm_label",
+            "entry": "DungeonFarmMain",
+            "description": "$task_dungeon_farm_desc",
+            "controller": [
+                "Win32-Front",
+                "CloudGame-Front"
+            ],
+            "group": [
+                "Daily"
+            ],
+            "option": [
+                "DungeonFarmConfig",
+                "DungeonFarmStage",
+                "DungeonFarmDifficulty",
+                "DungeonFarmRounds",
+                "DungeonFarmTeleport",
+                "DungeonFarmCombatPreset",
+                "DungeonFarmLogDecisions"
+            ]
+        }
+    ],
+    "option": {
+        "DungeonFarmConfig": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_config",
+            "description": "$task_dungeon_farm_option_config_desc",
+            "default_case": "RabbitHole",
+            "cases": [
+                {
+                    "name": "RabbitHole",
+                    "label": "$task_dungeon_farm_config_rabbit_hole",
+                    "pipeline_override": {
+                        "DungeonFarm_ConfigOption": {
+                            "attach": {
+                                "dungeon": "rabbit_hole"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Custom",
+                    "label": "$task_dungeon_farm_config_custom",
+                    "description": "$task_dungeon_farm_config_custom_desc",
+                    "option": [
+                        "DungeonFarmConfigName"
+                    ]
+                }
+            ]
+        },
+        "DungeonFarmConfigName": {
+            "type": "input",
+            "label": "$task_dungeon_farm_option_config_name",
+            "description": "$task_dungeon_farm_option_config_name_desc",
+            "inputs": [
+                {
+                    "name": "dungeon",
+                    "default": "rabbit_hole",
+                    "verify": "^[A-Za-z0-9_-]+$",
+                    "pattern_msg": "$task_dungeon_farm_option_config_name_msg"
+                }
+            ],
+            "pipeline_override": {
+                "DungeonFarm_ConfigOption": {
+                    "attach": {
+                        "dungeon": "{dungeon}"
+                    }
+                }
+            }
+        },
+        "DungeonFarmStage": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_stage",
+            "description": "$task_dungeon_farm_option_stage_desc",
+            "default_case": "ClockworkTrick",
+            "cases": [
+                {
+                    "name": "FromConfig",
+                    "label": "$task_dungeon_farm_stage_from_config"
+                },
+                {
+                    "name": "ClockworkTrick",
+                    "label": "钟表把戏",
+                    "pipeline_override": {
+                        "DungeonFarm_StageOption": {
+                            "attach": {
+                                "stage": "钟表把戏"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "SculptureHall",
+                    "label": "雕塑展馆",
+                    "pipeline_override": {
+                        "DungeonFarm_StageOption": {
+                            "attach": {
+                                "stage": "雕塑展馆"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "WeftLoom",
+                    "label": "纬线织机",
+                    "pipeline_override": {
+                        "DungeonFarm_StageOption": {
+                            "attach": {
+                                "stage": "纬线织机"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "GuardCarrot",
+                    "label": "守卫萝卜",
+                    "pipeline_override": {
+                        "DungeonFarm_StageOption": {
+                            "attach": {
+                                "stage": "守卫萝卜"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "MindAtlas",
+                    "label": "精神图谱",
+                    "pipeline_override": {
+                        "DungeonFarm_StageOption": {
+                            "attach": {
+                                "stage": "精神图谱"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "OrbitNight",
+                    "label": "轨道之夜",
+                    "pipeline_override": {
+                        "DungeonFarm_StageOption": {
+                            "attach": {
+                                "stage": "轨道之夜"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "DungeonFarmDifficulty": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_difficulty",
+            "description": "$task_dungeon_farm_option_difficulty_desc",
+            "default_case": "Keep",
+            "cases": [
+                {
+                    "name": "Keep",
+                    "label": "$task_dungeon_farm_difficulty_keep",
+                    "pipeline_override": {
+                        "DungeonFarm_DifficultyOption": {
+                            "attach": {
+                                "difficulty": 0
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "I",
+                    "label": "I",
+                    "pipeline_override": {
+                        "DungeonFarm_DifficultyOption": {
+                            "attach": {
+                                "difficulty": 1
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "II",
+                    "label": "II",
+                    "pipeline_override": {
+                        "DungeonFarm_DifficultyOption": {
+                            "attach": {
+                                "difficulty": 2
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "III",
+                    "label": "III",
+                    "pipeline_override": {
+                        "DungeonFarm_DifficultyOption": {
+                            "attach": {
+                                "difficulty": 3
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "IV",
+                    "label": "IV",
+                    "pipeline_override": {
+                        "DungeonFarm_DifficultyOption": {
+                            "attach": {
+                                "difficulty": 4
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "V",
+                    "label": "V",
+                    "pipeline_override": {
+                        "DungeonFarm_DifficultyOption": {
+                            "attach": {
+                                "difficulty": 5
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "DungeonFarmRounds": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_rounds",
+            "description": "$task_dungeon_farm_option_rounds_desc",
+            "default_case": "R1",
+            "cases": [
+                {
+                    "name": "R1",
+                    "label": "1",
+                    "pipeline_override": {
+                        "DungeonFarm_RoundsOption": {
+                            "attach": {
+                                "rounds": 1
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "R3",
+                    "label": "3",
+                    "pipeline_override": {
+                        "DungeonFarm_RoundsOption": {
+                            "attach": {
+                                "rounds": 3
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "R5",
+                    "label": "5",
+                    "pipeline_override": {
+                        "DungeonFarm_RoundsOption": {
+                            "attach": {
+                                "rounds": 5
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "R10",
+                    "label": "10",
+                    "pipeline_override": {
+                        "DungeonFarm_RoundsOption": {
+                            "attach": {
+                                "rounds": 10
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Unlimited",
+                    "label": "$task_dungeon_farm_rounds_unlimited",
+                    "pipeline_override": {
+                        "DungeonFarm_RoundsOption": {
+                            "attach": {
+                                "rounds": 0
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "DungeonFarmTeleport": {
+            "type": "switch",
+            "label": "$task_dungeon_farm_option_teleport",
+            "description": "$task_dungeon_farm_option_teleport_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "DungeonFarm_TeleportOption": {
+                            "attach": {
+                                "skip_teleport": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "DungeonFarm_TeleportOption": {
+                            "attach": {
+                                "skip_teleport": true
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "DungeonFarmCombatPreset": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_combat_preset",
+            "description": "$task_dungeon_farm_option_combat_preset_desc",
+            "default_case": "FromConfig",
+            "cases": [
+                {
+                    "name": "FromConfig",
+                    "label": "$task_dungeon_farm_combat_preset_from_config"
+                },
+                {
+                    "name": "BasicAttack",
+                    "label": "$task_auto_combat_preset_basic_attack",
+                    "pipeline_override": {
+                        "DungeonFarm_CombatPresetOption": {
+                            "attach": {
+                                "combat_preset": "basic_attack"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "SkillRotation",
+                    "label": "$task_auto_combat_preset_skill_rotation",
+                    "pipeline_override": {
+                        "DungeonFarm_CombatPresetOption": {
+                            "attach": {
+                                "combat_preset": "skill_rotation"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "TeamRotation",
+                    "label": "$task_auto_combat_preset_team_rotation",
+                    "pipeline_override": {
+                        "DungeonFarm_CombatPresetOption": {
+                            "attach": {
+                                "combat_preset": "team_rotation"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "DungeonFarmLogDecisions": {
+            "type": "switch",
+            "label": "$task_dungeon_farm_option_log_decisions",
+            "description": "$task_dungeon_farm_option_log_decisions_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "DungeonFarm_LogDecisionsOption": {
+                            "attach": {
+                                "log_decisions": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "DungeonFarm_LogDecisionsOption": {
+                            "attach": {
+                                "log_decisions": false
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

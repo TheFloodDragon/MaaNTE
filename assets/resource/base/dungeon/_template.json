@@ -1,0 +1,220 @@
+{
+    "name": "副本配置模板",
+    "desc": "复制本文件改名后使用。所有 roi 都必须用 1280x720 实机截图重新标定，改完把 _calibrated 设为 true。",
+
+    "_calibrated": false,
+    "_calibrate_help": [
+        "标定步骤：",
+        "1. 游戏设为 1280x720 窗口化，在每个关键界面截图。",
+        "2. 用画图/截图工具量出目标区域的 [x, y, 宽, 高]，填进对应 roi。",
+        "3. OCR 步骤的 text 填界面上实际显示的文字（可给多个写法/多语言）。",
+        "4. 用 python tools/calibrate_dungeon.py <截图> <配置名> 把框画到截图上核对。",
+        "5. 全部填完并核对无误后，把 _calibrated 改成 true，否则会被拒绝运行。",
+        "roi 是包住目标的矩形。OCR 步骤可以留宽一些（点击落在识别到的文字框中心），",
+        "但 click_rect 是直接点坐标，必须准。",
+        "实配置示例见同目录 rabbit_hole.json。"
+    ],
+
+    "teleport_point_id": "",
+    "_teleport_help": "填 map_teleport/teleport_points.json 里的传送点 id；留空表示不传送（需自己先站在副本入口）。",
+
+    "rounds": 3,
+    "max_failures": 3,
+
+    "loop_mode": "reenter",
+    "_loop_mode_help": [
+        "reenter：每轮都退回大世界重新走 entry+confirm 进副本，状态最明确。",
+        "again  ：exit 点「再次挑战」原地重开，下一轮直接从 advance 开始，省掉走路和选副本。",
+        "         只在上一轮成功时才跳过 entry；任何一轮失败都会回到完整流程。"
+    ],
+
+    "difficulty_rects": [],
+    "_difficulty_help": "难度按钮的点击矩形，按 I..V 顺序填。界面选 difficulty=N 就点第 N 个；填 0 表示不动难度。",
+
+    "entry": [
+        {
+            "desc": "走到副本入口：按住 W 前进，直到出现交互提示，然后按 F",
+            "type": "search",
+            "until": {
+                "ocr": ["请填入交互提示上的文字"],
+                "roi": [0, 0, 100, 40]
+            },
+            "probe": [
+                {
+                    "hold": "w",
+                    "duration": 0.8
+                }
+            ],
+            "on_found": [
+                {
+                    "key": "f",
+                    "post_wait": 2.0
+                }
+            ],
+            "sweep": [
+                {
+                    "hold": "a",
+                    "duration": 0.25
+                }
+            ],
+            "sweep_every": 8,
+            "timeout": 45,
+            "_help": [
+                "search = 反复做 probe，每轮后看一眼 until 是否命中。",
+                "until 只判断「到了没」，不会点击；要做的交互写在 on_found 里。",
+                "sweep 是连续 sweep_every 轮都没命中时的纠偏动作（防撞墙卡死）。"
+            ]
+        },
+        {
+            "desc": "等副本列表界面打开 —— roi 必须替换成实机标定值",
+            "ocr": ["请填入界面标题文字"],
+            "roi": [0, 0, 100, 40],
+            "click": false
+        },
+        {
+            "desc": "在列表里选中目标副本。role=stage 让界面的「副本名称」选项能覆盖这里的 text",
+            "role": "stage",
+            "ocr": ["请填入副本名称"],
+            "roi": [0, 0, 100, 40],
+            "post_wait": 0.8
+        },
+        {
+            "desc": "选难度。role=difficulty 让界面的「难度档位」选项能覆盖这里的矩形；填 0 时整步移除",
+            "role": "difficulty",
+            "click_rect": [0, 0, 30, 30],
+            "required": false,
+            "post_wait": 0.8
+        }
+    ],
+
+    "confirm": [
+        {
+            "desc": "点击进入/挑战按钮 —— roi 必须替换成实机标定值",
+            "ocr": ["进入", "挑战", "开始战斗"],
+            "roi": [0, 0, 100, 40],
+            "post_wait": 1.0
+        },
+        {
+            "desc": "可能出现的体力/次数确认弹窗。required=false 表示没有也不算失败",
+            "ocr": ["确认", "确定"],
+            "roi": [0, 0, 100, 40],
+            "required": false,
+            "post_wait": 1.0
+        },
+        {
+            "desc": "等待加载进入副本。复用已验证的公共加载节点",
+            "node": "SceneLoadingType1"
+        }
+    ],
+
+    "advance": [
+        {
+            "desc": "进副本后前进接敌 —— 怪通常在场地另一头，站着不动不会开打",
+            "type": "search",
+            "until": "PinkPawHeist_CheckMonsterOnce",
+            "probe": [
+                {
+                    "hold": "w",
+                    "duration": 1.0
+                }
+            ],
+            "timeout": 40,
+            "_help": "until 用敌人血条颜色节点（仓库里唯一已验证的战斗信号），不需要自己标 roi。"
+        }
+    ],
+
+    "settle": {
+        "desc": "战斗结束的标志。留空表示以战斗自身结束为准（推荐配合 combat.stop_when_no_enemy）",
+        "ocr": ["战斗胜利", "挑战成功", "结算"],
+        "roi": [0, 0, 100, 40]
+    },
+    "settle_timeout": 180.0,
+
+    "locate": [
+        {
+            "desc": "打完后找出口/奖励点：边走边按 F，直到目标界面出现",
+            "type": "search",
+            "until": {
+                "ocr": ["请填入领奖界面上的文字"],
+                "roi": [0, 0, 100, 40]
+            },
+            "probe": [
+                {
+                    "hold": "w",
+                    "duration": 1.2
+                },
+                {
+                    "key": "f",
+                    "post_wait": 0.5
+                }
+            ],
+            "sweep": [
+                {
+                    "hold": "d",
+                    "duration": 0.5
+                }
+            ],
+            "sweep_every": 5,
+            "timeout": 120,
+            "_help": "出口位置随地形和镜头朝向变化，没法写死坐标，所以边走边按 F 探测。"
+        }
+    ],
+
+    "reward": [
+        {
+            "desc": "点击领取奖励 —— roi 必须替换成实机标定值",
+            "ocr": ["领取", "确认"],
+            "roi": [0, 0, 100, 40],
+            "post_wait": 1.0,
+            "_help": "若界面上同时有「领取」和「双倍领取」，roi 必须只框住你要点的那一个。"
+        },
+        {
+            "desc": "奖励展示后的关闭/点击空白处。可选步骤",
+            "ocr": ["点击空白处关闭", "关闭"],
+            "roi": [0, 0, 100, 40],
+            "required": false,
+            "post_wait": 0.8
+        }
+    ],
+
+    "exit": [
+        {
+            "desc": "退出副本回到可再次进入的状态 —— roi 必须替换成实机标定值",
+            "ocr": ["退出", "返回"],
+            "roi": [0, 0, 100, 40],
+            "post_wait": 1.5,
+            "_help": "loop_mode 填 again 时，这里应该改成点「再次挑战」并接一个加载节点。"
+        },
+        {
+            "desc": "退出确认弹窗。可选",
+            "ocr": ["确认", "确定"],
+            "roi": [0, 0, 100, 40],
+            "required": false,
+            "post_wait": 1.0
+        }
+    ],
+
+    "recover": [
+        {
+            "desc": "任一阶段失败后的兜底：回到大世界，让下一轮能重新开始",
+            "node": "SceneAnyEnterWorld"
+        },
+        {
+            "desc": "给界面一点稳定时间",
+            "wait": 2.0
+        }
+    ],
+
+    "combat": {
+        "preset": "basic_attack",
+        "duration": 240,
+        "stop_when_no_enemy": true,
+        "no_enemy_grace": 4.0,
+        "log_decisions": false,
+        "_help": [
+            "preset 可选 basic_attack / skill_rotation / team_rotation，也可用 script_path 指向自己的脚本。",
+            "stop_when_no_enemy：血条消失 no_enemy_grace 秒后收兵。副本里打完怪队伍 UI 还在，",
+            "不开这个就只能每轮干等满 duration；duration 变成兜底上限。"
+        ]
+    }
+}
