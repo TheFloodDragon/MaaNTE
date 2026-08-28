@@ -15,6 +15,7 @@ Pipeline 节点负责，因为那些依赖界面识别。
 
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -34,8 +35,14 @@ except ImportError:  # pragma: no cover - 非 Windows 或独立测试
     get_pids_by_name = None
 
 
-# 云异环窗口类名前缀（与 interface.json 的 CloudGame-Front 保持一致：Qt.*）
-CLOUD_WINDOW_CLASS = ("Qt",)
+# 云异环窗口类名（与 interface.json 的 CloudGame-Front 保持一致：class_regex "Qt.*"）。
+#
+# 必须是**编译好的正则对象**，不能写成字符串 "Qt"：
+# ``utils.win32_process._match_class_name`` 对字符串做的是精确相等比较，
+# 只有非字符串的 pattern 才走 ``re.search``。写成 "Qt" 时永远匹配不到真实
+# 类名（实机为 ``Qt51517QWindowOwnDC``），窗口明明已经出现却一直找不到，
+# 表现为 CloudGameLaunch 必然卡到「等待窗口超时（120s）」。
+CLOUD_WINDOW_CLASS = (re.compile(r"^Qt"),)
 
 DEFAULT_WINDOW_TIMEOUT = 120.0
 DEFAULT_POLL_INTERVAL = 1.0

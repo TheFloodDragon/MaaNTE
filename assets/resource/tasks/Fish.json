@@ -335,8 +335,8 @@
                     "name": "Yes",
                     "label": "$option_switch_case_yes",
                     "pipeline_override": {
-                        "FishNewGamingPro": {
-                            "custom_action_param": {
+                        "FishNewGamingPro_LearningOption": {
+                            "attach": {
                                 "learning_enabled": true,
                                 "learning_replay_history": true
                             }
@@ -347,8 +347,8 @@
                     "name": "No",
                     "label": "$option_switch_case_no",
                     "pipeline_override": {
-                        "FishNewGamingPro": {
-                            "custom_action_param": {
+                        "FishNewGamingPro_LearningOption": {
+                            "attach": {
                                 "learning_enabled": false,
                                 "learning_replay_history": false
                             }
@@ -367,8 +367,8 @@
                     "name": "Yes",
                     "label": "$option_switch_case_yes",
                     "pipeline_override": {
-                        "FishNewGamingPro": {
-                            "custom_action_param": {
+                        "FishNewGamingPro_DebugOption": {
+                            "attach": {
                                 "debug_enabled": true
                             }
                         }
@@ -378,8 +378,8 @@
                     "name": "No",
                     "label": "$option_switch_case_no",
                     "pipeline_override": {
-                        "FishNewGamingPro": {
-                            "custom_action_param": {
+                        "FishNewGamingPro_DebugOption": {
+                            "attach": {
                                 "debug_enabled": false
                             }
                         }

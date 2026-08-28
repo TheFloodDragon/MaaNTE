@@ -7,25 +7,49 @@
             "preset": "basic_attack"
         }
     },
-    "AutoCombatPresetBasicAttack": {
-        "desc": "预设：仅普攻（配置载体，不参与流程）",
+
+    // 下面这些 *_Option 节点不参与流程（enabled: false），只作为界面选项的载体。
+    //
+    // 为什么不让选项直接覆盖 AutoCombatMain 的 custom_action_param：
+    // GUI 合并多个 option 的 pipeline_override 时，custom_action_param 是被
+    // 整体替换而不是逐键合并的。五个选项都改同一个字段时，只有最后一个（日志开关）
+    // 能活下来，其余静默失效——表现为战斗预设永远是 basic_attack、最长运行时间
+    // 回落到代码默认、两个开关完全关不掉。
+    //
+    // 让每个选项改各自独立的节点，就不存在互相覆盖：字段路径本来就不同。
+    // 这与 DungeonFarm_* / PinkPawHeist_AutoResizeGameWindowConfig 是同一套机制
+    // （attach + get_node_data）。
+    //
+    // attach 一律留空：它表示「用户没有显式选择」。有值的那份来自 option 的
+    // pipeline_override，Python 侧再与 AutoCombatMain.custom_action_param 合并，
+    // 空值不参与覆盖。这样 GUI 不下发选项时仍能靠 custom_action_param 跑起来。
+    //
+    // 注意：这段说明必须是 // 注释，不能写成数组值的顶层键——MaaFramework 的
+    // PipelineResMgr 要求每个顶层键的值都是对象，数组会让整个文件解析失败
+    // （连 AutoCombatMain 都加载不进来，任务直接跑不起来）。
+    "AutoCombat_PresetOption": {
+        "desc": "选项载体：战斗预设（preset）",
         "enabled": false,
-        "attach": {
-            "preset": "basic_attack"
-        }
+        "attach": {}
     },
-    "AutoCombatPresetSkillRotation": {
-        "desc": "预设：通用技能循环（配置载体，不参与流程）",
+    "AutoCombat_DurationOption": {
+        "desc": "选项载体：最长运行时间（duration）",
         "enabled": false,
-        "attach": {
-            "preset": "skill_rotation"
-        }
+        "attach": {}
     },
-    "AutoCombatPresetTeamRotation": {
-        "desc": "预设：按队伍编成分角色出招（配置载体，不参与流程）",
+    "AutoCombat_StopWhenNotInTeamOption": {
+        "desc": "选项载体：脱离战斗界面时结束（stop_when_not_in_team）",
         "enabled": false,
-        "attach": {
-            "preset": "team_rotation"
-        }
+        "attach": {}
+    },
+    "AutoCombat_GuardOpenWorldOption": {
+        "desc": "选项载体：大世界启动守卫（guard_open_world）",
+        "enabled": false,
+        "attach": {}
+    },
+    "AutoCombat_LogDecisionsOption": {
+        "desc": "选项载体：是否输出规则触发日志（log_decisions）",
+        "enabled": false,
+        "attach": {}
     }
 }

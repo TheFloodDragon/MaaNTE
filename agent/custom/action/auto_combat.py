@@ -42,6 +42,26 @@ except ImportError:
 LOG_PREFIX = "[Combat]"
 NODE_PREFIX = "Combat"
 
+# 界面选项的载体节点。每个选项覆盖各自独立的节点，Python 侧再把它们的
+# ``attach`` 合并成参数字典。
+#
+# 为什么不让选项直接改 ``AutoCombatMain`` 的 ``custom_action_param``：
+# GUI 合并多个 option 的 pipeline_override 时，``custom_action_param``
+# 是**整体替换**而不是逐键合并。五个选项都改这一个字段时只有最后一个能活下来，
+# 实机表现为战斗预设永远是 ``basic_attack``、``duration`` 回落到代码默认值、
+# 两个开关（脱战结束、大世界守卫）完全关不掉。
+#
+# 改成每个选项写各自的节点就不存在互相覆盖——字段路径本来就不同。
+# 这套机制与 ``DungeonFarm_*`` / ``PinkPawHeist_AutoResizeGameWindowConfig``
+# 相同，已经在刷本任务上验证过。
+OPTION_NODES = (
+    "AutoCombat_PresetOption",
+    "AutoCombat_DurationOption",
+    "AutoCombat_StopWhenNotInTeamOption",
+    "AutoCombat_GuardOpenWorldOption",
+    "AutoCombat_LogDecisionsOption",
+)
+
 # 内置预设目录。两种布局都要支持：
 # - 开发仓库：``<root>/assets/resource/base/combat``
 # - 发布包：  ``<root>/resource/base/combat``（打包时 assets/ 这一层被剥掉）
@@ -127,12 +147,83 @@ def _load_script_source(params: dict):
     )
 
 
+def _describe_params(params: dict) -> str:
+    """把收到的参数摘要成一行，专门用于诊断「参数没传下来」。
+
+    只打键和值的类型/是否为空，不打全文：内联 script 可能很长，
+    刷到日志里会把真正有用的信息顶掉。
+    """
+    if not params:
+        return "（空字典）"
+    parts = []
+    for key in sorted(params):
+        value = params[key]
+        if value is None:
+            parts.append(f"{key}=null")
+        elif isinstance(value, str):
+            parts.append(f"{key}={'（空字符串）' if not value else value!r}")
+        elif isinstance(value, dict):
+            parts.append(f"{key}=<对象,{len(value)}键>")
+        else:
+            parts.append(f"{key}={value!r}")
+    return "{" + ", ".join(parts) + "}"
+
+
+def _collect_option_params(context) -> dict:
+    """把界面选项载体节点的 ``attach`` 合并成参数字典。
+
+    空值（``None`` / 空字符串）一律跳过：它们表示「这个选项没有给出有效值」。
+    输入框类选项的占位符替换失败时下发的正是 ``null``，跳过它才能回落到
+    ``custom_action_param`` 里的默认值，而不是拿着 ``None`` 去当预设名。
+
+    读不到节点不算错误：脚本直接调用、或某个 Client 不下发选项时都会这样，
+    此时应当由 ``custom_action_param`` 提供默认值。
+    """
+    merged: dict = {}
+    failed: list[str] = []
+    for node in OPTION_NODES:
+        try:
+            data = context.get_node_data(node)
+        except Exception:
+            # 节点读不到是正常情况（脚本直接调用时资源里没加载这些载体节点），
+            # 汇总成一条日志而不是每个节点刷一行。
+            failed.append(node)
+            continue
+        attach = data.get("attach") if isinstance(data, dict) else None
+        if not isinstance(attach, dict):
+            continue
+        for key, value in attach.items():
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            merged[key] = value
+    if failed and len(failed) < len(OPTION_NODES):
+        # 只有部分读不到才值得提醒：全都读不到通常是「没经过界面」，
+        # 而只缺几个说明 pipeline 里的载体节点定义不全。
+        print(f"{LOG_PREFIX}[WARN] 这些选项载体节点读不到: {failed}")
+    return merged
+
+
 @AgentServer.custom_action("AutoCombat")
 class AutoCombat(CustomAction):
     def run(
         self, context: Context, argv: CustomAction.RunArg
     ) -> CustomAction.RunResult:
-        params = _parse_custom_action_param(argv, log_prefix=LOG_PREFIX)
+        # 先把原始参数原样打出来。一旦界面选项没把值下发（GUI 对 option 的
+        # 合并方式各家不同），后面每一条异常行为都只是下游表现，看不出起因。
+        # 这一行日志是排查那类问题唯一可靠的证据。
+        raw_param = getattr(argv, "custom_action_param", None)
+        print(f"{LOG_PREFIX} 收到参数: {raw_param!r}")
+
+        # 界面选项走载体节点，pipeline / 内联调用走 custom_action_param。
+        # 选项优先：它代表用户在界面上的显式选择，而 custom_action_param
+        # 里的是资源自带的默认值。
+        inline = _parse_custom_action_param(argv, log_prefix=LOG_PREFIX)
+        from_options = _collect_option_params(context)
+        if from_options:
+            print(f"{LOG_PREFIX} 界面选项: {_describe_params(from_options)}")
+        params = {**inline, **from_options}
 
         raw, source = _load_script_source(params)
         if raw is None:

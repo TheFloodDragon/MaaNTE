@@ -32,8 +32,8 @@
                     "name": "BasicAttack",
                     "label": "$task_auto_combat_preset_basic_attack",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_PresetOption": {
+                            "attach": {
                                 "preset": "basic_attack"
                             }
                         }
@@ -43,8 +43,8 @@
                     "name": "SkillRotation",
                     "label": "$task_auto_combat_preset_skill_rotation",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_PresetOption": {
+                            "attach": {
                                 "preset": "skill_rotation"
                             }
                         }
@@ -54,8 +54,8 @@
                     "name": "TeamRotation",
                     "label": "$task_auto_combat_preset_team_rotation",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_PresetOption": {
+                            "attach": {
                                 "preset": "team_rotation"
                             }
                         }
@@ -76,8 +76,8 @@
                 }
             ],
             "pipeline_override": {
-                "AutoCombatMain": {
-                    "custom_action_param": {
+                "AutoCombat_DurationOption": {
+                    "attach": {
                         "duration": "{duration}"
                     }
                 }
@@ -93,8 +93,8 @@
                     "name": "Yes",
                     "label": "$option_switch_case_yes",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_StopWhenNotInTeamOption": {
+                            "attach": {
                                 "stop_when_not_in_team": true
                             }
                         }
@@ -104,8 +104,8 @@
                     "name": "No",
                     "label": "$option_switch_case_no",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_StopWhenNotInTeamOption": {
+                            "attach": {
                                 "stop_when_not_in_team": false
                             }
                         }
@@ -123,8 +123,8 @@
                     "name": "Yes",
                     "label": "$option_switch_case_yes",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_GuardOpenWorldOption": {
+                            "attach": {
                                 "guard_open_world": true
                             }
                         }
@@ -134,8 +134,8 @@
                     "name": "No",
                     "label": "$option_switch_case_no",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_GuardOpenWorldOption": {
+                            "attach": {
                                 "guard_open_world": false
                             }
                         }
@@ -153,8 +153,8 @@
                     "name": "Yes",
                     "label": "$option_switch_case_yes",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_LogDecisionsOption": {
+                            "attach": {
                                 "log_decisions": true
                             }
                         }
@@ -164,8 +164,8 @@
                     "name": "No",
                     "label": "$option_switch_case_no",
                     "pipeline_override": {
-                        "AutoCombatMain": {
-                            "custom_action_param": {
+                        "AutoCombat_LogDecisionsOption": {
+                            "attach": {
                                 "log_decisions": false
                             }
                         }

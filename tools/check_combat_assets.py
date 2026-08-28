@@ -24,6 +24,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "agent"))
+sys.path.insert(0, str(REPO / "tools"))
+
+from check_fishpro_assets import strip_jsonc  # noqa: E402
 
 from agent.custom.action.Combat.identity import resolve as resolve_character  # noqa: E402
 from agent.custom.action.Combat.kernel.constants import VK  # noqa: E402
@@ -71,10 +74,19 @@ def warn(message):
 
 
 def load_jsonc(path: Path):
-    """读取可能带 // 注释的 JSON（interface.json 用了 JSONC）。"""
-    text = path.read_text(encoding="utf-8")
-    text = re.sub(r"^\s*//.*$", "", text, flags=re.MULTILINE)
-    return json.loads(text)
+    """读取 JSONC（仓库的 pipeline 与 interface.json 都允许注释）。
+
+    必须逐字符剥离注释：仓库里大量 pipeline 把 ``// @i18n-skip`` 写在值后面
+    的同一行，只删「整行都是注释」的行会漏掉这些，解析随即失败。
+
+    尾随逗号也要容忍——MaaFramework 的解析器接受它，标准 ``json`` 不接受。
+    在这里报错等于凭空造出一批「文件坏了」的假警报。
+    """
+    text = strip_jsonc(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(text)
+    except ValueError:
+        return json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
 
 
 def walk_conditions(condition):
@@ -251,12 +263,16 @@ def check_pipeline_nodes():
     except (OSError, ValueError):
         return  # 已在上一组报错
 
-    # 收集所有 pipeline 节点名
+    # 收集所有 pipeline 节点名。
+    # pipeline 是 JSONC（允许 // 注释），必须用 load_jsonc，否则带注释的
+    # 文件解析失败。失败不能静默跳过——那会让这个文件里的节点全部
+    # "不存在"，报出一堆误导性的「引用了不存在的节点」。
     known: set[str] = set()
     for path in PIPELINE_DIR.rglob("*.json"):
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            data = load_jsonc(path)
+        except (OSError, ValueError) as exc:
+            error(f"pipeline 无法解析: {path.relative_to(REPO)}: {exc}")
             continue
         if isinstance(data, dict):
             known.update(data.keys())
@@ -266,8 +282,12 @@ def check_pipeline_nodes():
         entry = task.get("entry")
         if entry:
             entries.append(entry)
-    # option 的 pipeline_override 也要引用真实节点
+    # option 的 pipeline_override 也要引用真实节点。
+    # 顶层 pipeline_override 同样要查：input 型选项（如运行时长）没有 cases，
+    # 覆盖写在 option 顶层，只扫 cases 会让它的节点名笔误一路漏到运行时。
     for option in (task_data.get("option") or {}).values():
+        for node in (option.get("pipeline_override") or {}):
+            entries.append(node)
         for case in option.get("cases", []):
             for node in (case.get("pipeline_override") or {}):
                 entries.append(node)
@@ -295,8 +315,9 @@ def check_custom_action_registered():
     used: set[str] = set()
     for path in PIPELINE_DIR.rglob("*.json"):
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            data = load_jsonc(path)
+        except (OSError, ValueError) as exc:
+            error(f"pipeline 无法解析: {path.relative_to(REPO)}: {exc}")
             continue
         stack = [data]
         while stack:
@@ -356,33 +377,47 @@ def check_task_wiring():
                         f"任务 {task.get('name')} 引用了不存在的 group {group!r}"
                     )
 
-    # 预设 case 指向的预设文件必须存在且可解析
+    # 预设 case 指向的预设文件必须存在且可解析。
+    #
+    # 预设名可能写在两个位置：``attach``（界面选项走载体节点，现行写法）或
+    # ``custom_action_param``（早期写法，已废弃但仍要能查）。只认后者会让
+    # 迁移到载体节点后这项校验静默变成零校验——比没有校验更危险，
+    # 因为输出里那句 "[ok] 校验了 N 个预设引用" 会消失得毫无声响。
     checked = 0
     for option_name, option in options.items():
+        blocks = [(None, option.get("pipeline_override") or {})]
         for case in option.get("cases", []):
-            override = case.get("pipeline_override") or {}
+            blocks.append((case.get("name"), case.get("pipeline_override") or {}))
+        for case_name, override in blocks:
             for node_body in override.values():
-                param = (node_body or {}).get("custom_action_param") or {}
-                preset = param.get("preset")
-                if not preset:
-                    continue
-                path = COMBAT_DIR / f"{preset}.json"
-                if not path.exists():
-                    error(
-                        f"{option_name}/{case.get('name')}: 预设文件不存在 "
-                        f"{preset}.json"
+                body = node_body or {}
+                for holder in ("attach", "custom_action_param"):
+                    param = body.get(holder) or {}
+                    if not isinstance(param, dict):
+                        continue
+                    preset = param.get("preset")
+                    if not preset:
+                        continue
+                    where = (
+                        f"{option_name}/{case_name}" if case_name else option_name
                     )
-                    continue
-                checked += 1
+                    if not (COMBAT_DIR / f"{preset}.json").exists():
+                        error(f"{where}: 预设文件不存在 {preset}.json")
+                        continue
+                    checked += 1
     if checked:
         print(f"  [ok] 校验了 {checked} 个预设引用")
+    else:
+        # 三个内置预设至少要有一个被界面引用；数到 0 说明下发路径断了。
+        error("任务选项里没有任何有效的预设引用（预设选项可能没接上载体节点）")
 
     # 入口节点的默认预设也必须有效
     entry_nodes = {t.get("entry") for t in tasks if t.get("entry")}
     for path in PIPELINE_DIR.rglob("*.json"):
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            data = load_jsonc(path)
+        except (OSError, ValueError) as exc:
+            error(f"pipeline 无法解析: {path.relative_to(REPO)}: {exc}")
             continue
         if not isinstance(data, dict):
             continue

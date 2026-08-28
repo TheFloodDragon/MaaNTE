@@ -1393,6 +1393,143 @@ def verify_config() -> None:
     print(f"参数解析检查完成，累计 {CHECKS} 项")
 
 
+def verify_option_wiring() -> None:
+    """界面选项下发：必须走载体节点，且不得冲掉 pipeline 里写死的参数。
+
+    ## 这一组守的是一个真实缺陷
+
+    「学习模式」与「调试输出」两个子选项原本都覆盖
+    ``FishNewGamingPro.custom_action_param``。GUI 合并多个 option 的
+    ``pipeline_override`` 时这个字段是**整体替换**的：只有最后一个能活下来，
+    而且会连同 pipeline 里写死的 ``roi_px`` 与各项超时一起冲掉——
+    控条 ROI 静默回落到代码默认值，症状是「控条忽然不准了」，极难定位。
+
+    修法是让每个选项改各自独立的载体节点的 ``attach``。
+    """
+    import json
+    import re
+
+    from agent.custom.action.AutoFish.auto_fish_pro import (
+        _OPTION_NODES,
+        _collect_option_params,
+    )
+
+    print("\n--- 8. 界面选项下发 ---")
+
+    def load_jsonc(path: Path):
+        return json.loads(re.sub(r"//[^\n]*", "", path.read_text(encoding="utf-8")))
+
+    pipe = load_jsonc(
+        REPO / "assets" / "resource" / "base" / "pipeline" / "Fish" / "FishNew.json"
+    )
+    task = load_jsonc(REPO / "assets" / "resource" / "tasks" / "Fish.json")
+    options = task.get("option") or {}
+
+    # --- 载体节点存在、不参与流程、attach 默认空 ---
+    for node in _OPTION_NODES:
+        check(node in pipe, f"载体节点存在: {node}")
+        if node not in pipe:
+            continue
+        check(pipe[node].get("enabled") is False, f"{node} 不参与流程")
+        check(pipe[node].get("attach") == {}, f"{node} 的 attach 默认为空")
+
+    # --- 两个 Pro 子选项不得再覆盖 FishNewGamingPro ---
+    provided = set()
+    for name in ("FishNewProLearning", "FishNewProDebug"):
+        opt = options.get(name) or {}
+        for case in opt.get("cases", []) or []:
+            for node, patch in (case.get("pipeline_override") or {}).items():
+                check(
+                    node != "FishNewGamingPro",
+                    f"{name} 不再覆盖 FishNewGamingPro 的 custom_action_param"
+                    "（会连 roi_px 一起冲掉）",
+                )
+                check(node in _OPTION_NODES, f"{name} 只写载体节点（{node}）")
+                attach = patch.get("attach")
+                check(
+                    isinstance(attach, dict) and bool(attach),
+                    f"{name} 的覆盖写在非空 attach 里",
+                )
+                if isinstance(attach, dict):
+                    provided.update(attach.keys())
+
+    for key in ("learning_enabled", "learning_replay_history", "debug_enabled"):
+        check(key in provided, f"参数 {key} 有界面下发路径")
+
+    # --- attach -> 参数字典，并确认 roi_px 不再被冲掉 ---
+    class Ctx:
+        def __init__(self, table):
+            self.table = table
+
+        def get_node_data(self, node):
+            if node not in self.table:
+                raise RuntimeError("node not found")
+            return self.table[node]
+
+    def table(**attaches):
+        data = {n: {"enabled": False, "attach": {}} for n in _OPTION_NODES}
+        for node, attach in attaches.items():
+            data[node] = {"enabled": False, "attach": attach}
+        return data
+
+    got = _collect_option_params(
+        Ctx(
+            table(
+                FishNewGamingPro_LearningOption={
+                    "learning_enabled": True,
+                    "learning_replay_history": True,
+                },
+                FishNewGamingPro_DebugOption={"debug_enabled": True},
+            )
+        )
+    )
+    # 核心回归：两个选项同时生效。原实现下这里只会剩一个。
+    check(len(got) == 3, f"两个选项的三个参数同时生效（实际 {sorted(got)}）")
+    check(got.get("learning_enabled") is True, "收集到学习开关")
+    check(got.get("learning_replay_history") is True, "收集到历史回放开关")
+    check(got.get("debug_enabled") is True, "收集到调试开关")
+
+    # 关键回归：合并后 pipeline 写死的 roi_px 必须存活
+    inline = (pipe["FishNewGamingPro"] or {}).get("custom_action_param") or {}
+    merged = {**inline, **got}
+    cfg = load_fish_pro_config(merged)
+    check(
+        tuple(cfg.roi_px) == tuple(inline["roi_px"]),
+        f"选项生效时 roi_px 仍是 pipeline 的值（实际 {cfg.roi_px}）",
+    )
+    check(cfg.session_timeout_ms == inline["session_timeout_ms"], "超时参数存活")
+    check(cfg.learning_enabled is True, "学习开关传到 config")
+    check(cfg.debug_enabled is True, "调试开关传到 config")
+
+    # False 是有效值，不能被当成空值丢掉（否则开关关不掉）
+    got_off = _collect_option_params(
+        Ctx(
+            table(
+                FishNewGamingPro_LearningOption={"learning_enabled": False},
+                FishNewGamingPro_DebugOption={"debug_enabled": False},
+            )
+        )
+    )
+    check(got_off.get("learning_enabled") is False, "learning_enabled=False 被保留")
+    check(got_off.get("debug_enabled") is False, "debug_enabled=False 被保留")
+
+    # 读不到节点 / attach 类型不对时都要容错，交给 custom_action_param 兜底
+    check(_collect_option_params(Ctx(table())) == {}, "选项全空时返回空字典")
+    check(_collect_option_params(Ctx({})) == {}, "节点读不到时返回空字典")
+    check(
+        _collect_option_params(Ctx({n: {"attach": "oops"} for n in _OPTION_NODES}))
+        == {},
+        "attach 类型不对时忽略",
+    )
+    cfg_default = load_fish_pro_config({**inline, **{}})
+    check(
+        tuple(cfg_default.roi_px) == tuple(inline["roi_px"]),
+        "选项全空时仍用 pipeline 的 roi_px",
+    )
+
+    print(f"界面选项下发检查完成，累计 {CHECKS} 项")
+
+
 def main() -> int:
     print("=== FishPro 离线算法验证 ===")
     verify_vision()
@@ -1402,6 +1539,7 @@ def main() -> int:
     verify_learning()
     verify_closed_loop()
     verify_config()
+    verify_option_wiring()
 
     print(f"\n总计 {CHECKS} 项检查")
     if FAILURES:

@@ -316,6 +316,40 @@ def group_launcher():
     finally:
         L.find_windows_by_process = original
 
+    # --- 窗口类名匹配必须真的能命中实机类名 ---
+    #
+    # 这一段直接调用真实的 _match_class_name，不做替换。上面几条都把
+    # find_windows_by_process 整个换掉了，因此类名匹配逻辑从未被覆盖——
+    # 实机 bug 正是从这个缺口漏出去的：
+    #
+    #   CLOUD_WINDOW_CLASS 曾写成字符串 ("Qt",)，而 _match_class_name 对
+    #   字符串做的是**精确相等**比较，只有非字符串 pattern 才走 re.search。
+    #   实机类名是 Qt51517QWindowOwnDC，于是窗口明明已经出现却永远匹配不到，
+    #   CloudGameLaunch 必然卡到「等待窗口超时（120s）」。
+    from utils.win32_process import _match_class_name
+
+    # 实机采集到的真实类名（云·异环，1600x900 窗口）
+    for real in ("Qt51517QWindowOwnDC", "Qt5152QWindowIcon", "Qt6111QWindowOwnDC"):
+        check(
+            _match_class_name(real, L.CLOUD_WINDOW_CLASS),
+            f"能匹配实机窗口类名: {real}",
+        )
+    for other in ("UnrealWindow", "CabinetWClass", "Progman", "NotQtAtAll"):
+        check(
+            not _match_class_name(other, L.CLOUD_WINDOW_CLASS),
+            f"不误匹配其它窗口类名: {other}",
+        )
+    # 守住根因本身：字符串 pattern 在这里是无效写法
+    check(
+        not any(isinstance(p, str) for p in L.CLOUD_WINDOW_CLASS),
+        "CLOUD_WINDOW_CLASS 用编译好的正则，不用字符串"
+        "（字符串会被当成精确相等，永远匹配不到 Qt<版本> 类名）",
+    )
+    check(
+        not _match_class_name("Qt51517QWindowOwnDC", ("Qt",)),
+        "反证：字符串 'Qt' 确实匹配不到实机类名（这就是原 bug 的根因）",
+    )
+
     print(f"     完成，累计断言 {_CHECKS} 项")
 
 
@@ -531,6 +565,104 @@ def group_wiring():
     check(
         "recognition" not in entry,
         "入口不含识别（无界面信息时不得凭空编写）",
+    )
+
+    # --- 界面选项必须走载体节点 ---
+    #
+    # 三个选项原本全部覆盖 CloudGameLaunchMain.custom_action_param。GUI 合并
+    # 多个 option 的 pipeline_override 时这个字段是整体替换的，只有最后一个
+    # （等待超时）能活下来：用户填的启动器路径被忽略、「等待进入游戏」关不掉。
+    from custom.action.CloudGame.action import OPTION_NODES
+
+    for node in OPTION_NODES:
+        check(node in pipe, f"载体节点存在: {node}")
+        if node not in pipe:
+            continue
+        check_equal(pipe[node].get("enabled"), False, f"{node} 不参与流程")
+        check_equal(pipe[node].get("attach"), {}, f"{node} 的 attach 默认为空")
+
+    provided = set()
+    for opt_name in task.get("option", []):
+        body = task_data["option"].get(opt_name) or {}
+        blocks = [body.get("pipeline_override")]
+        for case in body.get("cases", []) or []:
+            blocks.append(case.get("pipeline_override"))
+        for block in blocks:
+            for node, patch in (block or {}).items():
+                check(
+                    node != task["entry"],
+                    f"{opt_name} 不再覆盖 {task['entry']} 的 custom_action_param"
+                    "（会被 GUI 整体替换，多个选项互相冲掉）",
+                )
+                check(node in OPTION_NODES, f"{opt_name} 只写载体节点（{node}）")
+                attach = patch.get("attach")
+                check(
+                    isinstance(attach, dict) and bool(attach),
+                    f"{opt_name} 对 {node} 的覆盖写在非空 attach 里",
+                )
+                if isinstance(attach, dict):
+                    provided.update(attach.keys())
+
+    for key in ("launcher_path", "wait_in_game", "ready_timeout"):
+        check(key in provided, f"参数 {key} 有界面下发路径")
+
+    # --- 载体节点 attach -> 参数字典 ---
+    from custom.action.CloudGame.action import _collect_option_params
+
+    class Ctx:
+        def __init__(self, table):
+            self.table = table
+
+        def get_node_data(self, node):
+            if node not in self.table:
+                raise RuntimeError("node not found")
+            return self.table[node]
+
+    def table(**attaches):
+        data = {n: {"enabled": False, "attach": {}} for n in OPTION_NODES}
+        for node, attach in attaches.items():
+            data[node] = {"enabled": False, "attach": attach}
+        return data
+
+    got = _collect_option_params(
+        Ctx(
+            table(
+                CloudGameLaunch_PathOption={"launcher_path": "D:/cloud/game.exe"},
+                CloudGameLaunch_WaitInGameOption={"wait_in_game": False},
+                CloudGameLaunch_ReadyTimeoutOption={"ready_timeout": 900},
+            )
+        )
+    )
+    # 核心回归：三个选项同时生效。原实现下这里只会剩最后一个键。
+    check_equal(len(got), 3, f"三个选项同时生效，互不覆盖（实际 {sorted(got)}）")
+    check_equal(got.get("launcher_path"), "D:/cloud/game.exe", "收集到启动器路径")
+    check_equal(got.get("wait_in_game"), False, "wait_in_game=False 被保留")
+    check_equal(got.get("ready_timeout"), 900, "收集到等待上限")
+
+    # 路径留空是常态（走自动探测），必须回落到 custom_action_param
+    default_param = entry.get("custom_action_param") or {}
+    for bad, label in ((None, "null"), ("", "空串"), ("   ", "全空格")):
+        got = _collect_option_params(
+            Ctx(
+                table(
+                    CloudGameLaunch_PathOption={"launcher_path": bad},
+                    CloudGameLaunch_ReadyTimeoutOption={"ready_timeout": 900},
+                )
+            )
+        )
+        check("launcher_path" not in got, f"launcher_path={label} 时不产生该键")
+        check_equal(got.get("ready_timeout"), 900, f"{label} 不影响其它选项")
+        merged = {**default_param, **got}
+        check_equal(
+            merged.get("launcher_path"), "", f"{label} 时回落到入口默认（自动探测）"
+        )
+
+    check_equal(_collect_option_params(Ctx(table())), {}, "选项全空时返回空字典")
+    check_equal(_collect_option_params(Ctx({})), {}, "节点读不到时返回空字典")
+    check_equal(
+        _collect_option_params(Ctx({n: {"attach": "oops"} for n in OPTION_NODES})),
+        {},
+        "attach 类型不对时忽略",
     )
 
     # --- CloudDaily 预设：定时每日流程的载体 ---

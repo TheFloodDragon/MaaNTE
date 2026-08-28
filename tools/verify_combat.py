@@ -42,6 +42,7 @@ from agent.custom.action.Combat.kernel.input import (  # noqa: E402
     norm_key,
     normalize_key_sequence,
 )
+from check_fishpro_assets import strip_jsonc  # noqa: E402
 from fixtures.baseline_loader import BASELINE_PATH, load_baseline  # noqa: E402
 
 BASE = load_baseline()
@@ -2741,6 +2742,269 @@ def group_switch_equivalence():
 
     print(f"     完成，累计断言 {_CHECKS} 项")
 
+def group_task_options():
+    """任务界面定义：参数必须走载体节点，不能挤在 custom_action_param 里。
+
+    ## 这一组守的是一个真实缺陷
+
+    AutoCombat 的五个选项原本全部覆盖 ``AutoCombatMain.custom_action_param``。
+    GUI 合并多个 option 的 ``pipeline_override`` 时这个字段是**整体替换**的，
+    于是只有最后一个（日志开关）能活下来，其余静默失效并回落到节点默认值：
+
+    - 战斗预设：永远是 ``basic_attack``，选了不算
+    - 最长运行时间：回落到代码里的 60 秒
+    - 脱离战斗界面时结束：开关无效
+    - 大世界启动守卫：开关无效，**关不掉**
+
+    修法是让每个选项改**各自独立的载体节点**的 ``attach``，字段路径不同就不会
+    互相覆盖。这与刷本任务（``DungeonFarm_*``）用的是同一套机制。
+
+    所以这里断言：选项不再碰入口节点、每个载体节点真实存在且默认空、
+    五个参数都有下发路径。
+    """
+    import json
+
+    print("[14] 任务界面定义：参数下发方式")
+
+    task_path = REPO / "assets" / "resource" / "tasks" / "AutoCombat.json"
+    data = json.loads(strip_jsonc(task_path.read_text(encoding="utf-8")))
+    options = data.get("option") or {}
+    tasks = data.get("task") or []
+    check_equal(len(tasks), 1, "AutoCombat.json 只定义一个任务")
+    referenced = tasks[0].get("option") or []
+
+    undefined = [name for name in referenced if name not in options]
+    check_equal(undefined, [], f"任务引用的 option 都有定义（缺: {undefined}）")
+
+    pipe_path = (
+        REPO / "assets" / "resource" / "base" / "pipeline" / "Combat" / "AutoCombat.json"
+    )
+    pipe = json.loads(strip_jsonc(pipe_path.read_text(encoding="utf-8")))
+
+    from agent.custom.action.auto_combat import OPTION_NODES
+
+    # --- 载体节点必须存在且不参与流程 ---
+    for node in OPTION_NODES:
+        check(node in pipe, f"载体节点 {node} 在 pipeline 里定义了")
+        if node not in pipe:
+            continue
+        check_equal(
+            pipe[node].get("enabled"), False, f"{node} 不参与流程（enabled: false）"
+        )
+        check_equal(
+            pipe[node].get("attach"),
+            {},
+            f"{node} 的 attach 默认为空（有值的那份来自用户选择）",
+        )
+
+    def blocks_of(opt):
+        yield opt.get("pipeline_override")
+        for case in opt.get("cases", []):
+            yield case.get("pipeline_override")
+
+    # --- 选项不得再碰 AutoCombatMain，且只能写已声明的载体节点 ---
+    provided = set()
+    for name in referenced + [
+        sub
+        for opt in options.values()
+        for c in opt.get("cases", [])
+        for sub in c.get("option", [])
+    ]:
+        opt = options.get(name)
+        if opt is None:
+            continue
+        for block in blocks_of(opt):
+            for node, patch in (block or {}).items():
+                check(
+                    node != "AutoCombatMain",
+                    f"{name} 不再覆盖 AutoCombatMain 的 custom_action_param"
+                    "（会被 GUI 整体替换，多个选项互相冲掉）",
+                )
+                check(
+                    node in OPTION_NODES,
+                    f"{name} 覆盖的节点 {node} 是已声明的载体节点",
+                )
+                attach = patch.get("attach")
+                check(
+                    isinstance(attach, dict) and bool(attach),
+                    f"{name} 对 {node} 的覆盖写在非空 attach 里",
+                )
+                check(
+                    "custom_action_param" not in patch,
+                    f"{name} 对 {node} 不再写 custom_action_param",
+                )
+                if isinstance(attach, dict):
+                    provided.update(attach.keys())
+
+    # --- 五个选项对应的参数都要有下发路径 ---
+    for key in (
+        "preset",
+        "duration",
+        "stop_when_not_in_team",
+        "guard_open_world",
+        "log_decisions",
+    ):
+        check(key in provided, f"参数 {key} 有界面下发路径")
+
+    # --- default_case 必须真实存在 ---
+    for name, opt in options.items():
+        default = opt.get("default_case")
+        if default is None:
+            continue
+        case_names = [c.get("name") for c in opt.get("cases", [])]
+        check(
+            default in case_names,
+            f"{name} 的 default_case {default!r} 在 cases 里（cases={case_names}）",
+        )
+
+    # --- 预设选项给出的预设文件都要存在 ---
+    combat_dir = REPO / "assets" / "resource" / "base" / "combat"
+    preset_values = []
+    for case in (options.get("AutoCombatPreset") or {}).get("cases", []):
+        patch = (case.get("pipeline_override") or {}).get(
+            "AutoCombat_PresetOption"
+        ) or {}
+        value = (patch.get("attach") or {}).get("preset")
+        if value is not None:
+            preset_values.append(value)
+    check_equal(len(preset_values), 3, f"三个内置预设都有选项（实际 {preset_values}）")
+    for value in preset_values:
+        check((combat_dir / f"{value}.json").exists(), f"预设文件存在: {value}.json")
+
+    # --- 入口节点自带的默认预设：所有选项都没下发时的最后兜底 ---
+    node = pipe.get("AutoCombatMain") or {}
+    check_equal(
+        node.get("custom_action"), "AutoCombat", "入口节点绑定 AutoCombat 动作"
+    )
+    default_param = node.get("custom_action_param") or {}
+    default_preset = default_param.get("preset")
+    check(bool(default_preset), f"入口节点自带默认预设（实际 {default_preset!r}）")
+    check(
+        (combat_dir / f"{default_preset}.json").exists(),
+        f"入口节点默认预设 {default_preset!r} 的文件存在",
+    )
+
+    print(f"     完成，累计断言 {_CHECKS} 项")
+
+
+def group_option_collection():
+    """载体节点 attach -> 参数字典：空值必须跳过，读不到不能崩。
+
+    输入框类选项（运行时长）的占位符替换失败时下发的是 ``null``。若把它当成
+    有效值，``duration`` 就成了 ``None``；``float(None)`` 直接抛异常，
+    任务连战斗都进不去。修了下发方式却没修合并语义，等于没修。
+
+    布尔 ``False`` 尤其要保住：这一组的存在意义就是让「大世界启动守卫」
+    能被关掉，而 ``False`` 恰好是最容易被当成空值丢弃的取值。
+    """
+    from agent.custom.action.auto_combat import (
+        OPTION_NODES,
+        _collect_option_params,
+    )
+
+    print("[15] 载体节点参数收集：空值与缺失的处理")
+
+    class Ctx:
+        def __init__(self, table):
+            self.table = table
+
+        def get_node_data(self, node):
+            if node not in self.table:
+                raise RuntimeError("node not found")
+            return self.table[node]
+
+    def table(**attaches):
+        data = {node: {"enabled": False, "attach": {}} for node in OPTION_NODES}
+        for node, attach in attaches.items():
+            data[node] = {"enabled": False, "attach": attach}
+        return data
+
+    full = table(
+        AutoCombat_PresetOption={"preset": "team_rotation"},
+        AutoCombat_DurationOption={"duration": 300},
+        AutoCombat_StopWhenNotInTeamOption={"stop_when_not_in_team": False},
+        AutoCombat_GuardOpenWorldOption={"guard_open_world": False},
+        AutoCombat_LogDecisionsOption={"log_decisions": True},
+    )
+    got = _collect_option_params(Ctx(full))
+    check_equal(got.get("preset"), "team_rotation", "收集到战斗预设")
+    check_equal(got.get("duration"), 300, "收集到运行时长")
+    check_equal(got.get("stop_when_not_in_team"), False, "收集到脱战开关")
+    check_equal(got.get("guard_open_world"), False, "收集到大世界守卫开关")
+    check_equal(got.get("log_decisions"), True, "收集到日志开关")
+
+    # 核心回归：五个选项同时下发时互不覆盖。这正是原缺陷的直接反例——
+    # 原实现下这里只会剩 log_decisions 一个键。
+    check_equal(len(got), 5, f"五个选项同时生效，互不覆盖（实际 {sorted(got)}）")
+
+    # 关键回归：guard_open_world=False 必须真的传到 SessionConfig
+    from agent.custom.action.Combat.runtime import SessionConfig
+    from agent.custom.action.pinkpaw.pinkpaw_common import _parse_bool
+
+    merged = {**{"preset": "basic_attack"}, **got}
+    cfg = SessionConfig(
+        duration=float(merged.get("duration", 60.0) or 60.0),
+        stop_when_not_in_team=_parse_bool(
+            merged.get("stop_when_not_in_team"), True
+        ),
+        guard_open_world=_parse_bool(merged.get("guard_open_world"), True),
+        log_decisions=_parse_bool(merged.get("log_decisions"), False),
+    )
+    check_equal(cfg.guard_open_world, False, "大世界启动守卫能被界面关掉")
+    check_equal(cfg.stop_when_not_in_team, False, "脱战结束能被界面关掉")
+    check_equal(cfg.duration, 300.0, "运行时长用界面给的值")
+    check_equal(cfg.log_decisions, True, "日志开关能被界面打开")
+    check_equal(merged["preset"], "team_rotation", "预设用界面选的那个")
+
+    # 占位符替换失败下发 null / 空串，必须当作「没给」并回落到默认值
+    for bad, label in ((None, "null"), ("", "空串"), ("   ", "全空格")):
+        broken = table(
+            AutoCombat_PresetOption={"preset": bad},
+            AutoCombat_DurationOption={"duration": bad},
+            AutoCombat_LogDecisionsOption={"log_decisions": True},
+        )
+        got = _collect_option_params(Ctx(broken))
+        check("preset" not in got, f"preset={label} 时不产生该键")
+        check("duration" not in got, f"duration={label} 时不产生该键")
+        check_equal(got.get("log_decisions"), True, f"{label} 不影响其它选项")
+        merged = {**{"preset": "basic_attack"}, **got}
+        check_equal(
+            merged["preset"], "basic_attack", f"preset={label} 时回落到入口默认预设"
+        )
+        # float(None) 会抛异常，这一步等价于「战斗还能起来」
+        check_equal(
+            float(merged.get("duration", 60.0) or 60.0),
+            60.0,
+            f"duration={label} 时回落到 60 秒而不是崩掉",
+        )
+
+    # 0 / False 是有效值，不能被当成空值丢掉
+    got = _collect_option_params(
+        Ctx(
+            table(
+                AutoCombat_DurationOption={"duration": 0},
+                AutoCombat_StopWhenNotInTeamOption={"stop_when_not_in_team": False},
+                AutoCombat_GuardOpenWorldOption={"guard_open_world": False},
+                AutoCombat_LogDecisionsOption={"log_decisions": False},
+            )
+        )
+    )
+    check_equal(got.get("duration"), 0, "duration=0 被保留")
+    check_equal(got.get("stop_when_not_in_team"), False, "False 被保留")
+    check_equal(got.get("guard_open_world"), False, "guard_open_world=False 被保留")
+    check_equal(got.get("log_decisions"), False, "log_decisions=False 被保留")
+
+    # 全空 / 读不到都不能抛异常，交给 custom_action_param 兜底
+    check_equal(_collect_option_params(Ctx(table())), {}, "选项全空时返回空字典")
+    check_equal(_collect_option_params(Ctx({})), {}, "节点读不到时返回空字典")
+
+    # attach 不是对象时也要容错
+    weird = {node: {"attach": "oops"} for node in OPTION_NODES}
+    check_equal(_collect_option_params(Ctx(weird)), {}, "attach 类型不对时忽略")
+
+    print(f"     完成，累计断言 {_CHECKS} 项")
+
+
 def main():
     print("=" * 68)
     print("战斗内核离线验证")
@@ -2758,6 +3022,8 @@ def main():
     group_kernel_equivalence()
     group_switch_state_machine()
     group_switch_equivalence()
+    group_task_options()
+    group_option_collection()
     print("-" * 68)
     if _FAILURES:
         print(f"失败 {len(_FAILURES)} / {_CHECKS} 项：")

@@ -350,6 +350,35 @@ auto_combat.py CustomAction 入口：参数解析、脚本加载、装配
 
 **三者都没给会直接返回失败**，不提供隐式默认脚本——让用户明确知道自己在跑什么，而不是被一个来源不明的动作序列驱动。
 
+### 界面选项如何下发：载体节点
+
+界面选项**不写** `AutoCombatMain.custom_action_param`，而是各写一个独立的载体节点：
+
+| 选项 | 载体节点 | 参数 |
+|---|---|---|
+| 战斗预设 | `AutoCombat_PresetOption` | `preset` |
+| 最长运行时间 | `AutoCombat_DurationOption` | `duration` |
+| 脱离战斗界面时结束 | `AutoCombat_StopWhenNotInTeamOption` | `stop_when_not_in_team` |
+| 启动前检查是否在战斗中 | `AutoCombat_GuardOpenWorldOption` | `guard_open_world` |
+| 输出规则触发日志 | `AutoCombat_LogDecisionsOption` | `log_decisions` |
+
+这些节点 `enabled: false`（不参与流程），`attach` 默认留空。用户选择后，GUI 把值写进对应节点的 `attach`；Python 侧 `_collect_option_params()` 读回来，与 `custom_action_param` 合并（**选项优先**，空值跳过并回落到默认）。
+
+**为什么必须这样绕一圈**：GUI 合并多个 option 的 `pipeline_override` 时，`custom_action_param` 是**整体替换**而不是逐键合并的。五个选项都改这一个字段时只有最后一个能活下来，其余静默失效——实机表现为：
+
+| 选项 | 实际效果 |
+|---|---|
+| 战斗预设 | 永远 `basic_attack`，选了不算 |
+| 最长运行时间 | 回落到代码默认 60 秒 |
+| 脱离战斗界面时结束 | 开关无效 |
+| 大世界启动守卫 | 开关无效，**关不掉** |
+
+只有排在最后的「输出规则触发日志」能生效。让每个选项改各自独立的节点就不存在互相覆盖：字段路径本来就不同。
+
+这与 `DungeonFarm_*`、`PinkPawHeist_AutoResizeGameWindowConfig` 是同一套机制（`attach` + `get_node_data`）。**新增选项时一律沿用载体节点，不要往 `custom_action_param` 里加**——第 14 组测试会拦住这类回归。
+
+`attach` 留空表示「用户没有显式选择」：GUI 不下发选项时（脚本直接调用、旧版客户端）仍能靠 `custom_action_param` 的默认值跑起来。输入框类选项的占位符替换失败时下发的是 `null`，同样按「没给」处理——否则 `float(None)` 会直接抛异常。
+
 ## 验证
 
 ```bash
@@ -372,6 +401,8 @@ python tools/check_combat_assets.py  # 预设与资产校验
 | 10 | 入口：脚本来源解析与拒绝策略 |
 | 11 / 11b / 11c | 内核等价性：与提取前的 core3 逐项比对 |
 | 12 | 预设目录解析：发布包布局 / 开发布局 / `cwd=assets` |
+| 14 | 任务界面定义：选项必须走载体节点，不得覆盖入口节点 |
+| 15 | 载体节点参数收集：五选项互不覆盖、空值回落、`False`/`0` 不被丢弃 |
 
 `check_combat_assets.py` 的 6 组：预设解析、locale 五语言齐全、pipeline 节点引用、CustomAction 注册、任务接线自洽（option 声明/group 名/预设引用）、locale 行尾。
 
@@ -408,14 +439,17 @@ python tools/check_combat_assets.py  # 预设与资产校验
 
 这与 `SoundDodgeMain`、`RealTimeTaskMain`、`TetrisEntrance` 等既有任务同构——它们都是「用户已就位，直接把控制权交给 Python」的模式，节点本身不携带界面信息。
 
+同一个 pipeline 文件里还有五个 `AutoCombat_*Option` 载体节点（`enabled: false`），只用来承载界面选项，不参与流程。机制见[界面选项如何下发](#界面选项如何下发载体节点)。
+
 界面选项（`assets/resource/tasks/AutoCombat.json`）：
 
-| 选项 | 类型 | 默认 |
-|---|---|---|
-| 战斗预设 | select | 仅普攻 |
-| 最长运行时间（秒） | input | 60 |
-| 脱离战斗界面时结束 | switch | 开 |
-| 输出规则触发日志 | switch | 关 |
+| 选项 | 类型 | 默认 | 载体节点 |
+|---|---|---|---|
+| 战斗预设 | select | 仅普攻 | `AutoCombat_PresetOption` |
+| 最长运行时间（秒） | input | 60 | `AutoCombat_DurationOption` |
+| 脱离战斗界面时结束 | switch | 开 | `AutoCombat_StopWhenNotInTeamOption` |
+| 启动前检查是否在战斗中 | switch | 开 | `AutoCombat_GuardOpenWorldOption` |
+| 输出规则触发日志 | switch | 关 | `AutoCombat_LogDecisionsOption` |
 
 任务归到 `RealTimeAssist` 分组，与实时辅助、音频闪避并列——都是「玩家在玩，脚本辅助」而非全自动托管的任务。
 

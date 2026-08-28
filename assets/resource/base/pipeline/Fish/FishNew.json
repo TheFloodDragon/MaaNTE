@@ -140,6 +140,28 @@
             "[Anchor]FishNewErrorRestart"
         ]
     },
+
+    // 下面两个 *_Option 节点不参与流程（enabled: false），只作为界面选项的载体。
+    //
+    // 为什么不让选项直接覆盖 FishNewGamingPro 的 custom_action_param：
+    // GUI 合并多个 option 的 pipeline_override 时，custom_action_param 是被
+    // 整体替换而不是逐键合并的。「学习模式」和「调试输出」两个子选项都改这一个
+    // 字段时只有最后一个能活下来，并且连同上面写死的 roi_px / 各项超时一起冲掉，
+    // 控条 ROI 会静默回落到代码默认值。
+    //
+    // 让每个选项改各自独立的节点就不存在互相覆盖：字段路径本来就不同。
+    // 这与 AutoCombat_* / DungeonFarm_* 是同一套机制（attach + get_node_data）。
+    // attach 一律留空：表示「用户没有显式选择」，空值不参与覆盖。
+    "FishNewGamingPro_LearningOption": {
+        "desc": "选项载体：FishPro 学习模式（learning_enabled / learning_replay_history）",
+        "enabled": false,
+        "attach": {}
+    },
+    "FishNewGamingPro_DebugOption": {
+        "desc": "选项载体：FishPro 调试输出（debug_enabled）",
+        "enabled": false,
+        "attach": {}
+    },
     "FishNewGameResult": {
         "desc": "检查钓鱼结果，并且关闭",
         "recognition": "OCR",

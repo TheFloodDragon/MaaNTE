@@ -13,5 +13,39 @@
         "pre_delay": 0,
         "post_delay": 0,
         "rate_limit": 0
+    },
+
+    // 下面这些 *_Option 节点不参与流程（enabled: false），只作为界面选项的载体。
+    //
+    // 为什么不让选项直接覆盖 CloudGameLaunchMain 的 custom_action_param：
+    // GUI 合并多个 option 的 pipeline_override 时，custom_action_param 是被
+    // 整体替换而不是逐键合并的。三个选项都改同一个字段时，只有最后一个
+    // （等待超时）能活下来，其余静默失效——表现为用户填的启动器路径被忽略、
+    // 「等待进入游戏」开关关不掉。
+    //
+    // 让每个选项改各自独立的节点，就不存在互相覆盖：字段路径本来就不同。
+    // 这与 AutoCombat_* / DungeonFarm_* 是同一套机制（attach + get_node_data）。
+    //
+    // attach 一律留空：它表示「用户没有显式选择」。有值的那份来自 option 的
+    // pipeline_override，Python 侧再与 CloudGameLaunchMain.custom_action_param
+    // 合并，空值不参与覆盖。这样 GUI 不下发选项时仍能靠 custom_action_param 跑起来。
+    //
+    // 注意：这段说明必须是 // 注释，不能写成数组值的顶层键——MaaFramework 的
+    // PipelineResMgr 要求每个顶层键的值都是对象，数组会让整个文件解析失败
+    // （连 CloudGameLaunchMain 都加载不进来，任务直接跑不起来）。
+    "CloudGameLaunch_PathOption": {
+        "desc": "选项载体：启动器路径（launcher_path）",
+        "enabled": false,
+        "attach": {}
+    },
+    "CloudGameLaunch_WaitInGameOption": {
+        "desc": "选项载体：是否等待进入游戏（wait_in_game）",
+        "enabled": false,
+        "attach": {}
+    },
+    "CloudGameLaunch_ReadyTimeoutOption": {
+        "desc": "选项载体：进入游戏等待上限（ready_timeout）",
+        "enabled": false,
+        "attach": {}
     }
 }
