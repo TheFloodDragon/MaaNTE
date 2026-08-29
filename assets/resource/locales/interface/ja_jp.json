@@ -324,6 +324,10 @@
     "task_cloud_game_launch_option_wait_in_game_desc": "有効にすると、オープンワールドを確認してから完了します。後続タスクがロード中に始まりません。無効の場合はウィンドウ表示で完了します。",
     "task_cloud_game_launch_option_ready_timeout": "ゲーム開始のタイムアウト（秒）",
     "task_cloud_game_launch_option_ready_timeout_desc": "ログイン・待機列・ロード完了を待つ最大時間です。待機列が長い場合は増やしてください。",
+    "task_cloud_game_launch_option_auto_enter": "自動でゲームに入る",
+    "task_cloud_game_launch_option_auto_enter_desc": "「ゲーム開始」を自動でクリックし、その後に出る 30 秒カウントダウン付きの起動確認ダイアログも処理します。オフにすると待機のみで、自分でクリックする必要があります。",
+    "task_cloud_game_launch_option_max_queue_time": "待機列の上限（秒）",
+    "task_cloud_game_launch_option_max_queue_time_desc": "待機列やロードがこの時間を超えたら中止してエラー終了します。定時実行がクラウドのプレイ時間を黙って消費するのを防ぎます。既定値は 1800 秒（30 分）です。",
     "preset.CloudDaily.label": "クラウド版デイリー",
     "preset.CloudDaily.description": "クラウドクライアントを起動してデイリーを実行します。ゲームに入るまで待機し、家具・引き出し・報酬受取を順に実行します。フロントエンドのスケジューラと併用で放置運用が可能です。"
 }

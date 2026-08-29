@@ -6,9 +6,12 @@
         "custom_action_param": {
             "launcher_path": "",
             "window_timeout": 120,
-            "ready_timeout": 300,
+            "ready_timeout": 600,
             "confirm_hits": 2,
-            "wait_in_game": true
+            "wait_in_game": true,
+            "auto_enter": true,
+            "max_queue_time": 1800,
+            "stop_when_no_playtime": true
         },
         "pre_delay": 0,
         "post_delay": 0,
@@ -31,8 +34,9 @@
     // 合并，空值不参与覆盖。这样 GUI 不下发选项时仍能靠 custom_action_param 跑起来。
     //
     // 注意：这段说明必须是 // 注释，不能写成数组值的顶层键——MaaFramework 的
-    // PipelineResMgr 要求每个顶层键的值都是对象，数组会让整个文件解析失败
-    // （连 CloudGameLaunchMain 都加载不进来，任务直接跑不起来）。
+    // PipelineResMgr 要求每个顶层键的值都是对象，数组值会让**整个 bundle**
+    // 加载失败（resource.loaded=false -> tasker.inited=false），届时任何任务
+    // 都跑不了，不只是本任务。tools/check_pipeline_structure.py 专门守这条。
     "CloudGameLaunch_PathOption": {
         "desc": "选项载体：启动器路径（launcher_path）",
         "enabled": false,
@@ -45,6 +49,16 @@
     },
     "CloudGameLaunch_ReadyTimeoutOption": {
         "desc": "选项载体：进入游戏等待上限（ready_timeout）",
+        "enabled": false,
+        "attach": {}
+    },
+    "CloudGameLaunch_MaxQueueTimeOption": {
+        "desc": "选项载体：排队等待上限（max_queue_time）",
+        "enabled": false,
+        "attach": {}
+    },
+    "CloudGameLaunch_AutoEnterOption": {
+        "desc": "选项载体：是否自动点开始游戏并处理确认弹窗（auto_enter）",
         "enabled": false,
         "attach": {}
     }

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,6 +60,39 @@ class LaunchResult:
     source: str
     hwnd: int | None
     message: str
+
+
+def restore_if_minimized(hwnd: int | None, logger=None) -> bool:
+    """窗口最小化时恢复它；返回是否执行了恢复。
+
+    这是一个实测出来的静默盲区：窗口最小化时 ``post_screencap().wait()``
+    **仍然返回成功**，但截到的画面是全白的（实测 mean=255 / std=0），
+    而且尺寸会变成异常值（实测 3317x720 而非 1280x720）。
+    识别拿着白图必然全部不命中，表现为「任务一直等到超时」，
+    日志里却看不出任何异常。
+
+    三月七工具箱在云游戏截图前也做同样的事
+    （``_ensure_window_not_minimized_for_frame_capture``），原因一致：
+    最小化后画面停止渲染。
+    """
+    if not hwnd or sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        if not user32.IsIconic(int(hwnd)):
+            return False
+        _SW_RESTORE = 9
+        user32.ShowWindow(int(hwnd), _SW_RESTORE)
+        if logger is not None:
+            logger("云异环窗口处于最小化，已恢复（最小化时截图为全白，识别必然失败）")
+        time.sleep(1.0)
+        return True
+    except Exception as exc:
+        if logger is not None:
+            logger(f"恢复云异环窗口失败: {exc}")
+        return False
 
 
 def _running_pids(names: tuple[str, ...]) -> list[int]:
@@ -237,4 +271,5 @@ __all__ = [
     "LaunchResult",
     "launch_cloud_game",
     "resolve_executable",
+    "restore_if_minimized",
 ]

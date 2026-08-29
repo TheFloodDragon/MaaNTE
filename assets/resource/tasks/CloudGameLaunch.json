@@ -13,6 +13,8 @@
             ],
             "option": [
                 "CloudGameLauncherPath",
+                "CloudGameAutoEnter",
+                "CloudGameMaxQueueTime",
                 "CloudGameWaitInGame",
                 "CloudGameReadyTimeout"
             ]
@@ -68,6 +70,56 @@
                 }
             ]
         },
+        "CloudGameAutoEnter": {
+            "type": "switch",
+            "label": "$task_cloud_game_launch_option_auto_enter",
+            "description": "$task_cloud_game_launch_option_auto_enter_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CloudGameLaunch_AutoEnterOption": {
+                            "attach": {
+                                "auto_enter": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CloudGameLaunch_AutoEnterOption": {
+                            "attach": {
+                                "auto_enter": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CloudGameMaxQueueTime": {
+            "type": "input",
+            "label": "$task_cloud_game_launch_option_max_queue_time",
+            "description": "$task_cloud_game_launch_option_max_queue_time_desc",
+            "inputs": [
+                {
+                    "name": "max_queue_time",
+                    "default": "1800",
+                    "pipeline_type": "int",
+                    "verify": "^\\d+$"
+                }
+            ],
+            "pipeline_override": {
+                "CloudGameLaunch_MaxQueueTimeOption": {
+                    "attach": {
+                        "max_queue_time": "{max_queue_time}"
+                    }
+                }
+            }
+        },
         "CloudGameReadyTimeout": {
             "type": "input",
             "label": "$task_cloud_game_launch_option_ready_timeout",
@@ -75,7 +127,7 @@
             "inputs": [
                 {
                     "name": "ready_timeout",
-                    "default": "300",
+                    "default": "600",
                     "pipeline_type": "int",
                     "verify": "^\\d+$"
                 }

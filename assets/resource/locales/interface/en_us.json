@@ -324,6 +324,10 @@
     "task_cloud_game_launch_option_wait_in_game_desc": "When on, finishes only after the open world is confirmed, so later tasks never start during loading. When off, returns as soon as the window appears.",
     "task_cloud_game_launch_option_ready_timeout": "Enter-game timeout (seconds)",
     "task_cloud_game_launch_option_ready_timeout_desc": "Maximum time to wait for sign-in, queueing and loading. Increase it if the queue is long.",
+    "task_cloud_game_launch_option_auto_enter": "Enter the game automatically",
+    "task_cloud_game_launch_option_auto_enter_desc": "Click \"Start Game\" and handle the launch confirmation dialog that follows, which aborts on a 30-second countdown. Turn this off to only wait and click it yourself.",
+    "task_cloud_game_launch_option_max_queue_time": "Queue wait limit (seconds)",
+    "task_cloud_game_launch_option_max_queue_time_desc": "Give up and fail if queueing or loading exceeds this duration, so scheduled runs cannot silently burn your cloud playtime. Defaults to 1800 seconds (30 minutes).",
     "preset.CloudDaily.label": "Cloud NTE Daily",
     "preset.CloudDaily.description": "Launch the cloud client and run dailies: wait until the game is entered, then run furniture, withdraw and reward claim in order. Combine with the launcher's scheduler for unattended runs."
 }

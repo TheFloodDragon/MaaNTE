@@ -769,6 +769,569 @@ def group_wiring():
     print(f"     完成，累计断言 {_CHECKS} 项")
 
 
+def group_launcher_ui():
+    """启动器界面层：文本锚点、阶段判断、时长解析。
+
+    ## 这一组守的是一个真实阻断
+
+    61a07a0 的实现从「窗口出现」直接跳到「等 InWorld」，中间**没有任何点击**。
+    但实机启动器停在主页需要点「开始游戏」，随后还有一个带 30 秒倒计时的确认
+    弹窗（超时自动「退出启动」）。所以原实现在实机上永远进不了游戏。
+
+    这里的断言全部基于实机 OCR 结果（``debug/cloudgame/023714_restored.png``），
+    不是编出来的字符串。
+    """
+    print("[5] 启动器界面：文本锚点与时长解析")
+
+    from custom.action.CloudGame.launcher_ui import (
+        LauncherScreen,
+        TextHit,
+        parse_duration_minutes,
+        read_playtime,
+    )
+
+    def screen(*items) -> LauncherScreen:
+        return LauncherScreen(
+            hits=[TextHit(text=t, box=b, score=s) for t, b, s in items]
+        )
+
+    # —— 实机主页：19 条文本里与判断相关的那些，box 与分数照实机填 ——
+    home = screen(
+        ("UID:171099121", (877, 144, 127, 18), 0.98),
+        ("畅玩卡", (878, 169, 76, 28), 1.00),
+        ("未开通", (958, 173, 51, 18), 1.00),
+        ("月卡特权：", (818, 236, 72, 19), 0.98),
+        ("剩余时长", (801, 328, 84, 22), 0.99),
+        ("免费时长：", (822, 378, 86, 19), 0.99),
+        ("11小时23分钟", (845, 406, 132, 22), 1.00),
+        # 实机这条被 OCR 读成带 emoji 的样子，这正是不能用相等匹配的原因
+        ("😄付费时长：", (820, 460, 88, 23), 0.90),
+        ("0小时0分钟", (844, 489, 105, 23), 0.99),
+        ("充值", (1128, 477, 42, 25), 1.00),
+        ("开始游戏", (973, 566, 75, 24), 1.00),
+    )
+
+    check(home.is_home, "实机主页应判定为 is_home")
+    check(not home.is_confirm_dialog, "实机主页不应误判为确认弹窗")
+    check(home.is_logged_in, "UID 可见应判定为已登录")
+    start = home.find("开始游戏")
+    check(start is not None, "主页应能找到「开始游戏」")
+    check_equal(start.center, (1010, 578), "「开始游戏」点击中心")
+
+    free, paid = read_playtime(home)
+    check_equal(free, 11 * 60 + 23, "免费时长解析为分钟")
+    # 付费标签带 emoji 前缀，仍必须能配到下方的值
+    check_equal(paid, 0, "付费时长解析为分钟（标签含 emoji 也要能配对）")
+
+    # —— 确认弹窗：文案来自用户实机截图 ——
+    dialog = screen(
+        ("本次游戏将使用您的免费时长或计费时长", (445, 303, 396, 22), 0.99),
+        ("不再提醒", (615, 345, 88, 22), 0.99),
+        ("退出启动 (29S)", (447, 421, 152, 28), 0.98),
+        ("进入游戏", (727, 423, 80, 24), 1.00),
+    )
+    check(dialog.is_confirm_dialog, "确认弹窗应判定为 is_confirm_dialog")
+    check(not dialog.is_home, "确认弹窗不应判定为主页（没有「开始游戏」）")
+    check_equal(dialog.confirm_countdown, 29, "应能读出倒计时秒数")
+    enter = dialog.find("进入游戏")
+    check(enter is not None, "弹窗应能找到「进入游戏」")
+
+    # 标题被 OCR 拆开时，靠两个按钮同时在也要能判定
+    dialog_split = screen(
+        ("本次游戏将使用您的", (445, 303, 200, 22), 0.95),
+        ("退出启动 (12S)", (447, 421, 152, 28), 0.97),
+        ("进入游戏", (727, 423, 80, 24), 1.00),
+    )
+    check(
+        dialog_split.is_confirm_dialog,
+        "标题被拆行时仍应靠两个按钮判定为确认弹窗",
+    )
+
+    # 弹窗与主页同时可见时（弹窗盖在主页上），必须判成弹窗——它有倒计时
+    overlay = screen(
+        ("开始游戏", (973, 566, 75, 24), 1.00),
+        ("退出启动 (30S)", (447, 421, 152, 28), 0.97),
+        ("进入游戏", (727, 423, 80, 24), 1.00),
+    )
+    check(overlay.is_confirm_dialog, "弹窗盖在主页上时应判成弹窗")
+    check(
+        not overlay.is_home,
+        "弹窗盖在主页上时不得判成主页，否则会去点被遮住的「开始游戏」",
+    )
+
+    # —— 时长文本解析的边界 ——
+    check_equal(parse_duration_minutes("11小时23分钟"), 683, "标准时长文本")
+    check_equal(
+        parse_duration_minutes("0 小时 0 分钟"), 0, "OCR 插空格也要能解析"
+    )
+    check_equal(parse_duration_minutes("剩余时长"), None, "非时长文本返回 None")
+    check_equal(parse_duration_minutes(""), None, "空文本返回 None")
+    check_equal(parse_duration_minutes(None), None, "None 输入不得抛异常")
+
+    # 读不到时长必须是 None 而不是 0：两者语义完全不同，
+    # 把「没看清」当成「时长耗尽」会让 OCR 抖一帧就中止任务。
+    #
+    # 这里要覆盖**两种**读不到：
+    #   (a) 连标签都没有（还在加载）
+    #   (b) 标签在、但值没读出来（值尚未渲染，或 OCR 漏了那一条）
+    # 只测 (a) 是不够的——那种情况在 anchor 检查处就提前返回了，
+    # 走不到真正的配对逻辑，等于没测到。这个盲区是变异测试暴露出来的。
+    blank = screen(("加载中", (600, 350, 80, 22), 0.95))
+    free2, paid2 = read_playtime(blank)
+    check_equal(free2, None, "连标签都没有时免费时长应为 None")
+    check_equal(paid2, None, "连标签都没有时付费时长应为 None")
+
+    label_only = screen(
+        ("UID:171099121", (877, 144, 127, 18), 0.98),
+        ("免费时长：", (822, 378, 86, 19), 0.99),
+        ("付费时长：", (820, 460, 88, 23), 0.90),
+        ("开始游戏", (973, 566, 75, 24), 1.00),
+    )
+    free3, paid3 = read_playtime(label_only)
+    check_equal(free3, None, "标签在但值没读到时免费时长应为 None 而非 0")
+    check_equal(paid3, None, "标签在但值没读到时付费时长应为 None 而非 0")
+
+    # 值离标签太远（属于另一栏）不得被错配过来
+    far_value = screen(
+        ("免费时长：", (822, 378, 86, 19), 0.99),
+        ("3小时0分钟", (120, 406, 132, 22), 1.00),
+    )
+    free4, _ = read_playtime(far_value)
+    check_equal(free4, None, "水平相距过远的时长值不得被错配到该标签")
+
+    print(f"     完成，累计断言 {_CHECKS} 项")
+
+
+class FakeClickController(FakeController):
+    """记录点击的假控制器。
+
+    只实现 ``post_touch_move / post_touch_down / post_touch_up``，**故意不提供**
+    ``post_click``：实机在 AgentServer 上下文里调 ``post_click`` 会抛
+    ``access violation reading 0xFFFFFFFFFFFFFFFF``（跨进程代理不支持该 API），
+    所以实现必须走 touch 三段式。假控制器不提供 post_click，实现一旦退回去用它
+    就会立刻 AttributeError 而不是静默通过。
+
+    同时记录调用顺序：必须是 move -> down -> up，缺一步或顺序错都算失败。
+    """
+
+    def __init__(self, frames):
+        super().__init__(frames)
+        self.clicks: list[tuple[int, int]] = []
+        self.calls: list[str] = []
+        self._pending: tuple[int, int] | None = None
+
+    def post_touch_move(self, x, y, contact=0, pressure=1):
+        self.calls.append("move")
+        self._pending = (int(x), int(y))
+        return _Wrap(True)
+
+    def post_touch_down(self, x, y, contact=0, pressure=1):
+        self.calls.append("down")
+        self._pending = (int(x), int(y))
+        return _Wrap(True)
+
+    def post_touch_up(self, contact=0):
+        self.calls.append("up")
+        # 一次完整点击以抬起为准，避免把 move 也计成一次点击
+        if self._pending is not None:
+            self.clicks.append(self._pending)
+            self._pending = None
+        return _Wrap(True)
+
+
+class ExpiringControllerTasker:
+    """模拟实机行为：每次访问 ``.controller`` 都返回**新的**代理对象，
+    且上一次取到的那个立刻失效。
+
+    这是实机测出来的真实语义——在 AgentServer 上下文里
+    ``context.tasker.controller`` 每次访问都是新对象、新句柄（实测
+    ``同一对象=False 同一句柄=False``）。谁把它取出来跨调用缓存，
+    输入 API 就会抛 ``access violation``。
+
+    假环境必须复现这个语义，否则「缓存 controller」这个缺陷永远测不出来：
+    实机上它表现为截图正常、点击全炸且偶发成功，极难定位。
+    """
+
+    def __init__(self, backend):
+        self._backend = backend
+        self._issued: list["_ExpiringController"] = []
+        self.stopping = False
+
+    @property
+    def controller(self):
+        for old in self._issued:
+            old._expired = True
+        fresh = _ExpiringController(self._backend)
+        self._issued.append(fresh)
+        return fresh
+
+
+class _ExpiringController:
+    """一次性 controller 代理：被下一次取用后即失效。"""
+
+    def __init__(self, backend):
+        self._backend = backend
+        self._expired = False
+
+    def _guard(self):
+        if self._expired:
+            # 对应实机的 OSError: access violation
+            raise OSError(
+                "exception: access violation reading 0xFFFFFFFFFFFFFFFF"
+            )
+
+    def post_screencap(self):
+        self._guard()
+        return self._backend.post_screencap()
+
+    def post_touch_move(self, x, y, contact=0, pressure=1):
+        self._guard()
+        return self._backend.post_touch_move(x, y, contact, pressure)
+
+    def post_touch_down(self, x, y, contact=0, pressure=1):
+        self._guard()
+        return self._backend.post_touch_down(x, y, contact, pressure)
+
+    def post_touch_up(self, contact=0):
+        self._guard()
+        return self._backend.post_touch_up(contact)
+
+
+class FakeEnterContext:
+    """按帧标签驱动进入流程的假 context。
+
+    ``frames`` 是帧标签序列；``in_game`` 里的标签视为已在游戏内；
+    ``screens`` 把标签映射到 ``LauncherScreen``。
+
+    tasker 用 :class:`ExpiringControllerTasker`，复现实机「controller 句柄
+    每次访问都变」的语义。
+    """
+
+    def __init__(self, frames, in_game=(), screens=None, raise_nodes=()):
+        self._backend = FakeClickController(frames)
+        self.tasker = ExpiringControllerTasker(self._backend)
+        self._in_game = set(in_game)
+        self._screens = screens or {}
+        self._raise = set(raise_nodes)
+        self.ocr_calls = 0
+
+    def run_recognition(self, node, image):
+        if node in self._raise:
+            raise RuntimeError(f"boom:{node}")
+        return _Hit(image in self._in_game and node == "InWorld")
+
+    def ocr_screen(self, image):
+        self.ocr_calls += 1
+        from custom.action.CloudGame.launcher_ui import LauncherScreen
+
+        return self._screens.get(image) or LauncherScreen(hits=[])
+
+    @property
+    def clicks(self):
+        # 读后端而不是 tasker.controller：后者每次访问都会新建代理并让旧的失效
+        return self._backend.clicks
+
+    @property
+    def calls(self):
+        return self._backend.calls
+
+
+def group_enter():
+    """进入流程状态机：点按钮、处理倒计时弹窗、排队上限、时长为 0 即停。"""
+    print("[6] 进入流程：状态机与放弃条件")
+
+    from custom.action.CloudGame.enter import CLICK_COOLDOWN, enter_cloud_game
+    from custom.action.CloudGame.launcher_ui import LauncherScreen, TextHit
+
+    def screen(*items) -> LauncherScreen:
+        return LauncherScreen(
+            hits=[TextHit(text=t, box=b, score=1.0) for t, b in items]
+        )
+
+    home = screen(
+        ("UID:171099121", (877, 144, 127, 18)),
+        ("免费时长：", (822, 378, 86, 19)),
+        ("11小时23分钟", (845, 406, 132, 22)),
+        ("付费时长：", (820, 460, 88, 23)),
+        ("0小时0分钟", (844, 489, 105, 23)),
+        ("开始游戏", (973, 566, 75, 24)),
+    )
+    dialog = screen(
+        ("本次游戏将使用您的免费时长或计费时长", (445, 303, 396, 22)),
+        ("退出启动 (29S)", (447, 421, 152, 28)),
+        ("进入游戏", (727, 423, 80, 24)),
+    )
+    queueing = screen(("正在排队", (600, 350, 80, 22)))
+    no_time = screen(
+        ("UID:171099121", (877, 144, 127, 18)),
+        ("免费时长：", (822, 378, 86, 19)),
+        ("0小时0分钟", (845, 406, 132, 22)),
+        ("付费时长：", (820, 460, 88, 23)),
+        ("0小时0分钟", (844, 489, 105, 23)),
+        ("开始游戏", (973, 566, 75, 24)),
+    )
+
+    # —— 正常路径：主页 -> 点开始 -> 弹窗 -> 点进入 -> 排队 -> 进游戏 ——
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["home", "dialog", "queue", "queue", "game", "game"],
+        in_game={"game"},
+        screens={"home": home, "dialog": dialog, "queue": queueing},
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        confirm_hits=2,
+    )
+    check(result.ok, "正常路径应成功进入游戏")
+    check_equal(result.stage, "in_game", "成功时阶段应为 in_game")
+    check_equal(
+        ctx.clicks[0], (1010, 578), "第一次点击应落在「开始游戏」中心"
+    )
+    check_equal(
+        ctx.clicks[1], (767, 435), "第二次点击应落在「进入游戏」中心"
+    )
+    check_equal(len(ctx.clicks), 2, "正常路径只应点两次，不得在排队页乱点")
+
+    # 点击必须是完整的 move -> down -> up 三段式。
+    # 实机在 AgentServer 上下文里 post_click 会抛访问违例（跨进程代理不支持），
+    # 而同一 controller 的 post_screencap 正常，所以只能走 touch 三段式。
+    # 缺 move 会让依赖 hover 的控件收不到事件；缺 up 会一直按住。
+    check_equal(
+        ctx.calls,
+        ["move", "down", "up"] * 2,
+        "每次点击都应是完整的 move -> down -> up",
+    )
+
+    # —— 时长为 0 必须立即停，且一次都不能点 ——
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["home"] * 6, screens={"home": no_time}
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+    )
+    check(not result.ok, "时长为 0 应失败退出")
+    check_equal(result.stage, "no_playtime", "阶段应为 no_playtime")
+    check_equal(
+        len(ctx.clicks), 0, "时长为 0 时一次都不该点——点了也进不去"
+    )
+    check("剩余时长为 0" in result.message, "失败原因应说明时长为 0")
+
+    # 关掉这个开关后就不该因时长为 0 而停
+    clock = FakeClock()
+    ctx = FakeEnterContext(frames=["home"] * 4, screens={"home": no_time})
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        enter_timeout=3.0,
+        stop_when_no_playtime=False,
+    )
+    check_equal(
+        result.stage, "timeout", "关掉时长检查后应继续尝试直到超时"
+    )
+    check(len(ctx.clicks) >= 1, "关掉时长检查后仍应点「开始游戏」")
+
+    # —— 读不到时长（None）不得当作时长耗尽 ——
+    # 两种形态都要覆盖：连标签都没有，以及标签在但值没读出来。
+    # 后者才是真实风险：值那一条 OCR 偶尔会漏，若把它当成 0，
+    # 任务就会以「剩余时长为 0」中止，而用户账号里其实还有时长。
+    blank_home = screen(("开始游戏", (973, 566, 75, 24)))
+    label_only_home = screen(
+        ("UID:171099121", (877, 144, 127, 18)),
+        ("免费时长：", (822, 378, 86, 19)),
+        ("付费时长：", (820, 460, 88, 23)),
+        ("开始游戏", (973, 566, 75, 24)),
+    )
+    for label, variant in (
+        ("无标签", blank_home),
+        ("标签在但值读不到", label_only_home),
+    ):
+        clock = FakeClock()
+        ctx = FakeEnterContext(frames=["home"] * 4, screens={"home": variant})
+        result = enter_cloud_game(
+            ctx,
+            ocr_screen=ctx.ocr_screen,
+            clock=clock,
+            sleeper=clock.sleep,
+            poll_interval=1.0,
+            enter_timeout=3.0,
+        )
+        check(
+            result.stage != "no_playtime",
+            f"{label}：读不到时长不得判成时长耗尽（OCR 抖一帧就停任务不可接受）",
+        )
+        check(
+            len(ctx.clicks) >= 1, f"{label}：读不到时长仍应尝试点「开始游戏」"
+        )
+
+    # —— 确认弹窗优先于主页：弹窗盖在主页上时必须点「进入游戏」 ——
+    overlay = screen(
+        ("开始游戏", (973, 566, 75, 24)),
+        ("退出启动 (30S)", (447, 421, 152, 28)),
+        ("进入游戏", (727, 423, 80, 24)),
+    )
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["ov", "ov", "game", "game"],
+        in_game={"game"},
+        screens={"ov": overlay},
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        confirm_hits=2,
+    )
+    check(result.ok, "弹窗覆盖主页时也应能进入游戏")
+    check_equal(
+        ctx.clicks[0],
+        (767, 435),
+        "弹窗覆盖主页时应点「进入游戏」而非被遮住的「开始游戏」",
+    )
+
+    # —— 点击冷却：同一按钮不得每轮连点 ——
+    clock = FakeClock()
+    ctx = FakeEnterContext(frames=["dialog"] * 10, screens={"dialog": dialog})
+    enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        enter_timeout=9.0,
+    )
+    check(
+        len(ctx.clicks) <= 4,
+        f"9 秒内点击次数应受 {CLICK_COOLDOWN}s 冷却限制，实际 {len(ctx.clicks)}",
+    )
+    check(len(ctx.clicks) >= 2, "冷却期过后应重试点击")
+
+    # —— 排队超上限：放弃并报错（用户选定的行为）——
+    clock = FakeClock()
+    ctx = FakeEnterContext(frames=["queue"] * 200, screens={"queue": queueing})
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        max_queue_time=10.0,
+        enter_timeout=600.0,
+    )
+    check(not result.ok, "排队超上限应失败")
+    check_equal(result.stage, "queue_timeout", "阶段应为 queue_timeout")
+    check(
+        clock.now < 600.0,
+        "排队上限应先于总超时触发，不该白等到 enter_timeout",
+    )
+    check("排队" in result.message, "失败原因应提到排队")
+
+    # 排队计时从离开主页起算，不含在主页/弹窗停留的时间：
+    # 否则等登录、等弹窗的时间会被算进排队，提前误判超时。
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["home"] * 8 + ["queue"] * 8 + ["game", "game"],
+        in_game={"game"},
+        screens={"home": home, "dialog": dialog, "queue": queueing},
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        max_queue_time=10.0,
+        confirm_hits=2,
+    )
+    check(
+        result.ok,
+        "在主页停留 8 轮后再排队 8 轮，不应因排队上限 10s 而失败",
+    )
+
+    # —— 识别异常不得放行 ——
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["queue"] * 6,
+        screens={"queue": queueing},
+        raise_nodes=("InWorld", "InMiniWorld"),
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        enter_timeout=5.0,
+    )
+    check(
+        not result.ok, "游戏内识别抛异常时不得判定为已进入游戏"
+    )
+
+    # —— OCR 抛异常时不得崩溃，应继续轮询 ——
+    class BoomContext(FakeEnterContext):
+        def ocr_screen(self, image):
+            raise RuntimeError("ocr boom")
+
+    clock = FakeClock()
+    ctx = BoomContext(frames=["x"] * 6)
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        enter_timeout=4.0,
+    )
+    check(not result.ok, "OCR 持续异常应以超时失败而不是抛出")
+    check_equal(len(ctx.clicks), 0, "OCR 异常时不得盲点")
+
+    # —— 任务被停止应立即返回 ——
+    clock = FakeClock()
+    ctx = FakeEnterContext(frames=["home"] * 4, screens={"home": home})
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        should_stop=lambda: True,
+    )
+    check(not result.ok, "被停止应返回失败")
+    check_equal(result.stage, "stopped", "阶段应为 stopped")
+    check_equal(len(ctx.clicks), 0, "被停止后不得再点击")
+
+    # —— 已在游戏内时不该去点任何按钮 ——
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["game", "game"], in_game={"game"}, screens={}
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        confirm_hits=2,
+    )
+    check(result.ok, "已在游戏内应直接成功")
+    check_equal(len(ctx.clicks), 0, "已在游戏内不得点击任何按钮")
+    check_equal(ctx.ocr_calls, 0, "已在游戏内不必跑启动器 OCR")
+
+    print(f"     完成，累计断言 {_CHECKS} 项")
+
+
 def main():
     print("=" * 68)
     print("云异环启动任务离线验证")
@@ -777,6 +1340,8 @@ def main():
     group_launcher()
     group_ready()
     group_wiring()
+    group_launcher_ui()
+    group_enter()
     print("-" * 68)
     if _FAILURES:
         print(f"失败 {len(_FAILURES)} / {_CHECKS} 项：")

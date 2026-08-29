@@ -330,6 +330,10 @@
     "task_cloud_game_launch_option_wait_in_game_desc": "开启后会等到确认进入大世界才算完成，后续任务不会在加载中开始。关闭则窗口出现即返回。",
     "task_cloud_game_launch_option_ready_timeout": "进入游戏超时（秒）",
     "task_cloud_game_launch_option_ready_timeout_desc": "等待登录、排队与加载完成的最长时间。排队较久时可适当加大。",
+    "task_cloud_game_launch_option_auto_enter": "自动进入游戏",
+    "task_cloud_game_launch_option_auto_enter_desc": "自动点击「开始游戏」，并处理随后那个带 30 秒倒计时的启动确认弹窗。关闭后只等待，需要你自己点。",
+    "task_cloud_game_launch_option_max_queue_time": "排队等待上限（秒）",
+    "task_cloud_game_launch_option_max_queue_time_desc": "排队或加载超过这个时长就放弃并报错退出，避免定时任务无声占用云游戏时长。默认 1800 秒（30 分钟）。",
     "preset.CloudDaily.label": "云异环日常",
     "preset.CloudDaily.description": "自动启动云异环并完成每日：先拉起云客户端等待进入游戏，再依次跑家具、提现与奖励领取。配合前端定时器可实现无人值守。"
 }

@@ -324,6 +324,10 @@
     "task_cloud_game_launch_option_wait_in_game_desc": "켜면 오픈 월드를 확인한 뒤 완료되므로 이후 작업이 로딩 중에 시작되지 않습니다. 끄면 창이 나타나는 즉시 완료됩니다.",
     "task_cloud_game_launch_option_ready_timeout": "게임 진입 제한 시간 (초)",
     "task_cloud_game_launch_option_ready_timeout_desc": "로그인, 대기열, 로딩 완료를 기다리는 최대 시간입니다. 대기열이 길면 늘리세요.",
+    "task_cloud_game_launch_option_auto_enter": "자동으로 게임 진입",
+    "task_cloud_game_launch_option_auto_enter_desc": "「게임 시작」을 자동으로 클릭하고, 이어서 나오는 30초 카운트다운 실행 확인 창까지 처리합니다. 끄면 대기만 하며 직접 클릭해야 합니다.",
+    "task_cloud_game_launch_option_max_queue_time": "대기열 대기 상한 (초)",
+    "task_cloud_game_launch_option_max_queue_time_desc": "대기열이나 로딩이 이 시간을 넘으면 포기하고 오류로 종료합니다. 예약 실행이 클라우드 플레이 시간을 조용히 소모하는 것을 막습니다. 기본값은 1800초(30분)입니다.",
     "preset.CloudDaily.label": "클라우드 일일",
     "preset.CloudDaily.description": "클라우드 클라이언트를 실행하고 일일 임무를 수행합니다. 게임 진입을 기다린 뒤 가구, 출금, 보상 수령을 순서대로 실행합니다. 프론트엔드 스케줄러와 함께 사용하면 무인 실행이 가능합니다."
 }

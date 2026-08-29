@@ -22,11 +22,17 @@ from maa.custom_action import CustomAction
 
 from utils.logger import logger
 
+from .enter import (
+    DEFAULT_MAX_QUEUE_TIME,
+    enter_cloud_game,
+)
 from .launcher import (
     DEFAULT_POLL_INTERVAL as LAUNCH_POLL_INTERVAL,
     DEFAULT_WINDOW_TIMEOUT,
     launch_cloud_game,
+    restore_if_minimized,
 )
+from .ocr_bridge import make_ocr_screen
 from .ready import (
     DEFAULT_CONFIRM_HITS,
     DEFAULT_POLL_INTERVAL as READY_POLL_INTERVAL,
@@ -50,6 +56,8 @@ OPTION_NODES = (
     "CloudGameLaunch_PathOption",
     "CloudGameLaunch_WaitInGameOption",
     "CloudGameLaunch_ReadyTimeoutOption",
+    "CloudGameLaunch_MaxQueueTimeOption",
+    "CloudGameLaunch_AutoEnterOption",
 )
 
 
@@ -119,6 +127,30 @@ def _parse_int(value, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, parsed))
 
 
+_FALSE_WORDS = {"0", "false", "no", "off", "否", "关", "关闭"}
+
+
+def _parse_bool(value, default: bool) -> bool:
+    """解析开关参数。
+
+    界面选项下发的可能是字符串（``"false"``）也可能是真布尔，两种都要吃。
+    ``None`` 表示「没给值」，回落默认而不是当成 False——否则默认开启的开关
+    会因为用户没动它而变成关闭。
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if not text:
+            return default
+        return text not in _FALSE_WORDS
+    return bool(value)
+
+
 @AgentServer.custom_action("CloudGameLaunch")
 class CloudGameLaunch(CustomAction):
     """启动云异环并等待进入游戏。"""
@@ -146,14 +178,15 @@ class CloudGameLaunch(CustomAction):
         confirm_hits = _parse_int(
             params.get("confirm_hits"), DEFAULT_CONFIRM_HITS, 1, 10
         )
-        wait_in_game = params.get("wait_in_game", True)
-        if isinstance(wait_in_game, str):
-            wait_in_game = wait_in_game.strip().lower() not in {
-                "0",
-                "false",
-                "no",
-                "off",
-            }
+        max_queue_time = _parse_float(
+            params.get("max_queue_time"), DEFAULT_MAX_QUEUE_TIME, 30.0, 7200.0
+        )
+        wait_in_game = _parse_bool(params.get("wait_in_game"), True)
+        # 自动进入：点「开始游戏」并处理确认弹窗。默认开启——客户端不会自己进游戏。
+        auto_enter = _parse_bool(params.get("auto_enter"), True)
+        stop_when_no_playtime = _parse_bool(
+            params.get("stop_when_no_playtime"), True
+        )
 
         def should_stop() -> bool:
             try:
@@ -181,11 +214,43 @@ class CloudGameLaunch(CustomAction):
         if launch.already_running:
             log(launch.message)
 
+        # 最小化的窗口截出来是全白，识别必然全不命中，且 post_screencap 仍报成功。
+        # 必须在任何识别之前恢复，否则后面一路等到超时都查不出原因。
+        restore_if_minimized(launch.hwnd, logger=log)
+
         if not wait_in_game:
             log("已按配置跳过「等待进入游戏」")
             return CustomAction.RunResult(success=True)
 
-        # 2. 等待真正进入游戏（依赖已验证的游戏内公共节点）。
+        # 2. 推进到游戏内。
+        #
+        # 客户端**不会自己进游戏**：启动后停在主页需要点「开始游戏」，随后还有
+        # 一个带 30 秒倒计时的确认弹窗。auto_enter 关闭时退回旧行为（只等待），
+        # 供「客户端已配置自动进入」或想手动介入的用户使用。
+        if auto_enter:
+            entered = enter_cloud_game(
+                context,
+                ocr_screen=make_ocr_screen(context, logger=log),
+                max_queue_time=max_queue_time,
+                enter_timeout=ready_timeout,
+                poll_interval=READY_POLL_INTERVAL,
+                confirm_hits=confirm_hits,
+                stop_when_no_playtime=stop_when_no_playtime,
+                should_stop=should_stop,
+                logger=log,
+            )
+            if not entered.ok:
+                logger.error(
+                    "%s 进入云游戏失败（阶段=%s，耗时 %.0fs）: %s",
+                    _LOG_PREFIX,
+                    entered.stage,
+                    entered.elapsed,
+                    entered.message,
+                )
+                return CustomAction.RunResult(success=False)
+            log(f"{entered.message}，耗时 {entered.elapsed:.0f}s")
+            return CustomAction.RunResult(success=True)
+
         ready = wait_until_in_game(
             context,
             ready_timeout=ready_timeout,
