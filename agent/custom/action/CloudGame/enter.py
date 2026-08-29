@@ -135,6 +135,14 @@ class _Clicker:
         真实鼠标：部分控件依赖 hover 状态才响应。
 
         controller 现取（见 :func:`_controller_of`），不能缓存。
+
+        坐标用的是**截图的坐标空间**，不必手动换算窗口尺寸。已从
+        MaaFramework 源码确认：``ControllerAgent::preproc_touch_point`` 会按
+        ``image_raw / image_target`` 把点缩放到设备原始坐标，``handle_click``
+        与 ``handle_touch_down/move`` 都先过它；只有控制单元带
+        ``NoScalingTouchPoints`` 时才不缩放，而 ``Win32ControlUnitMgr`` 从不
+        设置该标志。所以直接用 OCR box 的中心即可，窗口 1280x720 还是
+        1600x900 都一样。
         """
         controller = _controller_of(self._context)
         if controller is None:

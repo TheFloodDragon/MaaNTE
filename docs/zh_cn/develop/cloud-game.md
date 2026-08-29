@@ -112,6 +112,23 @@ action.py       CustomAction 入口：参数解析与各层串联
 - 文本匹配一律用**包含**而非相等。「付费时长：」前的图标会被 OCR 读成 emoji（实机得到 `😄付费时长：`），相等匹配必然失配。
 - `JOCR(only_rec=True)` 是**跳过检测、把整个 ROI 当作一行识别**，对整屏用会返回一条低分垃圾（实测 `"口"` / 0.19）。要拿到画面里的多条文本必须用 `only_rec=False`。
 
+### 点击坐标用截图的坐标空间，不必手动换算
+
+云异环窗口尺寸不固定（实测出现过 1280x720 与 1600x900），而 `cached_image` 始终是 1280x720——MaaFramework 会把截图缩放到目标短边。那么点击该传哪套坐标？
+
+已从 MaaFramework 源码确认：传**截图的坐标空间**，框架内部换算到设备原始坐标。`ControllerAgent::preproc_touch_point` 的逻辑是
+
+```cpp
+double scale_width  = image_raw_width_  / image_target_width_;
+int    proced_x     = round(p.x * scale_width);
+```
+
+`handle_click`、`handle_touch_down`、`handle_touch_move`、`handle_swipe` 全部先过这个函数。唯一例外是控制单元带 `MaaControllerFeature_NoScalingTouchPoints` 时不缩放，而 `Win32ControlUnitMgr::get_features()` 只会返回 `UseMouseDownAndUpInsteadOfClick` 与 `UseKeyboardDownAndUpInsteadOfClick`，**从不设置** 该标志。
+
+所以直接拿 OCR 结果里的 box 中心去点是正确的，窗口多大都不用管。这也是坐标不写死、每帧从 OCR 现取的另一个理由。
+
+顺带一提，`UseMouseDownAndUpInsteadOfClick` 意味着对报告该特性的鼠标方式，`post_click` 在框架内部本来就会拆成 touch_down + 50ms + touch_up。本模块用的三段式与之等价，只是多了一次显式 move 来触发 hover。
+
 ### controller 句柄不能缓存
 
 这条对所有 CustomAction 都适用，值得单独记。在 AgentServer 上下文里探测得到：
