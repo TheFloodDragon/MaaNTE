@@ -42,16 +42,26 @@ class ReadyResult:
 
 
 def _is_hit(result) -> bool:
-    """兼容 MAA 不同返回结构，统一判断识别是否命中。"""
+    """判断识别是否命中。
+
+    ``run_recognition`` 返回 ``RecognitionDetail``（只有 ``hit``），
+    ``run_task`` 返回 ``TaskDetail``（看 ``status.succeeded``），两种都要吃。
+
+    缺省必须是 ``False``：判错方向会让任务谎报「已进入游戏」，
+    后续每日流程全部空跑。见 ``enter.py`` 里的同名函数。
+    """
     if result is None:
         return False
+    hit = getattr(result, "hit", None)
+    if hit is not None:
+        return bool(hit)
     status = getattr(result, "status", None)
     succeeded = getattr(status, "succeeded", None)
     if succeeded is not None:
         return bool(succeeded)
     if status is not None:
         return status == 0
-    return bool(getattr(result, "hit", True))
+    return False
 
 
 def wait_until_in_game(

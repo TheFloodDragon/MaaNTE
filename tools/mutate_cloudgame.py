@@ -14,6 +14,9 @@
 7. 不先判断是否已在游戏内 -> 在游戏里还去找启动器按钮
 8. 识别异常当作命中 -> 加载页就放行
 9. 时长解析用相等匹配 -> 实机「😄付费时长：」必然失配
+10. 游戏登录页当成排队干等 -> 排队通过后仍进不了游戏（原实现的真实缺陷）
+11. 登录页判断永远为真 -> 在排队页按 ESC，把已排的队取消掉
+12. `_is_hit` 结构不认识时判成命中 -> 任务谎报已进入游戏，后续流程全空跑
 
 用法：``python tools/mutate_cloudgame.py``
 """
@@ -106,6 +109,42 @@ MUTATIONS = [
         "enter.py",
         "        controller = _controller_of(self._context)\n        if controller is None:\n            raise RuntimeError(\"拿不到 controller\")",
         "        if not hasattr(self, '_cached_ctrl'):\n            self._cached_ctrl = _controller_of(self._context)\n        controller = self._cached_ctrl\n        if controller is None:\n            raise RuntimeError(\"拿不到 controller\")",
+    ),
+    (
+        "游戏登录页当成排队干等（排队通过后仍进不了游戏）",
+        "enter.py",
+        "        if screen.is_game_login:",
+        "        if False:",
+    ),
+    (
+        "登录页判断永远为真（在排队页按 ESC，取消掉已排的队）",
+        "launcher_ui.py",
+        "        if not self.has(TEXT_CONFIRM_ENTER):\n            return False\n        return not self.is_confirm_dialog and not self.has(TEXT_START_GAME)",
+        "        return True",
+    ),
+    (
+        "登录页不再排除确认弹窗（错过 30 秒倒计时）",
+        "launcher_ui.py",
+        "        return not self.is_confirm_dialog and not self.has(TEXT_START_GAME)",
+        "        return True",
+    ),
+    (
+        "_is_hit 结构不认识时判成命中（谎报已进入游戏）",
+        "enter.py",
+        "    if status is not None:\n        return status == 0\n    return False",
+        "    if status is not None:\n        return status == 0\n    return True",
+    ),
+    (
+        "ready._is_hit 结构不认识时判成命中（谎报已进入游戏）",
+        "ready.py",
+        "    if status is not None:\n        return status == 0\n    return False",
+        "    if status is not None:\n        return status == 0\n    return True",
+    ),
+    (
+        "run_task 异常向外抛（一次识别失败打断整个进入流程）",
+        "enter.py",
+        '    except Exception as exc:\n        log(f"运行 {ENTER_WORLD_NODE} 异常: {exc}")\n        return False',
+        "    except Exception:\n        raise",
     ),
 ]
 

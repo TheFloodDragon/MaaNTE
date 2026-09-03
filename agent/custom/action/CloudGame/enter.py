@@ -13,11 +13,16 @@
 因为这几个阶段的出现次序会因「不再提醒」是否勾选、是否需要排队而变化：
 
 ```
-  已在游戏内 ────────────────────────────────► 成功
-  确认弹窗   ──点「进入游戏」──┐
-  启动器主页 ──点「开始游戏」──┤
-  都不是（排队/加载/登录中）──┴──► 继续轮询，直到进游戏或超时
+  已在游戏内 ──────────────────────────────────────────► 成功
+  启动器确认弹窗 ──点「进入游戏」──┐
+  启动器主页     ──点「开始游戏」──┤
+  游戏登录页     ──SceneAnyEnterWorld──┤
+  都不是（排队 / 串流加载）─────────┴──► 继续轮询，直到进游戏或超时
 ```
+
+注意「启动器确认弹窗」与「游戏登录页」上的按钮文案**都是「进入游戏」**，
+必须靠其它文本区分：确认弹窗一定同时有带倒计时的「退出启动」，主页一定有
+「开始游戏」。见 :attr:`launcher_ui.LauncherScreen.is_game_login`。
 
 ## 三条硬性约束
 
@@ -27,13 +32,24 @@
    所以只有明确读到 0 才停。
 3. **排队超上限放弃并报错**（用户选定的行为）：定时调度里静默占着时长最糟。
 
+## 为什么游戏登录页要交给 SceneAnyEnterWorld
+
+串流通了之后画面就归游戏本体了，此时还有游戏登录页的「进入游戏」、开服公告、
+月卡领取三道关。这些**仓库里早就有实现**：`Interface/Scene/Scene.json` 的
+公开接口 `SceneAnyEnterWorld` 把它们连同两种加载页一起串好了。所以这里复用它，
+不重写一套（规范也要求只用公开接口，禁止引用 `__ScenePrivate*`）。
+
+但只在**确认已经到游戏侧**之后才调用。它的 next 链里有兜底的按 ESC，
+而排队界面属于云启动器——在那上面按 ESC 有可能直接取消排队，把已经排了很久的
+队白排掉。
+
 ## 未实机验证的部分
 
 排队界面本身**没有采集到**（本机进程无输入桌面权限，点不动按钮；见
 `spec://cloudgame_calibration.md`）。所以这里不猜排队界面的文案与 ROI，
-而是把「既不在主页、也不在弹窗、也不在游戏内」统一当作**推进中**（排队或加载），
-靠 `max_queue_time` 兜底，并把每次看到的 OCR 文本打进日志——用户实机跑一次，
-日志里就会出现真实的排队文案，据此再做精确识别。
+而是把「既不在主页、也不在弹窗、也不在登录页、也不在游戏内」统一当作
+**推进中**（排队或串流加载），靠 `max_queue_time` 兜底，并把每次看到的 OCR
+文本打进日志——用户实机跑一次，日志里就会出现真实的排队文案，据此再做精确识别。
 """
 
 from __future__ import annotations
@@ -48,6 +64,15 @@ from .launcher_ui import (
     TextHit,
     read_playtime,
 )
+
+# 串流进入后画面就交给游戏本体了，此时还要过游戏自己的登录页、公告弹窗与月卡
+# 领取才能到大世界。这些**已经有现成实现**：``SceneAnyEnterWorld`` 是
+# ``Interface/Scene/Scene.json`` 暴露的公开接口，内部串起了
+# 登录页「进入游戏」、关公告、月卡确认、两种加载页与兜底 ESC。
+#
+# 所以这里不重写一套，直接复用。仓库规范也要求只用公开接口，
+# 禁止引用 ``__ScenePrivate*``。
+ENTER_WORLD_NODE = "SceneAnyEnterWorld"
 
 # 已验证的游戏内场景判定节点（与 ready.py 一致）
 IN_GAME_NODES = ("InWorld", "InMiniWorld")
@@ -294,7 +319,25 @@ def enter_cloud_game(
             sleeper(max(float(poll_interval), 0.05))
             continue
 
-        # 2c. 既不在游戏、也不在主页/弹窗 —— 排队、串流加载或登录中。
+        # 2c. 游戏自己的登录页：串流已经通了，但游戏本体还停在登录页。
+        #
+        # 这里是原实现真正漏掉的一环。启动器把画面交给游戏之后，还要过
+        # 游戏登录页的「进入游戏」、开服公告、月卡领取，才会到大世界。
+        # 原实现把这些统统归进「排队 / 加载中」干等到超时，所以哪怕排队
+        # 顺利通过也进不了游戏。
+        #
+        # 不自己写这段流程：``SceneAnyEnterWorld`` 已经把登录页进入、
+        # 关公告、月卡确认、两种加载页与兜底 ESC 串好了，直接复用公开接口。
+        if screen.is_game_login:
+            queue_started = None
+            if "game_login" not in logged_stages:
+                logged_stages.add("game_login")
+                log("已进入游戏登录页，交给 SceneAnyEnterWorld 推进")
+            _run_enter_world(context, log)
+            sleeper(max(float(poll_interval), 0.05))
+            continue
+
+        # 2d. 既不在游戏、也不在主页/弹窗/登录页 —— 排队或串流加载中。
         #
         # 排队界面尚未实机采集，这里不猜它的文案与 ROI。把 OCR 文本打进日志，
         # 用户实机跑一次日志里就会出现真实排队文案，据此再做精确识别。
@@ -306,6 +349,15 @@ def enter_cloud_game(
         if snapshot and snapshot not in logged_stages:
             logged_stages.add(snapshot)
             log(f"当前画面文本（{waited:.0f}s）: {snapshot}")
+
+        # 这里**刻意不调用** SceneAnyEnterWorld。
+        #
+        # 它的 next 链里有兜底的 `[JumpBack]__ScenePrivateAnyExit`，动作是按
+        # ESC。排队界面属于云启动器而不是游戏，在那上面按 ESC 有可能直接取消
+        # 排队——把等了半小时的队白排掉，比多等一会儿严重得多。
+        #
+        # 所以只在 2c 拿到「确实已经在游戏侧」的正面证据（登录页的「进入游戏」
+        # 按钮）之后才交给它。证据不足时就继续等，由 max_queue_time 兜底。
 
         if waited >= max(float(max_queue_time), 0.0):
             return result(
@@ -325,6 +377,23 @@ def enter_cloud_game(
     )
 
 
+def _run_enter_world(context, log) -> bool:
+    """跑 ``SceneAnyEnterWorld`` 把游戏侧推进到大世界。
+
+    异常不外抛：这一步失败只意味着这一轮没推进，下一轮还会再试；
+    让它把整个 ``enter_cloud_game`` 打断反而更糟。
+    """
+    runner = getattr(context, "run_task", None)
+    if runner is None:
+        return False
+    try:
+        runner(ENTER_WORLD_NODE)
+        return True
+    except Exception as exc:
+        log(f"运行 {ENTER_WORLD_NODE} 异常: {exc}")
+        return False
+
+
 def _fmt_minutes(value: int | None) -> str:
     if value is None:
         return "未读到"
@@ -332,16 +401,28 @@ def _fmt_minutes(value: int | None) -> str:
 
 
 def _is_hit(result) -> bool:
-    """兼容 MAA 不同返回结构，统一判断识别是否命中。"""
+    """判断识别是否命中。
+
+    ``Context.run_recognition`` 返回的是 ``RecognitionDetail``，判定命中只看
+    ``hit``（该类没有 ``status`` 字段）。``run_task`` 返回的是 ``TaskDetail``，
+    那个才看 ``status.succeeded``。两种都要吃，所以按字段存在性分派。
+
+    **缺省必须是 False**：早先这里写的是 ``getattr(result, "hit", True)``，
+    一旦返回对象换了结构，「没进游戏」就会被判成「已进游戏」——任务谎报成功，
+    后续每日流程全部在启动器界面上空跑。识别结果拿不准时，宁可继续等。
+    """
     if result is None:
         return False
+    hit = getattr(result, "hit", None)
+    if hit is not None:
+        return bool(hit)
     status = getattr(result, "status", None)
     succeeded = getattr(status, "succeeded", None)
     if succeeded is not None:
         return bool(succeeded)
     if status is not None:
         return status == 0
-    return bool(getattr(result, "hit", True))
+    return False
 
 
 def _screencap(context):
@@ -361,6 +442,7 @@ __all__ = [
     "DEFAULT_ENTER_TIMEOUT",
     "DEFAULT_MAX_QUEUE_TIME",
     "DEFAULT_POLL_INTERVAL",
+    "ENTER_WORLD_NODE",
     "EnterResult",
     "IN_GAME_NODES",
     "enter_cloud_game",

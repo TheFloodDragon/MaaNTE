@@ -1014,11 +1014,18 @@ class FakeEnterContext:
         self._screens = screens or {}
         self._raise = set(raise_nodes)
         self.ocr_calls = 0
+        # 记录 run_task 调用，用于断言游戏登录页确实交给了 SceneAnyEnterWorld，
+        # 以及断言排队页**没有**被调用（那会按 ESC 取消排队）
+        self.tasks: list[str] = []
 
     def run_recognition(self, node, image):
         if node in self._raise:
             raise RuntimeError(f"boom:{node}")
         return _Hit(image in self._in_game and node == "InWorld")
+
+    def run_task(self, node, pipeline_override=None):
+        self.tasks.append(node)
+        return _Hit(True)
 
     def ocr_screen(self, image):
         self.ocr_calls += 1
@@ -1311,6 +1318,149 @@ def group_enter():
     check(not result.ok, "被停止应返回失败")
     check_equal(result.stage, "stopped", "阶段应为 stopped")
     check_equal(len(ctx.clicks), 0, "被停止后不得再点击")
+
+    # —— 游戏登录页必须交给 SceneAnyEnterWorld ——
+    #
+    # 这是原实现真正漏掉的一环，也是"排队通过后仍进不了游戏"的直接原因：
+    # 串流通了之后画面归游戏本体，还有登录页「进入游戏」、公告、月卡三道关，
+    # 原实现把这些归进「排队 / 加载中」一路干等到超时。
+    #
+    # 关键难点：登录页的按钮文案和启动器确认弹窗**一模一样**都是「进入游戏」，
+    # 只能靠其它文本区分。
+    from custom.action.CloudGame.enter import ENTER_WORLD_NODE
+
+    game_login = screen(("进入游戏", (560, 600, 160, 40)))
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["login", "login", "game", "game"],
+        in_game={"game"},
+        screens={"login": game_login},
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        confirm_hits=2,
+    )
+    check(result.ok, "游戏登录页应能被推进到游戏内")
+    check(
+        ENTER_WORLD_NODE in ctx.tasks,
+        f"游戏登录页必须调用 {ENTER_WORLD_NODE}（否则排队通过也进不了游戏）",
+    )
+
+    # 登录页不得被误判成启动器主页或确认弹窗：
+    # 误判成弹窗会去点自己（无害但不推进），误判成主页会去找不存在的「开始游戏」
+    check(
+        game_login.is_game_login, "只有「进入游戏」的画面应判定为游戏登录页"
+    )
+    check(not game_login.is_home, "游戏登录页不应判成启动器主页")
+    check(
+        not game_login.is_confirm_dialog,
+        "游戏登录页不应判成启动器确认弹窗（那个一定带「退出启动」倒计时）",
+    )
+
+    # 反向：启动器确认弹窗与主页都不得被判成游戏登录页。
+    # 弹窗被判成登录页会导致跳过点击、错过 30 秒倒计时。
+    check(
+        not dialog.is_game_login,
+        "启动器确认弹窗不得判成游戏登录页（会错过 30 秒倒计时）",
+    )
+    check(not home.is_game_login, "启动器主页不得判成游戏登录页")
+    check(
+        not overlay.is_game_login,
+        "弹窗覆盖主页时也不得判成游戏登录页",
+    )
+
+    # —— 排队页**不得**调用 SceneAnyEnterWorld ——
+    #
+    # 它的 next 链里有兜底的按 ESC。排队界面属于云启动器而不是游戏，
+    # 在那上面按 ESC 有可能直接取消排队——把等了很久的队白排掉，
+    # 远比多等一会儿严重。所以必须先有「已在游戏侧」的正面证据。
+    clock = FakeClock()
+    ctx = FakeEnterContext(frames=["queue"] * 6, screens={"queue": queueing})
+    enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        enter_timeout=5.0,
+    )
+    check_equal(
+        ctx.tasks,
+        [],
+        f"排队页不得调用 {ENTER_WORLD_NODE}（其兜底按 ESC 可能取消排队）",
+    )
+
+    # 主页与确认弹窗同样不该调用它：那时候还没到游戏侧
+    clock = FakeClock()
+    ctx = FakeEnterContext(
+        frames=["home", "dialog", "game", "game"],
+        in_game={"game"},
+        screens={"home": home, "dialog": dialog},
+    )
+    enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        confirm_hits=2,
+    )
+    check_equal(
+        ctx.tasks, [], f"启动器阶段不得调用 {ENTER_WORLD_NODE}"
+    )
+
+    # —— run_task 抛异常不得打断整个进入流程 ——
+    class TaskBoomContext(FakeEnterContext):
+        def run_task(self, node, pipeline_override=None):
+            self.tasks.append(node)
+            raise RuntimeError("run_task boom")
+
+    clock = FakeClock()
+    ctx = TaskBoomContext(
+        frames=["login", "login", "game", "game"],
+        in_game={"game"},
+        screens={"login": game_login},
+    )
+    result = enter_cloud_game(
+        ctx,
+        ocr_screen=ctx.ocr_screen,
+        clock=clock,
+        sleeper=clock.sleep,
+        poll_interval=1.0,
+        confirm_hits=2,
+    )
+    check(
+        result.ok,
+        f"{ENTER_WORLD_NODE} 抛异常时应继续轮询而不是打断进入流程",
+    )
+
+    # —— 识别结果结构不认识时必须判成「未命中」 ——
+    #
+    # 缺省值的方向决定了失败模式：判成命中 = 任务谎报已进入游戏，
+    # 后续每日流程全在启动器界面上空跑；判成未命中 = 最多多等一会儿。
+    from custom.action.CloudGame.enter import _is_hit as _enter_is_hit
+    from custom.action.CloudGame.ready import _is_hit as _ready_is_hit
+
+    class Unknown:
+        """既没有 hit 也没有 status 的返回对象。"""
+
+    for name, fn in (("enter", _enter_is_hit), ("ready", _ready_is_hit)):
+        check(
+            not fn(None),
+            f"{name}._is_hit: None 应判为未命中",
+        )
+        check(
+            not fn(Unknown()),
+            f"{name}._is_hit: 结构不认识时应判为未命中（判成命中会谎报进入游戏）",
+        )
+        check(
+            fn(_Hit(True)) and not fn(_Hit(False)),
+            f"{name}._is_hit: 应按 RecognitionDetail.hit 判定",
+        )
 
     # —— 已在游戏内时不该去点任何按钮 ——
     clock = FakeClock()

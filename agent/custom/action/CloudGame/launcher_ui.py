@@ -109,6 +109,24 @@ class LauncherScreen:
         return self.has(TEXT_START_GAME) and not self.is_confirm_dialog
 
     @property
+    def is_game_login(self) -> bool:
+        """是否停在**游戏自己的**登录页（不是启动器的确认弹窗）。
+
+        串流加载完成后画面就交给游戏本体了，此时出现的是游戏登录页，
+        中下方有「进入游戏」按钮（``SceneManager/SceneLogin.json`` 的
+        ``__ScenePrivateLoginContinue`` 识别的就是它，roi ``400,550,480,140``）。
+        这一步同样**没人会自动点**——原实现把这个画面归进「排队/加载中」
+        一路干等到超时，这才是"通过排队后仍进不了游戏"的真正原因。
+
+        与启动器确认弹窗的区别：确认弹窗一定同时有「退出启动」（带倒计时），
+        游戏登录页没有。主页则有「开始游戏」而没有「进入游戏」。
+        所以这里用**排除法**判定，不猜游戏登录页的 ROI。
+        """
+        if not self.has(TEXT_CONFIRM_ENTER):
+            return False
+        return not self.is_confirm_dialog and not self.has(TEXT_START_GAME)
+
+    @property
     def is_logged_in(self) -> bool:
         """是否已登录。
 
