@@ -91,5 +91,7 @@
     "volleyball.teammates_selected": "[自动排球] 队友选择完成",
     "volleyball.playing": "[自动排球] 正在挑战难度 %d",
     "volleyball.difficulty_done": "[自动排球] 难度 %d 已完成",
-    "volleyball.task_done": "[自动排球] 全部难度已完成"
+    "volleyball.task_done": "[自动排球] 全部难度已完成",
+    "sound_dodge.failed_to_start": "音频监听器启动失败，请检查音频输出设备",
+    "sound_dodge.listener_died": "音频监听器已停止工作，任务结束"
 }

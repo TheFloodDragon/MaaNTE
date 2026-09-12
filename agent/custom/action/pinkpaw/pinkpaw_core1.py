@@ -49,6 +49,15 @@ class ActionHelper:
         self.ctx = ctx
         self.mx, self.my = 640, 360
 
+    def is_stopping(self) -> bool:
+        tasker = getattr(self.ctx, "tasker", None)
+        if tasker is None:
+            return False
+        stopping = getattr(tasker, "stopping", False)
+        if callable(stopping):
+            stopping = stopping()
+        return bool(stopping)
+
     # ---------- 按键类操作 ----------
     def _call_key(self, node_type, key_str, extra=None):
         vk = VK.get(key_str)
@@ -114,6 +123,8 @@ class ActionHelper:
 
         start = time.monotonic()
         while time.monotonic() - start < timeout_ms / 1000.0:
+            if self.is_stopping():
+                return False
             if _is_hit(self.ctx.run_task(f"PinkPawHeist_{node_name}")):
                 return True
             self.delay(200)
@@ -142,6 +153,8 @@ class ActionHelper:
 
         start = time.monotonic()
         while time.monotonic() - start < timeout / 1000.0:
+            if self.is_stopping():
+                return False
             if self.check_monster():
                 return True
             self.delay(100)
@@ -171,6 +184,8 @@ class ActionHelper:
 
         no_monster_start = None
         while True:
+            if self.is_stopping():
+                return False
             if self.check_monster():
                 no_monster_start = None
                 self.attack_cycle(times=attack_cycles, loot=loot)
@@ -184,6 +199,8 @@ class ActionHelper:
 
         if role_to_switch_back:
             for _ in range(3):
+                if self.is_stopping():
+                    return False
                 self.click_key(role_to_switch_back)
                 self.delay(200)
         return True
@@ -191,6 +208,8 @@ class ActionHelper:
     def delay(self, ms):
         import time
 
+        if self.is_stopping():
+            return
         time.sleep(ms / 1000.0)
 
 

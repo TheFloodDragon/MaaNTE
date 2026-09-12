@@ -93,5 +93,7 @@
     "volleyball.teammates_selected": "[배구] 팀원 선택 완료",
     "volleyball.playing": "[배구] 난이도 %d 도전 중",
     "volleyball.difficulty_done": "[배구] 난이도 %d 완료",
-    "volleyball.task_done": "[배구] 모든 난이도 완료"
+    "volleyball.task_done": "[배구] 모든 난이도 완료",
+    "sound_dodge.failed_to_start": "오디오 리스너 시작 실패, 오디오 출력 장치를 확인하세요",
+    "sound_dodge.listener_died": "오디오 리스너가 중지되어 작업을 종료합니다"
 }

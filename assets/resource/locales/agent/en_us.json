@@ -93,5 +93,7 @@
     "volleyball.teammates_selected": "[Volleyball] Teammates selected",
     "volleyball.playing": "[Volleyball] Playing difficulty %d",
     "volleyball.difficulty_done": "[Volleyball] Difficulty %d complete",
-    "volleyball.task_done": "[Volleyball] All difficulties complete"
+    "volleyball.task_done": "[Volleyball] All difficulties complete",
+    "sound_dodge.failed_to_start": "Sound listener failed to start; check the audio output device",
+    "sound_dodge.listener_died": "Sound listener stopped working; task ended"
 }

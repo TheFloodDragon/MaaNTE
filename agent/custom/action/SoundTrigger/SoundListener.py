@@ -119,6 +119,10 @@ class Ear:
         self._thread = None
         _log().info("Ear stopped")
 
+    def is_healthy(self) -> bool:
+        """Check if listener is running and thread is alive."""
+        return self._running.is_set() and self._thread is not None and self._thread.is_alive()
+
     def _open_device(self):
         speaker = sc.default_speaker()
         mic = sc.get_microphone(id=str(speaker.name), include_loopback=True)
@@ -185,6 +189,7 @@ class Ear:
         except Exception as e:
             _log().error(f"Ear error: {e}", exc_info=True)
         finally:
+            self._running.clear()
             if rec is not None:
                 try:
                     rec.__exit__(None, None, None)

@@ -93,5 +93,7 @@
     "volleyball.teammates_selected": "[バレーボール] チームメイトを選択済み",
     "volleyball.playing": "[バレーボール] 難易度 %d に挑戦中",
     "volleyball.difficulty_done": "[バレーボール] 難易度 %d 完了",
-    "volleyball.task_done": "[バレーボール] 全難易度完了"
+    "volleyball.task_done": "[バレーボール] 全難易度完了",
+    "sound_dodge.failed_to_start": "音声リスナーの起動に失敗しました。音声出力デバイスを確認してください",
+    "sound_dodge.listener_died": "音声リスナーが停止したため、タスクを終了します"
 }
