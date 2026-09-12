@@ -35,6 +35,14 @@ from .DatasetCollection.autonomous_driving_dataset_recorder import *
 from .BagelSpam import *
 from .auto_volleyball import *
 
+# Combat system
+from .Combat import (
+    CombatInitAction,
+    CombatStepAction,
+    CombatFinalizeAction,
+    CombatStatusRecognition,
+)
+
 __all__ = [
     "AutoMakeCoffee",
     "AutoMakeCoffeeLite",
@@ -84,4 +92,8 @@ __all__ = [
     "VolleyballSelectTeammates",
     "VolleyballPlay",
     "VolleyballAdvanceDifficulty",
+    "CombatInitAction",
+    "CombatStepAction",
+    "CombatFinalizeAction",
+    "CombatStatusRecognition",
 ]

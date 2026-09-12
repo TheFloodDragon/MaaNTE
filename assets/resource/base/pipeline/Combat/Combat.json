@@ -1,0 +1,68 @@
+{
+    "CombatMain": {
+        "desc": "战斗任务入口：读取任务选项并创建战斗会话",
+        "action": "Custom",
+        "custom_action": "CombatInitAction",
+        "attach": {
+            "policy_type": "balanced",
+            "custom_template": "custom_example.json",
+            "use_ultimate": true,
+            "use_skill": true,
+            "attack_interval_ms": 800,
+            "enable_sound": false,
+            "sound_threshold": 0.13,
+            "max_combat_duration_s": 300
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CombatLoop"
+        ],
+        "on_error": [
+            "CombatFinalize"
+        ]
+    },
+    "CombatLoop": {
+        "desc": "单轮 观察→决策→执行；会话结束由 CombatSessionEnded 识别分支退出",
+        "action": "Custom",
+        "custom_action": "CombatStepAction",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CombatSessionEnded",
+            "CombatLoop"
+        ],
+        "on_error": [
+            "CombatFinalize"
+        ]
+    },
+    "CombatSessionEnded": {
+        "desc": "会话已进入终态时命中，进入收尾",
+        "recognition": {
+            "type": "Custom",
+            "param": {
+                "custom_recognition": "CombatStatusRecognition",
+                "custom_recognition_param": {
+                    "check_type": "session_terminal"
+                }
+            }
+        },
+        "action": "DoNothing",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CombatFinalize"
+        ]
+    },
+    "CombatFinalize": {
+        "desc": "释放输入、停止音频并汇报结束原因",
+        "action": "Custom",
+        "custom_action": "CombatFinalizeAction",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

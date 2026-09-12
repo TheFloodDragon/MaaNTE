@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "support_then_main",
+  "type": "custom",
+  "roles": {
+    "support": 2,
+    "main": 1
+  },
+  "steps": [
+    {
+      "action": "switch",
+      "role": "support",
+      "required": true
+    },
+    {
+      "action": "skill",
+      "when": "skill_ready",
+      "required": false
+    },
+    {
+      "action": "switch",
+      "role": "main",
+      "required": true
+    },
+    {
+      "action": "ultimate",
+      "when": "ultimate_ready",
+      "required": false
+    },
+    {
+      "action": "normal_attack",
+      "max_ms": 1200,
+      "required": false
+    }
+  ],
+  "on_finish": "reobserve",
+  "max_cycles": 100
+}
