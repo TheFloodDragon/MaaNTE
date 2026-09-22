@@ -73,29 +73,24 @@
     },
     "FishNewGaming": {
         "desc": "进行钓鱼游戏",
-        "recognition": "And",
-        "all_of": [
-            "FishCursor"
-        ],
-        "action": "Custom",
-        "custom_action": "auto_fish_without_cv",
-        "custom_action_param": {
-            "safe_margin": 6,
-            "center_band_ratio": 0.4,
-            "prediction_ms": 140,
-            "velocity_alpha": 0.5,
-            "green_velocity_alpha": 0.5,
-            "green_center_alpha": 0.85,
-            "pulse_min_ms": 18,
-            "pulse_max_ms": 36,
-            "pulse_ms_per_px": 0.45,
-            "width_change_threshold": 8,
-            "width_confirm_frames": 2,
-            "control_end_grace_ms": 300,
-            "lost_timeout_ms": 120,
-            "lost_abort_ms": 1500
+        "recognition": {
+            "type": "Custom",
+            "param": {
+                "custom_recognition": "fish_control_visible"
+            }
         },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "auto_fish_without_cv",
+                "custom_action_param": {
+                    "learning_mode": "off"
+                }
+            }
+        },
+        "rate_limit": 0,
         "pre_delay": 0,
+        "post_delay": 0,
         "next": [
             "FishNewGameResult",
             "FishNewEscapeResult",

@@ -23,6 +23,10 @@
     "autofish.confirm_sell_detected": "检测到确认卖鱼按钮，点击确认。",
     "autofish.no_fish_sell_close": "无鱼可卖，关闭渔获市场。",
     "autofish.sell_success": "卖鱼成功。",
+    "fish.learning_unavailable": "模型或学习功能不可用，本轮使用规则控条。",
+    "fish.learning_save_failed": "本轮学习数据未能保存，不影响本轮结束。",
+    "fish.unsupported_frame": "控条截图的格式或比例不受支持，请使用 16:9 截图。",
+    "fish.engine_summary": "本轮有效学习样本 %d，丢弃样本 %d。",
     "furniture.claimed.hamster_ball": "已领取 仓鼠球",
     "furniture.claimed.fluff": "已领取 棉棉",
     "furniture.claimed.damaged_crate": "已领取 破损的木箱",
@@ -101,7 +105,7 @@
     "bidking.fallback_one": "[拍卖之王] 无法确定出价，本轮出 %d",
     "bidking.readback_mismatch": "[拍卖之王] 回读不一致（目标 %d，实际 %d），已重输一次",
     "bidking.readback_unreadable": "[拍卖之王] 输入框回读不到数字，按已输入内容继续",
-    "bidking.failed": "[拍卖之王] 出价失败（%s）"
+    "bidking.failed": "[拍卖之王] 出价失败（%s）",
     "volleyball_weekly.started": "[自动排球（周常）] 任务开始",
     "volleyball_weekly.playing": "[自动排球（周常）] 比赛进行中",
     "volleyball_weekly.teammates_selected": "[自动排球（周常）] 队友选择完成"

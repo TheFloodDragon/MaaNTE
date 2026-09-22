@@ -1,264 +1,288 @@
+"""新版钓鱼的 Maa 适配：识别、有限输入段、再次识别，流程仍由 Pipeline 管理。"""
+
 from __future__ import annotations
 
+from dataclasses import asdict
+import json
+from pathlib import Path
 import time
 
+import numpy as np
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
+from maa.custom_recognition import CustomRecognition
 
+from utils import pienv
 from utils.logger import logger
+from utils.maafocus import PrintT
 
-from .fish_control import (
-    KEY_A,
-    KEY_D,
-    choose_tracking_key,
-    estimate_error_velocity,
-    predict_tracking_interval,
-    should_finish_control,
-)
-from .fish_params import load_fish_control_params
-from .fish_vision import detect_control_boxes
+from .fish_control import KEY_A, KEY_D, FishDecision, FishingEngine, should_finish_control
+from .fish_learning import FishLearningSession
+from .fish_params import FishControlConfig, MAX_KEY_HOLD_MS, load_fish_engine_config
+from .fish_vision import CONTROL_ROI, detect_control_boxes, normalize_control_image
+
+__all__ = ["AutoFishWithoutCV", "FishControlVisible"]
+
+
+class _Stopped(Exception):
+    pass
+
+
+class _KeyInput:
+    """不跨截图持键；原生 Job 自身的阻塞不属于 Python 可中断的范围。"""
+
+    def __init__(self, controller, stopping, clock, sleep):
+        self.controller = controller
+        self.stopping = stopping
+        self.clock = clock
+        self.sleep = sleep
+
+    @staticmethod
+    def _wait(job) -> None:
+        job.wait()
+        if not job.succeeded:
+            raise RuntimeError("Maa controller job failed")
+
+    def wait_interruptibly(self, seconds: float) -> None:
+        deadline = self.clock() + max(0.0, seconds)
+        while True:
+            if self.stopping():
+                raise _Stopped()
+            remaining = deadline - self.clock()
+            if remaining <= 0:
+                return
+            self.sleep(min(0.005, remaining))
+
+    def execute(self, decision: FishDecision) -> tuple[float, float, float]:
+        if self.stopping():
+            raise _Stopped()
+        if decision.key is None:
+            now = self.clock()
+            return now, now, 0.0
+        if decision.key not in (KEY_A, KEY_D) or not np.isfinite(decision.duration_ms):
+            raise ValueError("invalid fishing input")
+        started = self.clock()
+        release_started = started
+        try:
+            # 即便按下 Job 报错，也可能已发生部分输入，因此 finally 总是尝试松键。
+            self._wait(self.controller.post_key_down(decision.key))
+            started = self.clock()
+            self.wait_interruptibly(min(MAX_KEY_HOLD_MS, max(0.0, decision.duration_ms)) / 1000)
+        finally:
+            release_started = self.clock()
+            self._wait(self.controller.post_key_up(decision.key))
+        if self.stopping():
+            raise _Stopped()
+        return started, self.clock(), max(0.0, release_started - started) * 1000
+
+    def release_all(self) -> bool:
+        success = True
+        for key in (KEY_A, KEY_D):
+            try:
+                self._wait(self.controller.post_key_up(key))
+            except Exception as exc:
+                success = False
+                logger.warning("释放钓鱼按键失败: key=%s error=%s", key, type(exc).__name__)
+        return success
+
+
+def _controller_profile(controller) -> str:
+    configured = pienv.controller()
+    if configured is None:
+        # 无 PI 控制器信息时仅供本次规则控制；调用处不启用跨设备模型。
+        return ""
+    return json.dumps(asdict(configured), ensure_ascii=True, sort_keys=True)
+
+
+class _FishingRuntime:
+    def __init__(self, context, config: FishControlConfig, *, clock=None, sleep=None):
+        self.context = context
+        self.config = config
+        self.controller = context.tasker.controller
+        self.clock = clock or time.monotonic
+        self.sleep = sleep or time.sleep
+        self.input = _KeyInput(self.controller, lambda: context.tasker.stopping, self.clock, self.sleep)
+        self.engine = FishingEngine(config)
+        self.learning: FishLearningSession | None = None
+        self._learning_issue_reported = False
+
+    def _report_learning_issue(self) -> None:
+        if self.learning is not None and self.learning.issue and not self._learning_issue_reported:
+            self._learning_issue_reported = True
+            logger.warning("钓鱼学习降级: %s", self.learning.issue)
+            PrintT(self.context, "fish.learning_unavailable")
+
+    def run(self) -> bool:
+        success = False
+        try:
+            if not self.input.release_all():
+                raise RuntimeError("failed to clear fishing input")
+            if self.context.tasker.stopping:
+                raise _Stopped()
+            profile = _controller_profile(self.controller)
+            if self.config.learning_mode != "off" and not profile:
+                logger.warning("钓鱼缺少 PI 控制器配置，本轮仅使用规则")
+                PrintT(self.context, "fish.learning_unavailable")
+            else:
+                self.learning = FishLearningSession(self.config, profile, Path.cwd())
+                self._report_learning_issue()
+            success = self._loop()
+        except _Stopped:
+            logger.debug("钓鱼控条因任务停止退出")
+        except Exception:
+            logger.exception("钓鱼控条异常，交由 Pipeline 处理")
+        finally:
+            released = self.input.release_all()
+            success = success and released and not self.context.tasker.stopping
+            # 若输入释放失败，不进行潜在阻塞的存储操作。
+            if self.learning is not None and released:
+                try:
+                    if not self.learning.finish():
+                        logger.warning("钓鱼学习保存失败: %s", self.learning.issue)
+                        PrintT(self.context, "fish.learning_save_failed")
+                except Exception:
+                    logger.exception("钓鱼学习保存异常")
+                    PrintT(self.context, "fish.learning_save_failed")
+        return success
+
+    def _invalidate(self, reason: str) -> None:
+        if self.learning is not None:
+            self.learning.invalidate(reason)
+
+    def _loop(self) -> bool:
+        cfg = self.config
+        last_cursor_seen = None
+        has_seen_control = False
+        lost_since = None
+        unchanged_since = None
+        previous_roi = None
+        awaiting_change = False
+        frame_id = 0
+        last_log = self.clock()
+        logger.debug("钓鱼预测引擎开始: learning=%s", cfg.learning_mode)
+        while not self.context.tasker.stopping:
+            capture_started = self.clock()
+            job = self.controller.post_screencap()
+            self.input._wait(job)
+            if self.context.tasker.stopping:
+                raise _Stopped()
+            # 失败的截图绝不读取旧缓存；本动作没有另一个抢截图的线程。
+            image = self.controller.cached_image
+            capture_finished = self.clock()
+            image = normalize_control_image(image)
+            if image is None:
+                PrintT(self.context, "fish.unsupported_frame")
+                return False
+            green, cursor = detect_control_boxes(image, self.engine.last_cursor_center)
+            now = self.clock()
+            frame_id += 1
+            if cursor is not None:
+                last_cursor_seen = now
+            if should_finish_control(has_seen_control, last_cursor_seen, now, cfg.control_end_grace_ms):
+                self._invalidate("control_finished")
+                logger.debug("钓鱼光标持续消失，交由 Pipeline 判断钓获或逃脱")
+                return True
+
+            observation = None
+            if green is not None and cursor is not None:
+                observation = self.engine.observe(
+                    green, cursor, (capture_started + capture_finished) / 2,
+                    capture_ms=(capture_finished - capture_started) * 1000,
+                    frame_id=frame_id,
+                )
+            if observation is None:
+                self._invalidate("missing_detection")
+                previous_roi = None
+                awaiting_change = False
+                if lost_since is None:
+                    lost_since = now
+                lost_ms = (now - lost_since) * 1000
+                if lost_ms >= cfg.lost_timeout_ms:
+                    self.engine.reset_tracking()
+                if lost_ms >= cfg.lost_abort_ms:
+                    logger.warning("钓鱼控条持续无有效观测，停止本轮控制")
+                    return False
+                if cfg.loop_interval_ms:
+                    self.input.wait_interruptibly(cfg.loop_interval_ms / 1000)
+                continue
+
+            has_seen_control = True
+            lost_since = None
+            x, y, width, height = CONTROL_ROI
+            roi = image[y : y + height, x : x + width]
+            duplicate = previous_roi is not None and np.array_equal(previous_roi, roi)
+            previous_roi = roi.copy()
+            if duplicate:
+                self._invalidate("duplicate_frame")
+            else:
+                awaiting_change = False
+                unchanged_since = None
+            if duplicate and awaiting_change:
+                # 上一次输入后画面完全未变，先等待新的视觉证据，不盲目重复按键。
+                if unchanged_since is None:
+                    unchanged_since = now
+                if (now - unchanged_since) * 1000 >= cfg.lost_abort_ms:
+                    logger.warning("钓鱼输入后控条画面持续不变，停止本轮控制")
+                    return False
+                if cfg.loop_interval_ms:
+                    self.input.wait_interruptibly(cfg.loop_interval_ms / 1000)
+                continue
+
+            residual = 0.0
+            if self.learning is not None:
+                if not duplicate:
+                    self.learning.observe(observation)
+                residual = self.learning.predict(observation)
+                self._report_learning_issue()
+            decision = self.engine.decide(observation, residual)
+            started, finished, held_ms = self.input.execute(decision)
+            self.engine.remember_execution(decision)
+            if self.learning is not None:
+                self.learning.record_action(
+                    observation, decision, started_at=started, finished_at=finished, held_ms=held_ms
+                )
+            awaiting_change = decision.key is not None
+            if now - last_log >= 0.5:
+                last_log = now
+                logger.debug(
+                    "钓鱼预测状态: frame=%d capture_ms=%.1f mode=%s error=%.1f "
+                    "predicted=%.1f relative_v=%.1f key=%s held_ms=%.1f residual=%.3f",
+                    frame_id, observation.capture_ms, decision.mode, observation.error_px,
+                    observation.predicted_error_px, observation.relative_vx,
+                    decision.key, held_ms, decision.residual,
+                )
+            if cfg.loop_interval_ms:
+                self.input.wait_interruptibly(cfg.loop_interval_ms / 1000)
+        raise _Stopped()
 
 
 @AgentServer.custom_action("auto_fish_without_cv")
 class AutoFishWithoutCV(CustomAction):
-    def run(
-        self, context: Context, argv: CustomAction.RunArg
-    ) -> CustomAction.RunResult:
-        params = load_fish_control_params(argv.custom_action_param)
-        safe_margin = params["safe_margin"]
-        center_band_ratio = params["center_band_ratio"]
-        prediction_ms = params["prediction_ms"]
-        velocity_alpha = params["velocity_alpha"]
-        green_velocity_alpha = params["green_velocity_alpha"]
-        green_center_alpha = params["green_center_alpha"]
-        pulse_min_ms = params["pulse_min_ms"]
-        pulse_max_ms = params["pulse_max_ms"]
-        pulse_ms_per_px = params["pulse_ms_per_px"]
-        width_change_threshold = params["width_change_threshold"]
-        width_confirm_frames = params["width_confirm_frames"]
-        control_end_grace_ms = params["control_end_grace_ms"]
-        lost_timeout_ms = params["lost_timeout_ms"]
-        lost_abort_ms = params["lost_abort_ms"]
-        loop_interval_ms = params["loop_interval_ms"]
+    def run(self, context: Context, argv: CustomAction.RunArg) -> CustomAction.RunResult:
+        config = load_fish_engine_config(argv.custom_action_param)
+        return CustomAction.RunResult(success=_FishingRuntime(context, config).run())
 
-        controller = context.tasker.controller
-        last_cursor_center = None
-        last_sample_time = None
-        cursor_velocity = 0.0
-        green_center = None
-        green_width = None
-        green_velocity = 0.0
-        last_detected_green_center = None
-        last_green_sample_time = None
-        width_candidate = None
-        width_candidate_hits = 0
-        lost_since = None
-        last_cursor_seen = None
-        has_seen_control = False
-        last_status_log = 0.0
-        frame_count = 0
 
-        def tap_control_key(key, duration_ms):
-            controller.post_key_down(key).wait()
-            try:
-                time.sleep(max(0.0, duration_ms) / 1000.0)
-            finally:
-                controller.post_key_up(key).wait()
-
-        def release_control_keys():
-            for key in (KEY_A, KEY_D):
-                try:
-                    controller.post_key_up(key).wait()
-                except Exception as exc:
-                    logger.warning("释放钓鱼按键失败: key=%s error=%s", key, exc)
-
-        def update_green_bar(box, sample_time):
-            nonlocal green_center, green_width, green_velocity
-            nonlocal last_detected_green_center, last_green_sample_time
-            nonlocal width_candidate, width_candidate_hits
-
-            box_x, _, box_w, _ = box
-            detected_center = float(box_x + box_w / 2)
-            detected_width = float(box_w)
-            if green_center is None or green_width is None:
-                green_center = detected_center
-                green_width = detected_width
-                last_detected_green_center = detected_center
-                last_green_sample_time = sample_time
-                width_candidate = None
-                width_candidate_hits = 0
-                logger.debug(
-                    "钓鱼绿条边界初始化: left=%.1f right=%.1f",
-                    green_center - green_width / 2,
-                    green_center + green_width / 2,
-                )
-                return
-
-            if last_green_sample_time is not None:
-                green_velocity = estimate_error_velocity(
-                    last_detected_green_center,
-                    detected_center,
-                    sample_time - last_green_sample_time,
-                    green_velocity,
-                    green_velocity_alpha,
-                )
-            last_detected_green_center = detected_center
-            last_green_sample_time = sample_time
-            green_center += (detected_center - green_center) * green_center_alpha
-
-            if abs(detected_width - green_width) < width_change_threshold:
-                green_width += (detected_width - green_width) * 0.2
-                width_candidate = None
-                width_candidate_hits = 0
-            elif (
-                width_candidate is not None
-                and abs(detected_width - width_candidate) < width_change_threshold / 2
-            ):
-                width_candidate_hits += 1
-            else:
-                width_candidate = detected_width
-                width_candidate_hits = 1
-
-            if width_candidate_hits >= width_confirm_frames:
-                green_width = width_candidate
-                logger.debug("钓鱼绿条宽度更新: width=%.1f", green_width)
-                width_candidate = None
-                width_candidate_hits = 0
-
-        logger.debug("钓鱼开始：进入实时控条阶段")
+@AgentServer.custom_recognition("fish_control_visible")
+class FishControlVisible(CustomRecognition):
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        if context.tasker.stopping:
+            return None
         try:
-            while not context.tasker.stopping:
-                frame_started = time.monotonic()
-                image = controller.post_screencap().wait().get()
-                green_box, cursor_box = detect_control_boxes(image)
-                now = time.monotonic()
-                frame_count += 1
-
-                if green_box is not None:
-                    update_green_bar(green_box, now)
-                if cursor_box is not None:
-                    last_cursor_seen = now
-                if green_box is not None and cursor_box is not None:
-                    has_seen_control = True
-
-                if should_finish_control(
-                    has_seen_control,
-                    last_cursor_seen,
-                    now,
-                    control_end_grace_ms,
-                ):
-                    logger.debug("钓鱼光标持续消失，进入结果处理")
-                    return CustomAction.RunResult(success=True)
-
-                valid = bool(
-                    green_center is not None
-                    and green_width is not None
-                    and cursor_box is not None
-                )
-
-                if not valid:
-                    if lost_since is None:
-                        lost_since = now
-                    lost_ms = (now - lost_since) * 1000
-                    if lost_ms > lost_timeout_ms:
-                        last_cursor_center = None
-                        last_sample_time = None
-                        cursor_velocity = 0.0
-                    if lost_ms > lost_abort_ms:
-                        logger.warning("钓鱼控条识别超时，交给 Pipeline 恢复")
-                        return CustomAction.RunResult(success=False)
-                    time.sleep(0.02)
-                    continue
-
-                lost_since = None
-                cursor_x, _, cursor_w, _ = cursor_box
-                cursor_center_x = cursor_x + cursor_w / 2
-
-                if last_sample_time is not None:
-                    sample_seconds = now - last_sample_time
-                    cursor_velocity = estimate_error_velocity(
-                        last_cursor_center,
-                        cursor_center_x,
-                        sample_seconds,
-                        cursor_velocity,
-                        velocity_alpha,
-                    )
-                else:
-                    sample_seconds = 0.0
-                last_cursor_center = cursor_center_x
-                last_sample_time = now
-                green_left = green_center - green_width / 2
-                green_right = green_center + green_width / 2
-
-                lookahead_seconds = max(
-                    prediction_ms / 1000.0,
-                    min(0.25, sample_seconds * 1.25),
-                )
-                next_key = choose_tracking_key(
-                    None,
-                    cursor_center_x,
-                    cursor_velocity,
-                    green_left,
-                    green_right,
-                    green_velocity=green_velocity,
-                    lookahead_seconds=lookahead_seconds,
-                    safe_margin=safe_margin,
-                    center_band_ratio=center_band_ratio,
-                )
-
-                pulse_ms = 0.0
-                if next_key is not None:
-                    predicted_cursor = (
-                        cursor_center_x + cursor_velocity * lookahead_seconds
-                    )
-                    safe_left, safe_right = predict_tracking_interval(
-                        green_left,
-                        green_right,
-                        green_velocity,
-                        lookahead_seconds,
-                        safe_margin,
-                        center_band_ratio,
-                    )
-                    if next_key == KEY_A:
-                        outside_distance = max(0.0, predicted_cursor - safe_right)
-                    else:
-                        outside_distance = max(0.0, safe_left - predicted_cursor)
-                    pulse_ms = min(
-                        pulse_max_ms,
-                        max(
-                            pulse_min_ms,
-                            pulse_min_ms + outside_distance * pulse_ms_per_px,
-                        ),
-                    )
-                    tap_control_key(next_key, pulse_ms)
-
-                if now - last_status_log >= 0.5:
-                    last_status_log = now
-                    frame_ms = (time.monotonic() - frame_started) * 1000
-                    logger.debug(
-                        "钓鱼控条状态: frame=%d frame_ms=%.1f bar=[%.1f, %.1f] "
-                        "bar_velocity=%.1f cursor=%.1f cursor_velocity=%.1f "
-                        "lookahead_ms=%.1f key=%s pulse_ms=%.1f",
-                        frame_count,
-                        frame_ms,
-                        green_left,
-                        green_right,
-                        green_velocity,
-                        cursor_center_x,
-                        cursor_velocity,
-                        lookahead_seconds * 1000,
-                        next_key,
-                        pulse_ms,
-                    )
-
-                if loop_interval_ms > 0:
-                    time.sleep(loop_interval_ms / 1000.0)
-
-            logger.debug("钓鱼控条因任务停止退出")
-            return CustomAction.RunResult(success=False)
+            green, cursor = detect_control_boxes(argv.image)
+            if green is None or cursor is None:
+                return None
+            height, width = argv.image.shape[:2]
+            x, y, box_width, box_height = cursor
+            box = [
+                int(round(x * width / 1280)), int(round(y * height / 720)),
+                max(1, int(round(box_width * width / 1280))),
+                max(1, int(round(box_height * height / 720))),
+            ]
+            return CustomRecognition.AnalyzeResult(
+                box=box, detail={"reference_size": [1280, 720], "green_box": green, "cursor_box": cursor}
+            )
         except Exception:
-            logger.exception("钓鱼控条异常")
-            return CustomAction.RunResult(success=False)
-        finally:
-            release_control_keys()
+            logger.exception("钓鱼控条入口识别异常")
+            return None

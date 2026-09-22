@@ -23,6 +23,10 @@
     "autofish.confirm_sell_detected": "Confirm sell detected. Clicking...",
     "autofish.no_fish_sell_close": "No fish to sell, closing shop.",
     "autofish.sell_success": "Fish sold successfully.",
+    "fish.learning_unavailable": "The model or learning feature is unavailable. Using rule-based fishing control for this round.",
+    "fish.learning_save_failed": "Learning data for this round could not be saved. This does not affect the round's completion.",
+    "fish.unsupported_frame": "The fishing screenshot format or aspect ratio is unsupported. Please use a 16:9 screenshot.",
+    "fish.engine_summary": "This round: %d valid learning samples, %d discarded samples.",
     "furniture.claimed.hamster_ball": "Claimed Hamster Ball",
     "furniture.claimed.fluff": "Claimed Fluff",
     "furniture.claimed.damaged_crate": "Claimed Damaged Crate",
@@ -103,7 +107,7 @@
     "bidking.fallback_one": "[BidKing] Cannot determine the bid, bidding %d",
     "bidking.readback_mismatch": "[BidKing] Readback mismatch (target %d, actual %d), retyped once",
     "bidking.readback_unreadable": "[BidKing] Cannot read back the input box, continuing with what was typed",
-    "bidking.failed": "[BidKing] Bidding failed (%s)"
+    "bidking.failed": "[BidKing] Bidding failed (%s)",
     "volleyball_weekly.started": "[Volleyball Weekly] Task started",
     "volleyball_weekly.playing": "[Volleyball Weekly] Match in progress",
     "volleyball_weekly.teammates_selected": "[Volleyball Weekly] Teammates selected"

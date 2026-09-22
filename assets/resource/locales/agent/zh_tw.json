@@ -23,6 +23,10 @@
     "autofish.confirm_sell_detected": "檢測到確認賣魚按鈕，點擊確認。",
     "autofish.no_fish_sell_close": "無魚可賣，關閉漁獲市場。",
     "autofish.sell_success": "賣魚成功。",
+    "fish.learning_unavailable": "模型或學習功能無法使用，本輪使用規則控條。",
+    "fish.learning_save_failed": "本輪學習資料未能儲存，不影響本輪結束。",
+    "fish.unsupported_frame": "控條截圖的格式或比例不受支援，請使用 16:9 截圖。",
+    "fish.engine_summary": "本輪有效學習樣本 %d，捨棄樣本 %d。",
     "furniture.claimed.hamster_ball": "已領取 倉鼠球",
     "furniture.claimed.fluff": "已領取 棉棉",
     "furniture.claimed.damaged_crate": "已領取 破損的木箱",
@@ -103,7 +107,7 @@
     "bidking.fallback_one": "[拍賣之王] 無法確定出價，本輪出 %d",
     "bidking.readback_mismatch": "[拍賣之王] 回讀不一致（目標 %d，實際 %d），已重輸一次",
     "bidking.readback_unreadable": "[拍賣之王] 輸入框回讀不到數字，按已輸入內容繼續",
-    "bidking.failed": "[拍賣之王] 出價失敗（%s）"
+    "bidking.failed": "[拍賣之王] 出價失敗（%s）",
     "volleyball_weekly.started": "[自動排球（週常）] 任務開始",
     "volleyball_weekly.playing": "[自動排球（週常）] 比賽進行中",
     "volleyball_weekly.teammates_selected": "[自動排球（週常）] 隊友選擇完成"

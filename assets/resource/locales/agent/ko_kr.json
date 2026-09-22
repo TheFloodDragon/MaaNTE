@@ -23,6 +23,10 @@
     "autofish.confirm_sell_detected": "판매 확인 감지. 클릭 중...",
     "autofish.no_fish_sell_close": "판매할 생선이 없습니다. 어시장을 닫습니다.",
     "autofish.sell_success": "생선 판매 성공.",
+    "fish.learning_unavailable": "모델 또는 학습 기능을 사용할 수 없어 이번에는 규칙 기반으로 낚시 바를 제어합니다.",
+    "fish.learning_save_failed": "이번 학습 데이터를 저장하지 못했습니다. 이번 낚시의 종료에는 영향을 주지 않습니다.",
+    "fish.unsupported_frame": "낚시 제어 화면의 이미지 형식 또는 화면 비율이 지원되지 않습니다. 16:9 스크린샷이 필요합니다.",
+    "fish.engine_summary": "이번 유효 학습 샘플: %d, 버린 샘플: %d.",
     "furniture.claimed.hamster_ball": "햄스터 볼 수령 완료",
     "furniture.claimed.fluff": "몽글 수령 완료",
     "furniture.claimed.damaged_crate": "부서진 나무 상자 수령 완료",
@@ -103,7 +107,7 @@
     "bidking.fallback_one": "[경매의 왕] 입찰가를 확정할 수 없어 이번 라운드는 %d 입찰",
     "bidking.readback_mismatch": "[경매의 왕] 읽기 값 불일치(목표 %d, 실제 %d), 한 번 다시 입력했습니다",
     "bidking.readback_unreadable": "[경매의 왕] 입력란에서 숫자를 읽을 수 없어 입력된 내용으로 계속 진행합니다",
-    "bidking.failed": "[경매의 왕] 입찰 실패（%s）"
+    "bidking.failed": "[경매의 왕] 입찰 실패（%s）",
     "volleyball_weekly.started": "[배구 (주간)] 작업 시작",
     "volleyball_weekly.playing": "[배구 (주간)] 경기 진행 중",
     "volleyball_weekly.teammates_selected": "[배구 (주간)] 팀원 선택 완료"

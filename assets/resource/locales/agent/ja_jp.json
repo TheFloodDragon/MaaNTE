@@ -23,6 +23,10 @@
     "autofish.confirm_sell_detected": "売却確認を検出。クリック中...",
     "autofish.no_fish_sell_close": "売る魚がいません。魚市場を閉じます。",
     "autofish.sell_success": "魚の売却に成功しました。",
+    "fish.learning_unavailable": "モデルまたは学習機能を利用できません。今回はルールベースで釣りのバーを制御します。",
+    "fish.learning_save_failed": "今回の学習データを保存できませんでした。今回の釣りの終了処理には影響しません。",
+    "fish.unsupported_frame": "釣り操作画面の画像形式または縦横比に対応していません。16:9 のスクリーンショットが必要です。",
+    "fish.engine_summary": "今回の有効な学習サンプル: %d、破棄したサンプル: %d。",
     "furniture.claimed.hamster_ball": "ハムスターボール を受け取りました",
     "furniture.claimed.fluff": "モフンモフン を受け取りました",
     "furniture.claimed.damaged_crate": "壊れた木箱 を受け取りました",
@@ -103,7 +107,7 @@
     "bidking.fallback_one": "[オークションの王] 入札額を確定できないため、今回のラウンドは %d を入札",
     "bidking.readback_mismatch": "[オークションの王] 読み戻しが不一致（目標 %d、実際 %d）。再入力しました",
     "bidking.readback_unreadable": "[オークションの王] 入力欄から数値を読み戻せないため、入力済みの内容で続行します",
-    "bidking.failed": "[オークションの王] 入札失敗（%s）"
+    "bidking.failed": "[オークションの王] 入札失敗（%s）",
     "volleyball_weekly.started": "[バレーボール（週常）] タスク開始",
     "volleyball_weekly.playing": "[バレーボール（週常）] 試合進行中",
     "volleyball_weekly.teammates_selected": "[バレーボール（週常）] チームメイトを選択済み"
