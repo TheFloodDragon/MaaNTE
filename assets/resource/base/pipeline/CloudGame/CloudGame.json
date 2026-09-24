@@ -1,0 +1,632 @@
+{
+    "CloudGameProfile": {
+        "desc": "实机校准门槛：补齐下方云客户端识别、队列文本 ROI 和关闭按钮模板后才可置为 true",
+        "enabled": false,
+        "attach": {
+            "calibrated": false
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameAutoQueueConfig": {
+        "desc": "独立开关配置，避免与超时选项相互覆盖",
+        "enabled": false,
+        "attach": {
+            "auto_queue": true
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameQueueTimeoutConfig": {
+        "desc": "独立排队超时配置，单位分钟",
+        "enabled": false,
+        "attach": {
+            "timeout_minutes": 30
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameStartEntrance": {
+        "desc": "云启动唯一入口，每次重置运行状态并校验控制器及识别资源",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_reset",
+                "custom_action_param": {
+                    "poll_interval_seconds": 2,
+                    "login_timeout_seconds": 600,
+                    "transition_timeout_seconds": 30
+                }
+            }
+        },
+        "next": [
+            "CloudGameLoginWait"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameLoginWait": {
+        "desc": "仅等待用户登录；此节点不在状态分派列表中，避免无条件循环",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_wait_login"
+            }
+        },
+        "next": [
+            "CloudGameDispatch"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameDispatch": {
+        "desc": "云客户端状态分派：异常和遮挡优先，无条件等待放在最后",
+        "next": [
+            "CloudGameErrorAbort",
+            "CloudGameLoginExpired",
+            "CloudGameCloseDailyLoginPopup",
+            "CloudGameDailyLoginUnresolved",
+            "CloudGameReady",
+            "CloudGameManualEnterNotice",
+            "CloudGameStartConfirm",
+            "CloudGameEnterButton",
+            "CloudGameEnterWorld",
+            "CloudGameQueueWait"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameStartConfirm": {
+        "desc": "云客户端 1.0.0.1 启动确认弹窗是与主窗口重合的独立窗口，控制器截图看不到，必须由自定义识别单独取帧；30 秒倒计时内确认，否则客户端自行退出",
+        "recognition": {
+            "type": "Custom",
+            "param": {
+                "custom_recognition": "cloud_game_owned_dialog",
+                "custom_recognition_param": {
+                    "screen": "CloudGameStartConfirmNotice",
+                    "target": "CloudGameStartConfirmEnter"
+                }
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_click",
+                "custom_action_param": {
+                    "kind": "confirm"
+                }
+            }
+        },
+        "next": [
+            "CloudGameDispatch"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameStartConfirmNotice": {
+        "desc": "确认弹窗的时长提示文案，区分启动确认与其他弹窗",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    300,
+                    250,
+                    680,
+                    100
+                ],
+                "template": "CloudGame/StartConfirmNotice.png",
+                "threshold": 0.85
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameStartConfirmEnter": {
+        "desc": "确认弹窗的进入游戏按钮；退出启动按钮不在此 ROI 内",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    620,
+                    390,
+                    350,
+                    110
+                ],
+                "template": "CloudGame/StartConfirmEnter.png",
+                "threshold": 0.85
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameEnterButton": {
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameHome"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_click",
+                "custom_action_param": {
+                    "kind": "enter"
+                }
+            }
+        },
+        "next": [
+            "CloudGameDispatch"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameQueueWait": {
+        "desc": "有界只读轮询排队状态；新弹窗或游戏登录出现后回到 Pipeline",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_queue_wait"
+            }
+        },
+        "next": [
+            "CloudGameDispatch"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameCloseDailyLoginPopup": {
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameDailyLoginTitle",
+                    "CloudGameDailyLoginCloseButton"
+                ],
+                "box_index": 1
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_click",
+                "custom_action_param": {
+                    "kind": "daily"
+                }
+            }
+        },
+        "next": [
+            "CloudGameDispatch"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameDailyLoginUnresolved": {
+        "desc": "每日弹窗标题存在但关闭按钮无法确认，不能跳过遮挡或盲按 ESC",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameDailyLoginTitle"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_fail"
+            }
+        },
+        "focus": {
+            "Node.Action.Failed": "$cloud_game_daily_login_unresolved"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameEnterWorld": {
+        "desc": "确认已是游戏内部登录页才交给 SceneManager 公共接口",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameGameLogin"
+                ]
+            }
+        },
+        "next": [
+            "CloudGameCloseDailyLoginPopup",
+            "CloudGameDailyLoginUnresolved",
+            "CloudGameReady",
+            "[JumpBack]SceneAnyEnterWorld"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameReady": {
+        "desc": "重新取两帧确认大世界且无云端遮挡，再报告成功",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameInWorld"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_confirm_ready"
+            }
+        },
+        "next": [
+            "CloudGameStartDone"
+        ],
+        "on_error": [
+            "CloudGameStartFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameManualEnterNotice": {
+        "desc": "自动排队关闭时清理任务状态后结束，不把手动模式标记为已经进入游戏",
+        "enabled": false,
+        "action": {"type": "Custom", "param": {"custom_action": "cloud_game_finish"}},
+        "focus": {
+            "Node.Action.Succeeded": "$cloud_game_manual_enter"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameStartDone": {
+        "action": {"type": "Custom", "param": {"custom_action": "cloud_game_finish"}},
+        "focus": {
+            "Node.Action.Succeeded": "$cloud_game_ready"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameStartFailed": {
+        "desc": "显式返回失败，不能用成功的空节点吞掉启动失败",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_fail"
+            }
+        },
+        "focus": {
+            "Node.Action.Failed": "$cloud_game_start_failed"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameErrorAbort": {
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameErrorState"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_fail"
+            }
+        },
+        "focus": {
+            "Node.Action.Failed": "$cloud_game_start_failed"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameLoginExpired": {
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameLoginScreen"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_fail"
+            }
+        },
+        "focus": {
+            "Node.Action.Failed": "$cloud_game_login_expired"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameHome": {
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameHomeScreen",
+                    "CloudGameEnterText"
+                ],
+                "box_index": 1
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameInWorld": {
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "InWorld"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameGameLogin": {
+        "desc": "复用现有游戏登录页退出图标，只用于区分游戏内部和云客户端外壳",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    0,
+                    -100,
+                    100,
+                    100
+                ],
+                "template": "Common/Scene/Login/LoginExit.png",
+                "green_mask": true
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameLoginForm": {
+        "desc": "登录窗口出现输入框、验证码或协议勾选等凭据表单标记时，只提示用户手动登录，不输入或提交凭据、不代为同意协议",
+        "recognition": {"type": "OCR", "param": {
+            "roi": [410, 150, 460, 330],
+            "expected": ["请输入", "账号密码登录", "手机验证码登录", "扫码登录", "密码登录", "验证码", "手机号", "邮箱", "同意", "协议"]
+        }},
+        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+    },
+    "CloudGameLoginOtherMethods": {
+        "desc": "实机取证：客户端已记住账号的登录窗口只有“登录”和“使用其他方式登录”两个按钮，没有任何输入框",
+        "recognition": {"type": "OCR", "param": {
+            "roi": [440, 485, 400, 70],
+            "expected": ["使用其他方式登录"]
+        }},
+        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+    },
+    "CloudGameLoginSubmit": {
+        "desc": "记住账号登录窗口的“登录”按钮（实机 y≈422-472），ROI 不含下方“使用其他方式登录”；仅在无凭据表单标记时点击一次",
+        "recognition": {"type": "OCR", "param": {
+            "roi": [445, 418, 390, 58],
+            "expected": ["登录", "登 录"]
+        }},
+        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+    },
+    "CloudGameVerification": {
+        "desc": "验证码或安全验证提示，仅等待用户操作，不自动识别或刷新验证码",
+        "recognition": {"type": "OCR", "param": {
+            "roi": [250, 80, 780, 180],
+            "expected": ["安全验证", "请完成验证", "短信验证", "身份验证"]
+        }},
+        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+    },
+    "CloudGameAuthorization": {
+        "desc": "授权提示，用户自行阅读条款或在手机端确认，禁止自动同意",
+        "recognition": {"type": "OCR", "param": {
+            "roi": [250, 80, 780, 220],
+            "expected": ["授权登录", "确认授权", "扫码成功", "请在手机上确认登录"]
+        }},
+        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+    },
+    "CloudGameLoginFailure": {
+        "desc": "登录失败或验证码过期，提示用户在原有超时预算内修正重试，不重复发送验证码",
+        "recognition": {"type": "OCR", "param": {
+            "roi": [250, 80, 780, 180],
+            "expected": ["验证码错误", "验证码已失效", "二维码已过期", "登录失败", "登录已过期", "网络异常"]
+        }},
+        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+    },
+    "CloudGameLoginScreen": {
+        "desc": "云客户端 1.0.0.1 实机登录入口：点击任意位置登录。仅识别，登录由用户处理；账号表单仍待校准",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    530,
+                    550,
+                    230,
+                    70
+                ],
+                "template": "CloudGame/LoginRequired.png",
+                "threshold": 0.85
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameHomeScreen": {
+        "desc": "云客户端 1.0.0.1 已登录首页的固定工具栏图标；不含账号信息，登录页不存在该图标",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    950,
+                    40,
+                    140,
+                    110
+                ],
+                "template": "CloudGame/HomeSettingsIcon.png",
+                "threshold": 0.85
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameEnterText": {
+        "desc": "云首页开始游戏按钮；点击后会弹出 30 秒倒计时确认框",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [
+                    640,
+                    650,
+                    600,
+                    70
+                ],
+                "template": "CloudGame/StartGameSmall.png",
+                "threshold": 0.85
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameQueueScreen": {
+        "desc": "排队面板标题，取自客户端 QML: root.isVip ? \"畅玩月卡加速排队中...\" : \"排队中...\"。VIP 与普通共用同一排队界面，客户端不存在队列选择页",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "排队中",
+                    "畅玩月卡加速排队中"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameQueueText": {
+        "desc": "动态排队信息，取自客户端 QML 的排名与预计等待标签；用 expected 限定排队词表，避免 OCR 读到账号或余额信息",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "目前正排在第",
+                    "预计等待"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameDailyLoginTitle": {
+        "desc": "云客户端奖励弹窗标题，取自客户端 QML awardReminder 数据源的两种标题；与游戏内月卡今日奖励无关",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "每日登录奖励",
+                    "首次登录奖励"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameDailyLoginCloseButton": {
+        "desc": "该弹窗没有关闭按钮：客户端 QML 底部是可点击提示 closeTip(tipbg.png + closeTipMouseArea)，点击提示本身即可关闭，无需模板也不盲按 ESC",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "点击空白区域关闭"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameLoading": {
+        "desc": "云端连接与启动加载提示，取自客户端 QML 加载页文案；黑屏本身不算加载成功。不收录“请耐心等待”，该词同时出现在故障排查确认弹窗中会误命中",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "努力加载中",
+                    "游戏启动中，黑屏时间可能较长"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudGameErrorState": {
+        "desc": "取自客户端 QML 的界面级中断态文案：多设备占用、需切换节点、时长耗尽引导充值；仅停止任务，不自动重连、充值或重排。不收录“排队失败/排队超时/排队异常”，那些是 libwlcgcore.dll 的 SDK 日志字符串（带 - code、！！！ 后缀），不会显示在界面上",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "用户正在使用其他设备排队",
+                    "请切换节点",
+                    "前往充值"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

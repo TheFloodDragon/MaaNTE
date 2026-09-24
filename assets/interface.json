@@ -58,12 +58,14 @@
         },
         {
             "name": "CloudGame-Front",
+            "label": "$controller_cloud_game_front_label",
+            "display_short_side": 720,
             "type": "Win32",
             "permission_required": true,
             "win32": {
-                "class_regex": "Qt.*",
+                "class_regex": "^Qt\\d+QWindow(?:Icon|OwnDC)?$",
                 "window_regex": "^\\s*(云.*?异环)\\s*$",
-                "screencap": "FramePool",
+                "screencap": "PrintWindow",
                 "mouse": "Seize",
                 "keyboard": "Seize"
             }
@@ -88,6 +90,11 @@
         {
             "name": "Daily",
             "label": "$group.Daily.label",
+            "default_expand": true
+        },
+        {
+            "name": "CloudGame",
+            "label": "$group.CloudGame.label",
             "default_expand": true
         },
         {
@@ -120,6 +127,8 @@
     "import": [
         // group:Daily
         "resource/tasks/ClaimRewards.json",
+        // group:CloudGame
+        "resource/tasks/CloudGame.json",
         // group:CityTycoon
         "resource/tasks/Furniture.json",
         "resource/tasks/WithdrawMoney.json",

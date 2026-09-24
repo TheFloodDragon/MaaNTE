@@ -475,3 +475,5 @@ scripts/*
 !scripts/update_navi_coordinate_transform.py
 # Models
 assets/resource/base/model/*
+.narrafork/
+.worktrees/

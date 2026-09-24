@@ -447,7 +447,13 @@ def _check_admin_privilege():
 
 
 def _check_game_resolution():
-    """连接控制器后检测游戏窗口分辨率"""
+    """连接控制器后检测本地游戏窗口分辨率。"""
+    from utils.pienv import controller_name
+
+    if controller_name() == "CloudGame-Front":
+        logger.debug("当前使用 CloudGame-Front，由云启动任务检查控制器画面尺寸")
+        return
+
     from utils.win32_process import find_window_by_process, get_client_size
 
     hwnd = find_window_by_process("HTGame.exe")
@@ -531,6 +537,12 @@ def agent(is_dev_mode=False):
             _check_game_resolution()
             AgentServer.join()
         finally:
+            try:
+                from custom.action.cloud_game import cleanup_cloud_session
+
+                cleanup_cloud_session()
+            except Exception as cleanup_error:
+                logger.debug("云启动状态清理跳过: %s", type(cleanup_error).__name__)
             AgentServer.shut_down()
         logger.info("AgentServer关闭")
     except ImportError as e:

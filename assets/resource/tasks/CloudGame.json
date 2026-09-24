@@ -1,0 +1,73 @@
+{
+    "task": [
+        {
+            "name": "CloudGameStart",
+            "label": "$task_cloud_game_label",
+            "entry": "CloudGameStartEntrance",
+            "description": "$task_cloud_game_desc",
+            "controller": [
+                "CloudGame-Front"
+            ],
+            "group": [
+                "CloudGame"
+            ],
+            "option": [
+                "CloudGameAutoQueue",
+                "CloudGameQueueTimeout"
+            ]
+        }
+    ],
+    "option": {
+        "CloudGameAutoQueue": {
+            "type": "switch",
+            "label": "$task_cloud_game_option_auto_queue",
+            "description": "$task_cloud_game_option_auto_queue_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CloudGameAutoQueueConfig": {
+                            "attach": {
+                                "auto_queue": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CloudGameAutoQueueConfig": {
+                            "attach": {
+                                "auto_queue": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CloudGameQueueTimeout": {
+            "type": "input",
+            "label": "$task_cloud_game_option_queue_timeout",
+            "description": "$task_cloud_game_option_queue_timeout_desc",
+            "inputs": [
+                {
+                    "name": "minutes",
+                    "label": "$task_cloud_game_option_queue_timeout_input",
+                    "default": "30",
+                    "pipeline_type": "int",
+                    "verify": "^(?:[1-9]\\d{0,2}|1[0-3]\\d{2}|14[0-3]\\d|1440)$"
+                }
+            ],
+            "pipeline_override": {
+                "CloudGameQueueTimeoutConfig": {
+                    "attach": {
+                        "timeout_minutes": "{minutes}"
+                    }
+                }
+            }
+        }
+    }
+}
