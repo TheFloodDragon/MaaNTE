@@ -79,6 +79,7 @@ __all__ = [
     "PinkPawHeistReturnToEntranceAction",
     "PinkPawRewardSummary",
     "AutoFishWithoutCV",
+    "FishControlVisible",
     "AutoChooseFishStoreGeneralBait",
     "SoundDodgeAction",
     "AutoFScroll",

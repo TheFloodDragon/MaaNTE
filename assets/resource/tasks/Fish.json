@@ -21,6 +21,7 @@
             "description": "$task_fish_new_desc",
             "option": [
                 "FishNewAutoNavi",
+                "FishNewControlMode",
                 "FishSellAuto",
                 "FishBuyBaitAuto"
             ],
@@ -253,6 +254,59 @@
                         "AutoBuyFishBait": {
                             "custom_action_param": {
                                 "found_bait_threshold": 0.4
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "FishNewControlMode": {
+            "type": "select",
+            "label": "$task_fish_new_option_control_mode",
+            "description": "$task_fish_new_option_control_mode_desc",
+            "default_case": "off",
+            "cases": [
+                {
+                    "name": "off",
+                    "label": "$task_fish_new_option_control_mode_case_off",
+                    "pipeline_override": {
+                        "FishNewGaming": {
+                            "action": {
+                                "param": {
+                                    "custom_action_param": {
+                                        "learning_mode": "off"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "infer",
+                    "label": "$task_fish_new_option_control_mode_case_infer",
+                    "pipeline_override": {
+                        "FishNewGaming": {
+                            "action": {
+                                "param": {
+                                    "custom_action_param": {
+                                        "learning_mode": "infer"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "learn",
+                    "label": "$task_fish_new_option_control_mode_case_learn",
+                    "pipeline_override": {
+                        "FishNewGaming": {
+                            "action": {
+                                "param": {
+                                    "custom_action_param": {
+                                        "learning_mode": "learn"
+                                    }
+                                }
                             }
                         }
                     }
