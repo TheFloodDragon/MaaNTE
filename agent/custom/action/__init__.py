@@ -39,6 +39,14 @@ from .auto_volleyball import *
 from .BidKing.place_bid import PlaceBid
 from .auto_volleyball_weekly import *
 
+# Combat system
+from .Combat import (
+    CombatInitAction,
+    CombatStepAction,
+    CombatFinalizeAction,
+    CombatStatusRecognition,
+)
+
 __all__ = [
     "AutoMakeCoffee",
     "AutoMakeCoffeeLite",
@@ -103,4 +111,8 @@ __all__ = [
     "VolleyballWeeklyReset",
     "VolleyballWeeklySelectTeammates",
     "VolleyballWeeklyClickButton",
+    "CombatInitAction",
+    "CombatStepAction",
+    "CombatFinalizeAction",
+    "CombatStatusRecognition",
 ]

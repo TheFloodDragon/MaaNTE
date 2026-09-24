@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "id": "balanced",
+  "type": "builtin",
+  "description": "Use ultimate and skill when ready, normal attack otherwise"
+}

@@ -141,5 +141,22 @@
     "cloud_game.login_retry_required": "로그인 실패 또는 인증 만료입니다. 클라이언트에서 수정하여 다시 시도하세요. 기존 제한 시간은 연장되지 않습니다",
     "cloud_game.desktop_unavailable": "데스크톱 세션이 끊기거나 잠겨 있어 클라우드 NTE가 화면을 그리거나 입력을 받을 수 없습니��. 원격 데스크톱을 연결한 상태로 유지하거나 잠금을 해제한 후 실행하세요",
     "cloud_game.login_remembered": "클라우드 NTE에 저장된 계정을 감지하여 로그인을 한 번 클릭합니다. 자격 증명을 입력하거나 저장하지 않습니다",
-    "cloud_game.screen_too_small": "데스크톱 작업 영역에 1280×720 클라우드 NTE 창이 들어가지 않아 화면 밖 부분을 캡처할 수 없습니다. 해상도를 1280×768 이상으로 설정한 후 다시 실행하세요"
+    "cloud_game.screen_too_small": "데스크톱 작업 영역에 1280×720 클라우드 NTE 창이 들어가지 않아 화면 밖 부분을 캡처할 수 없습니다. 해상도를 1280×768 이상으로 설정한 후 다시 실행하세요",
+    "combat.session_start": "전투 세션 시작",
+    "combat.session_end": "전투 세션 종료: %s",
+    "combat.observe_snapshot": "상태 관찰: 전투=%s 현재 슬롯=%s",
+    "combat.action_execute": "동작 실행: %s",
+    "combat.action_result": "동작 결과: %s",
+    "combat.sound_event": "사운드 이벤트: %s (세션=%s)",
+    "combat.sound_health_degraded": "오디오 리스너 건강 상태 저하: %s",
+    "combat.template_load": "전투 템플릿 로드: %s",
+    "combat.template_invalid": "잘못된 전투 템플릿: %s",
+    "combat.exit_reason.stopped": "작업 중지됨",
+    "combat.exit_reason.combat_ended": "전투 종료",
+    "combat.exit_reason.template_completed": "템플릿 완료",
+    "combat.exit_reason.cycle_limit_reached": "사이클 한계 도달",
+    "combat.exit_reason.timeout": "전투 시간 초과",
+    "combat.exit_reason.failed": "전투 실패",
+    "sound_dodge.failed_to_start": "오디오 리스너 시작 실패, 오디오 출력 장치를 확인하세요",
+    "sound_dodge.listener_died": "오디오 리스너가 중지되어 작업을 종료합니다"
 }

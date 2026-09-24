@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "id": "basic",
+  "type": "builtin",
+  "description": "Basic attack with current character, no switching"
+}

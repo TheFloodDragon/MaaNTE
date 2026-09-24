@@ -1754,7 +1754,7 @@ class PinkPawHeistCore3Path:
                         continue
                     self.log_warning(f"{role} switch to {last_key} not confirmed")
                     self._clear_switch_state()
-                    return last_key
+                    return None
 
                 self.send_key(last_key, action_name="switch_char", interval=0.5)
                 image = self._screencap()

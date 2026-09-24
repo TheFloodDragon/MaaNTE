@@ -141,5 +141,22 @@
     "cloud_game.login_retry_required": "登入失敗或驗證碼已過期，請在客戶端修正後重試；本次登入逾時不會重新計時",
     "cloud_game.desktop_unavailable": "目前桌面工作階段已中斷或鎖定，雲異環視窗無法渲染與接收輸入；請保持遠端桌面連線或在本機解鎖後再執行",
     "cloud_game.login_remembered": "偵測到雲異環已記住的帳號，正在點擊「登入」；不會輸入或儲存任何憑證",
-    "cloud_game.screen_too_small": "目前螢幕工作區放不下 1280×720 的雲異環視窗，超出螢幕的部分無法截圖；請把桌面解析度調到至少 1280×768 後重新執行"
+    "cloud_game.screen_too_small": "目前螢幕工作區放不下 1280×720 的雲異環視窗，超出螢幕的部分無法截圖；請把桌面解析度調到至少 1280×768 後重新執行",
+    "combat.session_start": "戰鬥會話開始",
+    "combat.session_end": "戰鬥會話結束：%s",
+    "combat.observe_snapshot": "狀態觀察：戰鬥=%s 當前槽位=%s",
+    "combat.action_execute": "執行動作：%s",
+    "combat.action_result": "動作結果：%s",
+    "combat.sound_event": "聲音事件：%s (會話=%s)",
+    "combat.sound_health_degraded": "音頻監聽器健康狀態降級：%s",
+    "combat.template_load": "加載戰鬥模板：%s",
+    "combat.template_invalid": "無效的戰鬥模板：%s",
+    "combat.exit_reason.stopped": "任務已停止",
+    "combat.exit_reason.combat_ended": "戰鬥結束",
+    "combat.exit_reason.template_completed": "模板執行完成",
+    "combat.exit_reason.cycle_limit_reached": "達到循環上限",
+    "combat.exit_reason.timeout": "戰鬥超時",
+    "combat.exit_reason.failed": "戰鬥失敗",
+    "sound_dodge.failed_to_start": "音頻監聽器啟動失敗，請檢查音頻輸出設備",
+    "sound_dodge.listener_died": "音頻監聽器已停止工作，任務結束"
 }

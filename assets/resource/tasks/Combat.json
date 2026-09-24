@@ -1,0 +1,247 @@
+{
+    "task": [
+        {
+            "name": "Combat",
+            "label": "$task_combat_label",
+            "entry": "CombatMain",
+            "description": "$task_combat_desc",
+            "option": [
+                "Combat_PolicyType",
+                "Combat_UseUltimate",
+                "Combat_UseSkill",
+                "Combat_AttackInterval",
+                "Combat_EnableSound",
+                "Combat_MaxDuration"
+            ],
+            "controller": [
+                "Win32-Front"
+            ],
+            "group": [
+                "RealTimeAssist"
+            ]
+        }
+    ],
+    "option": {
+        "Combat_PolicyType": {
+            "type": "select",
+            "label": "$task_combat_option_policy_type",
+            "description": "$task_combat_option_policy_type_desc",
+            "default_case": "Balanced",
+            "cases": [
+                {
+                    "name": "Basic",
+                    "label": "$task_combat_option_policy_type_basic",
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "policy_type": "basic"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Balanced",
+                    "label": "$task_combat_option_policy_type_balanced",
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "policy_type": "balanced"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "Custom",
+                    "label": "$task_combat_option_policy_type_custom",
+                    "option": [
+                        "Combat_CustomTemplate"
+                    ],
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "policy_type": "custom"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "Combat_CustomTemplate": {
+            "type": "input",
+            "label": "$task_combat_option_custom_template",
+            "description": "$task_combat_option_custom_template_desc",
+            "inputs": [
+                {
+                    "name": "template_name",
+                    "label": "$task_combat_option_custom_template_input",
+                    "default": "custom_example.json",
+                    "pipeline_type": "string",
+                    "verify": "^[A-Za-z0-9_-]+\\.json$"
+                }
+            ],
+            "pipeline_override": {
+                "CombatMain": {
+                    "attach": {
+                        "custom_template": "{template_name}"
+                    }
+                }
+            }
+        },
+        "Combat_UseUltimate": {
+            "type": "switch",
+            "label": "$task_combat_option_use_ultimate",
+            "description": "$task_combat_option_use_ultimate_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "use_ultimate": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "use_ultimate": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "Combat_UseSkill": {
+            "type": "switch",
+            "label": "$task_combat_option_use_skill",
+            "description": "$task_combat_option_use_skill_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "use_skill": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "use_skill": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "Combat_AttackInterval": {
+            "type": "input",
+            "label": "$task_combat_option_attack_interval",
+            "description": "$task_combat_option_attack_interval_desc",
+            "inputs": [
+                {
+                    "name": "interval_ms",
+                    "label": "$task_combat_option_attack_interval_input",
+                    "default": "800",
+                    "pipeline_type": "int",
+                    "verify": "^([1-9][0-9]{2,3}|5000)$"
+                }
+            ],
+            "pipeline_override": {
+                "CombatMain": {
+                    "attach": {
+                        "attack_interval_ms": "{interval_ms}"
+                    }
+                }
+            }
+        },
+        "Combat_EnableSound": {
+            "type": "switch",
+            "label": "$task_combat_option_enable_sound",
+            "description": "$task_combat_option_enable_sound_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "option": [
+                        "Combat_SoundThreshold"
+                    ],
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "enable_sound": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CombatMain": {
+                            "attach": {
+                                "enable_sound": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "Combat_SoundThreshold": {
+            "type": "input",
+            "label": "$task_combat_option_sound_threshold",
+            "description": "$task_combat_option_sound_threshold_desc",
+            "inputs": [
+                {
+                    "name": "threshold",
+                    "label": "$task_combat_option_sound_threshold_input",
+                    "default": "0.13",
+                    "pipeline_type": "string",
+                    "verify": "^0\\.\\d+$|^1\\.0*$"
+                }
+            ],
+            "pipeline_override": {
+                "CombatMain": {
+                    "attach": {
+                        "sound_threshold": "{threshold}"
+                    }
+                }
+            }
+        },
+        "Combat_MaxDuration": {
+            "type": "input",
+            "label": "$task_combat_option_max_duration",
+            "description": "$task_combat_option_max_duration_desc",
+            "inputs": [
+                {
+                    "name": "duration_s",
+                    "label": "$task_combat_option_max_duration_input",
+                    "default": "300",
+                    "pipeline_type": "int",
+                    "verify": "^([1-9][0-9]|[1-5][0-9]{2}|600)$"
+                }
+            ],
+            "pipeline_override": {
+                "CombatMain": {
+                    "attach": {
+                        "max_combat_duration_s": "{duration_s}"
+                    }
+                }
+            }
+        }
+    }
+}

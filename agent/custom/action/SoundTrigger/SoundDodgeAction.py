@@ -112,6 +112,10 @@ class Ctx:
         logger.debug("Ctx entered")
         return True
 
+    def is_healthy(self):
+        """Check if ear listener is running properly."""
+        return self.ear and self.ear.is_healthy()
+
     def exit(self):
         self._stop_event.set()
         if self.ear:
@@ -234,10 +238,16 @@ class SoundDodgeAction(CustomAction):
                 dodge_all_attacks=dodge_all_attacks,
             )
             if not ctx.enter():
+                logger.error("Sound listener failed to start")
+                PrintT(context, "sound_dodge.failed_to_start")
                 return CustomAction.RunResult(success=False)
 
             PrintT(context, "sound_dodge.monitoring")
             while not context.tasker.stopping:
+                if not ctx.is_healthy():
+                    logger.error("Sound listener died during execution")
+                    PrintT(context, "sound_dodge.listener_died")
+                    return CustomAction.RunResult(success=False)
                 ctx.process_next(timeout=0.05)
 
             PrintT(context, "sound_dodge.interrupted")

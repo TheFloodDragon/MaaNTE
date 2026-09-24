@@ -139,5 +139,22 @@
     "cloud_game.login_retry_required": "登录失败或验证码已过期，请在客户端中修正后重试；本次登录超时不会重新计时",
     "cloud_game.desktop_unavailable": "当前桌面会话已断开或锁屏，云异环窗口无法渲染和接收输入；请保持远程桌面连接或在本机解锁后再运行",
     "cloud_game.login_remembered": "检测到云异环已记住的账号，正在点击“登录”；不会输入或保存任何凭据",
-    "cloud_game.screen_too_small": "当前屏幕工作区放不下 1280×720 的云异环窗口，超出屏幕的部分无法截图；请把桌面分辨率调到至少 1280×768 后重新运行"
+    "cloud_game.screen_too_small": "当前屏幕工作区放不下 1280×720 的云异环窗口，超出屏幕的部分无法截图；请把桌面分辨率调到至少 1280×768 后重新运行",
+    "combat.session_start": "战斗会话开始",
+    "combat.session_end": "战斗会话结束：%s",
+    "combat.observe_snapshot": "状态观察：战斗=%s 当前槽位=%s",
+    "combat.action_execute": "执行动作：%s",
+    "combat.action_result": "动作结果：%s",
+    "combat.sound_event": "声音事件：%s (会话=%s)",
+    "combat.sound_health_degraded": "音频监听器健康状态降级：%s",
+    "combat.template_load": "加载战斗模板：%s",
+    "combat.template_invalid": "无效的战斗模板：%s",
+    "combat.exit_reason.stopped": "任务已停止",
+    "combat.exit_reason.combat_ended": "战斗结束",
+    "combat.exit_reason.template_completed": "模板执行完成",
+    "combat.exit_reason.cycle_limit_reached": "达到循环上限",
+    "combat.exit_reason.timeout": "战斗超时",
+    "combat.exit_reason.failed": "战斗失败",
+    "sound_dodge.failed_to_start": "音频监听器启动失败，请检查音频输出设备",
+    "sound_dodge.listener_died": "音频监听器已停止工作，任务结束"
 }

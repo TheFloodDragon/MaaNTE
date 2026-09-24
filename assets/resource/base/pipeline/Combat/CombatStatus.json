@@ -1,0 +1,65 @@
+{
+    "CombatEnemyHealthBar": {
+        "desc": "敌方血条颜色检测（与粉爪 CheckMonsterOnce 同参数，供战斗模块复用）",
+        "recognition": {
+            "type": "ColorMatch",
+            "param": {
+                "roi": [
+                    33,
+                    27,
+                    1222,
+                    639
+                ],
+                "method": 4,
+                "lower": [
+                    242,
+                    31,
+                    32
+                ],
+                "upper": [
+                    244,
+                    33,
+                    34
+                ],
+                "count": 3,
+                "connected": true
+            }
+        },
+        "action": "DoNothing",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatInProgress": {
+        "desc": "确认处于战斗中（识别不确定时不命中）",
+        "recognition": {
+            "type": "Custom",
+            "param": {
+                "custom_recognition": "CombatStatusRecognition",
+                "custom_recognition_param": {
+                    "check_type": "in_combat"
+                }
+            }
+        },
+        "action": "DoNothing",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatCleared": {
+        "desc": "确认已无敌方血条（识别不确定时不命中）",
+        "recognition": {
+            "type": "Custom",
+            "param": {
+                "custom_recognition": "CombatStatusRecognition",
+                "custom_recognition_param": {
+                    "check_type": "cleared"
+                }
+            }
+        },
+        "action": "DoNothing",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}
