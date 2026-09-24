@@ -67,6 +67,7 @@
     "cloud_game.unknown_state": "云异环画面不在已知状态，请手动检查；未执行重连或重复点击",
     "cloud_game.ambiguous_target": "无法确认唯一且有效的按钮位置，已停止以避免误点击",
     "cloud_game.transition_failed": "点击后未确认预期画面变化，已停止；不会重复点击",
+    "cloud_game.input_rejected": "目标窗口未能激活或输入被安全检查拒绝，已停止；不会盲发输入",
     "cloud_game.manual_enter": "自动排队已关闭，请手动进入云异环游戏",
     "rhythm.song_selected": "已选曲: %s",
     "rhythm.playing": "正在演奏...",

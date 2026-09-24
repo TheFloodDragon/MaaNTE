@@ -701,11 +701,9 @@ class CloudGameWaitLogin(CustomAction):
                 prompt("cloud_game.login_required")
                 # 已提交过登录后主窗口可能短暂仍显示入口提示，再点会重新打开登录窗口。
                 if not state.clicked & {"login", "login_submit"}:
-                    x, y = _single_box(_detail(context, "CloudGameLoginScreen", image))
+                    point = _single_box(_detail(context, "CloudGameLoginScreen", image))
                     state.clicked.add("login")
-                    _check_stop(context)
-                    if not context.tasker.controller.post_click(x, y).wait().succeeded:
-                        raise _CloudError("cloud_game.transition_failed")
+                    _click_main_window(context, state, point)
             elif _post_login_state(context, image):
                 stable += 1
                 if stable >= 2:
@@ -795,7 +793,8 @@ def _is_window_visible(hwnd):
         return False
 
 
-def _activate_owned_window(hwnd):
+def _activate_window(hwnd):
+    """把目标窗口提到前台。未激活的 Qt OpenGL 窗口会丢弃合成鼠标输入。"""
     if sys.platform != "win32":
         return False
     user32 = ctypes.windll.user32
@@ -809,25 +808,49 @@ def _activate_owned_window(hwnd):
         return False
 
 
-def _point_hits_owned_window(hwnd, point):
-    if sys.platform != "win32":
-        return False
-    user32 = ctypes.windll.user32
-    _init_win32_api(user32)
-    user32.ClientToScreen.argtypes = [
-        wintypes.HWND,
-        ctypes.POINTER(wintypes.POINT),
-    ]
-    user32.ClientToScreen.restype = wintypes.BOOL
-    user32.WindowFromPoint.argtypes = [wintypes.POINT]
-    user32.WindowFromPoint.restype = wintypes.HWND
-    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
-    user32.GetAncestor.restype = wintypes.HWND
-    screen_point = wintypes.POINT(point[0], point[1])
-    if not user32.ClientToScreen(hwnd, ctypes.byref(screen_point)):
-        return False
-    under = user32.WindowFromPoint(screen_point)
-    return _hwnd_value(user32.GetAncestor(under, _GA_ROOT)) == _hwnd_value(hwnd)
+def _main_window_info(state):
+    """按会话锁定的 HWND 复核主窗口身份，不接受同进程的其他窗口。"""
+    hwnd = state.main_hwnd if state is not None else 0
+    if not hwnd:
+        return None
+    item = _window_by_hwnd(hwnd)
+    if (
+        item is None
+        or item.title != _CLOUD_TITLE
+        or not _MAIN_CLASS.match(item.class_name)
+    ):
+        return None
+    return item
+
+
+def _native_click(hwnd, point):
+    """激活目标窗口后发送一次原生点击。
+
+    click_window 内部还会校验前台归属、遮挡与光标落点，任一不符直接拒绝，
+    不会盲发按键；因此这里只需汇报成功与否，由调用方决定错误语义。
+    """
+    from utils.cloud_window import click_window
+
+    return bool(_activate_window(hwnd)) and bool(click_window(hwnd, point))
+
+
+def _click_main_window(context, state, point):
+    """主窗口点击同样先激活窗口再发原生输入，而不是直接用控制器合成点击。
+
+    实机取证（2026-09-24 20:49 与 21:24 同一像素对照）：控制器已把 720p 的
+    (640,548) 正确换算到屏幕 (960,703)，但当时窗口 active/focus 均为 0，
+    客户端日志没有任何新增记录，登录窗口也没出现；改走“激活 + 原生点击”
+    后立刻唤出登录窗口。因此这不是坐标问题，而是未激活的 Qt OpenGL 窗口
+    丢弃了合成输入。
+    """
+    item = _main_window_info(state)
+    if item is None:
+        raise _CloudError("cloud_game.client_missing")
+    target = _map_720p_to_client(point, item.client_size)
+    _check_stop(context)
+    if not _native_click(item.hwnd, target):
+        raise _CloudError("cloud_game.input_rejected")
+    return True
 
 
 def _target_window_info(target):
@@ -847,8 +870,6 @@ def _target_window_info(target):
 
 def _click_owned_target(target):
     """锁定已识别的 HWND 与几何信息；失败不回退到主窗口输入。"""
-    from utils.cloud_window import click_window
-
     candidates = _owned_dialog_candidates()
     if not any(item.hwnd == target.hwnd for item in candidates):
         raise _CloudError("cloud_game.ambiguous_target")
@@ -856,8 +877,8 @@ def _click_owned_target(target):
     if item is None:
         raise _CloudError("cloud_game.ambiguous_target")
     point = _map_720p_to_client(_box_center(target.box), item.client_size)
-    if not _activate_owned_window(item.hwnd) or not click_window(item.hwnd, point):
-        raise _CloudError("cloud_game.transition_failed")
+    if not _native_click(item.hwnd, point):
+        raise _CloudError("cloud_game.input_rejected")
     return True
 
 
@@ -913,9 +934,7 @@ class CloudGameClick(CustomAction):
             x, y = _single_box(detail)
             _begin_queue(state)
         state.clicked.add(kind)
-        _check_stop(context)
-        if not context.tasker.controller.post_click(x, y).wait().succeeded:
-            raise _CloudError("cloud_game.transition_failed")
+        _click_main_window(context, state, (x, y))
         # 每个按钮只发一次点击；随后持续截图验证状态变化，绝不重复输入。
         deadline = time.monotonic() + state.transition_timeout
         if state.queue_deadline is not None:

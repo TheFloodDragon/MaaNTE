@@ -46,6 +46,7 @@ STATES = {
 
 # 主窗口画面之外的 owned 弹窗画面标记，必须与主窗口状态区分开。
 
+
 def _configure_maa_once():
     """MaaFramework 5.10.4 的日志是异步线程；在用例之间反复 set_log_dir 会与
     尚未退出的工作线程竞争，导致随机的原生 abort。因此全局选项只设置一次，
@@ -65,6 +66,19 @@ LOGIN_NODES = (
     "CloudGameAuthorization",
     "CloudGameLoginFailure",
 )
+HOME_TEMPLATE_LAYOUTS = {
+    # 当前 720p 首页裁剪坐标；测试仅拼入无账号信息的模板，不读取个人截图。
+    "current_720p": {
+        "CloudGameHomeScreen": ("HomeSettingsIcon720.png", (1046, 76, 45, 45)),
+        "CloudGameEnterText": ("StartGame720.png", (965, 568, 91, 29)),
+    },
+    # 旧坐标来自仓库夹具 tests/fixtures/cloud_game/home_720p.png 的精确模板匹配；
+    # 测试同样只用模板合成帧，不依赖这张完整截图。
+    "legacy": {
+        "CloudGameHomeScreen": ("HomeSettingsIcon.png", (988, 65, 56, 56)),
+        "CloudGameEnterText": ("StartGameSmall.png", (888, 681, 110, 31)),
+    },
+}
 
 
 class VirtualCloudController(CustomController):
@@ -214,6 +228,30 @@ class NativeCloudFlowTests(unittest.TestCase):
         def confirm_state(_target):
             return "present" if controller.dialog else "gone"
 
+        def prepare(_context, state):
+            # 真实调度器下没有本地云窗口；只提供会话锁定的主窗口句柄，
+            # 让 _click_main_window 的身份校验与坐标换算仍真实执行。
+            state.main_hwnd = 1000
+
+        def main_window(hwnd):
+            if cloud._hwnd_value(hwnd) != 1000:
+                return None
+            return cloud._WindowInfo(
+                hwnd=1000,
+                rect=(0, 0, 1280, 720),
+                client_size=(1280, 720),
+                owner=0,
+                title=cloud._CLOUD_TITLE,
+                class_name="Qt51517QWindowOwnDC",
+                pid=4242,
+            )
+
+        def native_click(hwnd, point):
+            # 主窗口点击改走原生输入后，虚拟控制器仍需观察到这次点击才能推进画面。
+            if cloud._hwnd_value(hwnd) != 1000:
+                return False
+            return controller.click(*point)
+
         resource = Resource()
         callbacks = {
             "cloud_game_reset": cloud.CloudGameReset(),
@@ -250,9 +288,15 @@ class NativeCloudFlowTests(unittest.TestCase):
         with ExitStack() as stack:
             # 真实调度器下同样没有本地云窗口；入口的本地就绪检查由 test_cloud_start 覆盖。
             stack.enter_context(
-                patch.object(
-                    cloud, "_prepare_cloud_client", side_effect=lambda c, s: None
-                )
+                patch.object(cloud, "_prepare_cloud_client", side_effect=prepare)
+            )
+            # 主窗口点击走“激活 + 原生点击”，这里只替换窗口枚举与最底层的原生发送，
+            # _click_main_window 的身份校验、坐标换算与错误语义仍真实执行。
+            stack.enter_context(
+                patch.object(cloud, "_window_by_hwnd", side_effect=main_window)
+            )
+            stack.enter_context(
+                patch.object(cloud, "_native_click", side_effect=native_click)
             )
             stack.enter_context(
                 patch.object(cloud, "_owned_dialog_candidates", return_value=[])
@@ -332,7 +376,9 @@ class NativeCloudFlowTests(unittest.TestCase):
             (image_dir / path.name).write_bytes(path.read_bytes())
         return bundle
 
-    def assert_real_frame(self, frame, expected, node="CloudGameLoginScreen"):
+    def assert_real_frame(
+        self, frame, expected, node="CloudGameLoginScreen", expected_box=None
+    ):
         class LoginProbe(CustomAction):
             detail = None
             shape = None
@@ -354,6 +400,7 @@ class NativeCloudFlowTests(unittest.TestCase):
                 "CloudGameStartConfirmEnter",
                 "CloudGameHomeScreen",
                 "CloudGameEnterText",
+                "CloudGameHome",
             )
         }
         data["LoginProbe"] = {
@@ -380,11 +427,61 @@ class NativeCloudFlowTests(unittest.TestCase):
             self.assertEqual(probe.shape[:2], (720, 1280))
             self.assertIsNotNone(probe.detail)
             self.assertEqual(probe.detail.hit, expected)
-            if expected:
+            algorithm = "And" if node == "CloudGameHome" else "TemplateMatch"
+            self.assertEqual(probe.detail.algorithm, algorithm)
+            if expected and algorithm == "TemplateMatch":
                 self.assertGreaterEqual(probe.detail.best_result.score, 0.85)
+            if expected_box is not None:
+                self.assertEqual(tuple(probe.detail.box), expected_box)
+            if not expected:
+                self.assertIsNone(probe.detail.box)
             self.assertEqual(controller.clicks, [])
         finally:
             tasker.post_stop().wait()
+
+    def make_home_frame(self, templates, missing=None):
+        """只在合成背景上贴入版本化模板，不依赖窗口、OCR 模型或完整截图。"""
+        frame = np.full((720, 1280, 3), 24, dtype=np.uint8)
+        for node, (name, box) in templates.items():
+            if node == missing:
+                continue
+            with Image.open(
+                ROOT / "assets/resource/base/image/CloudGame" / name
+            ) as image:
+                template = np.asarray(image.convert("RGB"))[:, :, ::-1]
+            x, y, width, height = box
+            self.assertEqual(template.shape, (height, width, 3))
+            frame[y : y + height, x : x + width] = template
+        return frame
+
+    def test_home_templates_match_current_and_legacy_layouts(self):
+        for layout, templates in HOME_TEMPLATE_LAYOUTS.items():
+            frame = self.make_home_frame(templates)
+            for node, (_, box) in templates.items():
+                with self.subTest(layout=layout, node=node):
+                    self.assert_real_frame(frame, True, node, expected_box=box)
+            with self.subTest(layout=layout, node="CloudGameHome"):
+                # And 必须返回开始按钮而不是设置图标的框，保证后续点击目标正确。
+                self.assert_real_frame(
+                    frame,
+                    True,
+                    "CloudGameHome",
+                    expected_box=templates["CloudGameEnterText"][1],
+                )
+
+    def test_home_requires_both_settings_and_start_button(self):
+        for layout, templates in HOME_TEMPLATE_LAYOUTS.items():
+            for missing in templates:
+                with self.subTest(layout=layout, missing=missing):
+                    frame = self.make_home_frame(templates, missing=missing)
+                    for node, (_, box) in templates.items():
+                        self.assert_real_frame(
+                            frame,
+                            node != missing,
+                            node,
+                            expected_box=box if node != missing else None,
+                        )
+                    self.assert_real_frame(frame, False, "CloudGameHome")
 
     def load(self, name):
         return np.asarray(
@@ -397,6 +494,14 @@ class NativeCloudFlowTests(unittest.TestCase):
     def test_real_120dpi_frame_matches_after_controller_normalization(self):
         self.assert_real_frame(self.load("login_required_120dpi.png"), True)
 
+    def test_current_125dpi_login_prompt_returns_its_box(self):
+        # 当前登录文字顶部位于 y=532，旧 y=550 的 ROI 会截断模板。
+        self.assert_real_frame(
+            self.load("login_required_current_125dpi.png"),
+            True,
+            expected_box=(538, 532, 204, 32),
+        )
+
     def test_black_loading_frame_is_not_a_login_prompt(self):
         self.assert_real_frame(np.zeros((720, 1280, 3), dtype=np.uint8), False)
 
@@ -408,23 +513,132 @@ class NativeCloudFlowTests(unittest.TestCase):
         # 启动确认弹窗不得被当成登录页，否则会误报需要重新登录。
         self.assert_real_frame(image, False, "CloudGameLoginScreen")
 
-    def test_login_prompt_is_not_a_start_confirmation(self):
+    def test_confirm_enter_roi_excludes_the_exit_button(self):
+        """“退出启动”会立即终止本次启动，因此确认 ROI 不能与它有任何重叠。
+
+        实机夹具量得（1280x720 基准，含抗锯齿圆角）：退出按钮 x 348..627，
+        进入按钮 x 652..933，两者间隙仅 25px。ROI 左边界 636 落在该间隙内。
+        这里断言几何关系而不只是“能命中”，避免以后调 ROI 时重新把退出按钮圈进来。
+        """
+        image = self.load("start_confirm_720p.png")
+        roi = PIPELINE["CloudGameStartConfirmEnter"]["recognition"]["param"]["roi"]
+        roi_left, roi_right = roi[0], roi[0] + roi[2]
+        # 从夹具自身测量按钮列，不写死坐标。用整段按钮高度的逐列最大值：
+        # 窄行均值会被按钮上的深色文字拉低，把浅色的“进入游戏”整段判成背板。
+        # 阈值 80 介于背板(36)与两个按钮之间；取 100 会让偏暗的退出按钮碎成短段。
+        row = image[415:480].max(axis=(0, 2))
+        spans, start = [], None
+        for x, lit in enumerate(row > 80):
+            if lit and start is None:
+                start = x
+            elif not lit and start is not None:
+                if x - start > 100:
+                    spans.append((start, x))
+                start = None
+        self.assertEqual(len(spans), 2, spans)
+        (_, exit_right), (enter_left, enter_right) = spans
+        self.assertLessEqual(exit_right, roi_left)
+        self.assertLess(roi_left, enter_left)
+        self.assertLessEqual(enter_right, roi_right)
+        # 命中框必须落在进入按钮上，而不是间隙或退出按钮。
         self.assert_real_frame(
-            self.load("login_required_720p.png"), False, "CloudGameStartConfirmNotice"
+            image,
+            True,
+            "CloudGameStartConfirmEnter",
+            expected_box=(650, 415, 280, 65),
         )
+
+    def _as_raw_capture(self, frame, size):
+        """把 720p 夹具重采样成给定客户区尺寸，模拟独立弹窗窗口的原始取帧。"""
+        rgb = Image.fromarray(frame[:, :, ::-1], "RGB").resize(
+            size, Image.Resampling.LANCZOS
+        )
+        return np.asarray(rgb)[:, :, ::-1].copy()
+
+    def test_owned_dialog_normalization_keeps_the_enter_button_clickable(self):
+        """弹窗客户区不是 720p 时，归一化 + 识别 + 反向换算仍须指向“进入游戏”。
+
+        确认弹窗是与主窗口分离的独立顶层窗口，取帧尺寸由它自己的客户区决定；
+        实机探针见过 (900, 1600, 3)。因此画面要先归一化到 720p 才能用 720p 的
+        ROI 识别，命中框又要按客户区尺寸换算回去点击。这里覆盖整条往返链路：
+        非 16:9 尺寸在归一化时会被拉伸变形，是其中最薄弱的一环。
+        """
+        fixture = self.load("start_confirm_720p.png")
+        enter_left, enter_right = 652, 933
+        sizes = (
+            (1280, 720),  # 与基准一致，不重采样
+            (1600, 900),
+            (1024, 576),
+            (960, 540),
+            (1280, 800),  # 以下为非 16:9，归一化会改变长宽比
+            (1280, 1024),
+            (1440, 720),
+            (1100, 800),
+        )
+        for size in sizes:
+            with self.subTest(client=size):
+                normalized = cloud._normalize_owned_frame(
+                    self._as_raw_capture(fixture, size)
+                )
+                self.assertIsNotNone(normalized)
+                self.assertEqual(normalized.shape, (720, 1280, 3))
+                # 两次 LANCZOS 重采样后模板仍须命中，且命中框保持稳定。
+                self.assert_real_frame(
+                    normalized,
+                    True,
+                    "CloudGameStartConfirmEnter",
+                    expected_box=(650, 415, 280, 65),
+                )
+                x, y = cloud._map_720p_to_client(
+                    cloud._box_center((650, 415, 280, 65)), size
+                )
+                scale = size[0] / 1280
+                self.assertLess(enter_left * scale, x)
+                self.assertLess(x, enter_right * scale)
+                self.assertLess(0, y)
+                self.assertLess(y, size[1])
+
+    def test_unusable_owned_frames_are_rejected_rather_than_guessed(self):
+        """取帧结果不可用时必须返回 None，不能拿残帧当弹窗画面去识别。"""
+        for bad in (
+            None,
+            "not-an-array",
+            np.zeros((0, 0, 3), dtype=np.uint8),
+            np.zeros((720, 1280), dtype=np.uint8),
+            np.zeros((2, 720, 1280), dtype=np.uint8),
+            np.zeros((720, 1280, 2), dtype=np.uint8),
+        ):
+            with self.subTest(frame=type(bad).__name__):
+                self.assertIsNone(cloud._normalize_owned_frame(bad))
+
+    def test_login_prompt_is_not_a_start_confirmation(self):
+        for fixture in ("login_required_720p.png", "login_required_current_125dpi.png"):
+            for node in ("CloudGameStartConfirmNotice", "CloudGameStartConfirmEnter"):
+                with self.subTest(fixture=fixture, node=node):
+                    self.assert_real_frame(self.load(fixture), False, node)
 
     def test_real_home_is_recognized(self):
         for node in ("CloudGameHomeScreen", "CloudGameEnterText"):
             with self.subTest(node=node):
                 self.assert_real_frame(self.load("home_720p.png"), True, node)
+        self.assert_real_frame(
+            self.load("home_720p.png"),
+            True,
+            "CloudGameHome",
+            expected_box=HOME_TEMPLATE_LAYOUTS["legacy"]["CloudGameEnterText"][1],
+        )
         # 首页不得被当成登录页或启动确认弹窗，否则会重复点击或误报登录失效。
         for node in ("CloudGameLoginScreen", "CloudGameStartConfirmNotice"):
             with self.subTest(node=node):
                 self.assert_real_frame(self.load("home_720p.png"), False, node)
 
     def test_login_and_confirmation_frames_are_not_home(self):
-        for fixture in ("login_required_720p.png", "start_confirm_720p.png"):
-            for node in ("CloudGameHomeScreen", "CloudGameEnterText"):
+        for fixture in (
+            "login_required_720p.png",
+            "login_required_current_125dpi.png",
+            "start_confirm_720p.png",
+        ):
+            for node in ("CloudGameHomeScreen", "CloudGameEnterText", "CloudGameHome"):
                 with self.subTest(fixture=fixture, node=node):
                     self.assert_real_frame(self.load(fixture), False, node)
 

@@ -66,6 +66,7 @@
     "cloud_game.unknown_state": "雲異環畫面不在已知狀態，請手動檢查；未執行重新連線或重複點擊",
     "cloud_game.ambiguous_target": "無法確認唯一且有效的按鈕位置，已停止以避免誤點",
     "cloud_game.transition_failed": "點擊後未確認預期畫面變化，已停止；不會重複點擊",
+    "cloud_game.input_rejected": "目標視窗未能啟動或輸入被安全檢查拒絕，已停止；不會盲發輸入",
     "cloud_game.manual_enter": "自動排隊已關閉，請手動進入雲異環遊戲",
     "rhythm.song_selected": "已選曲: %s",
     "rhythm.playing": "正在演奏...",

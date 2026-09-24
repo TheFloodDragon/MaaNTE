@@ -142,12 +142,12 @@
         "post_delay": 0
     },
     "CloudGameStartConfirmEnter": {
-        "desc": "确认弹窗的进入游戏按钮；退出启动按钮不在此 ROI 内",
+        "desc": "确认弹窗的进入游戏按钮。实机取证（tests/fixtures/cloud_game/start_confirm_720p.png，含抗锯齿圆角）：退出启动按钮占 x=348..627，进入游戏占 x=652..933，间隙仅 25px；ROI 左边界 636 落在间隙内，确保完全不含会终止启动的退出按钮",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
                 "roi": [
-                    620,
+                    636,
                     390,
                     350,
                     110
@@ -483,17 +483,20 @@
         "rate_limit": 0, "pre_delay": 0, "post_delay": 0
     },
     "CloudGameLoginScreen": {
-        "desc": "云客户端 1.0.0.1 实机登录入口：点击任意位置登录。仅识别，登录由用户处理；账号表单仍待校准",
+        "desc": "实机登录入口：点击任意位置登录。覆盖 100% 与 125% 缩放下提示的位置和字号；不代表账号已登录",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
                 "roi": [
-                    530,
-                    550,
-                    230,
-                    70
+                    500,
+                    510,
+                    280,
+                    120
                 ],
-                "template": "CloudGame/LoginRequired.png",
+                "template": [
+                    "CloudGame/LoginRequired125.png",
+                    "CloudGame/LoginRequired.png"
+                ],
                 "threshold": 0.85
             }
         },
@@ -502,17 +505,20 @@
         "post_delay": 0
     },
     "CloudGameHomeScreen": {
-        "desc": "云客户端 1.0.0.1 已登录首页的固定工具栏图标；不含账号信息，登录页不存在该图标",
+        "desc": "已登录首页的固定设置图标；兼容两种实机 UI 缩放，不含账号信息，ROI 必须覆盖完整图标",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
                 "roi": [
                     950,
                     40,
-                    140,
-                    110
+                    210,
+                    120
                 ],
-                "template": "CloudGame/HomeSettingsIcon.png",
+                "template": [
+                    "CloudGame/HomeSettingsIcon720.png",
+                    "CloudGame/HomeSettingsIcon.png"
+                ],
                 "threshold": 0.85
             }
         },
@@ -521,17 +527,20 @@
         "post_delay": 0
     },
     "CloudGameEnterText": {
-        "desc": "云首页开始游戏按钮；点击后会弹出 30 秒倒计时确认框",
+        "desc": "云首页开始游戏按钮；兼容实机 y≈569 与原缩放布局，点击后会弹出 30 秒倒计时确认框",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
                 "roi": [
                     640,
-                    650,
+                    540,
                     600,
-                    70
+                    180
                 ],
-                "template": "CloudGame/StartGameSmall.png",
+                "template": [
+                    "CloudGame/StartGame720.png",
+                    "CloudGame/StartGameSmall.png"
+                ],
                 "threshold": 0.85
             }
         },

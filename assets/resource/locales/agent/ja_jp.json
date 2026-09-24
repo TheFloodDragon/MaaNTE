@@ -66,6 +66,7 @@
     "cloud_game.unknown_state": "不明な画面です。手動で確認してください。再接続や再クリックは行いません",
     "cloud_game.ambiguous_target": "有効なボタン位置を一意に確認できないため、誤操作防止のため停止しました",
     "cloud_game.transition_failed": "クリック後に画面の変化を確認できないため停止しました。再クリックは行いません",
+    "cloud_game.input_rejected": "対象ウィンドウを前面にできず、または安全確認で入力が拒否されたため停止しました。入力は送信しません",
     "cloud_game.manual_enter": "自動待機列は無効です。手動でゲームを開始してください",
     "rhythm.song_selected": "選択曲: %s",
     "rhythm.playing": "演奏中...",

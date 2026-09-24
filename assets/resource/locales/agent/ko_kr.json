@@ -66,6 +66,7 @@
     "cloud_game.unknown_state": "알 수 없는 화면입니다. 수동으로 확인하세요. 재연결이나 반복 클릭을 하지 않습니다",
     "cloud_game.ambiguous_target": "유효한 버튼 위치를 하나로 확정할 수 없어 잘못된 클릭을 막기 위해 중지했습니다",
     "cloud_game.transition_failed": "클릭 후 예상 화면 변화를 확인하지 못해 중지했습니다. 클릭을 반복하지 않습니다",
+    "cloud_game.input_rejected": "대상 창을 활성화할 수 없거나 안전 검사가 입력을 거부하여 중지했습니다. 입력을 보내지 않습니다",
     "cloud_game.manual_enter": "자동 대기열이 꺼져 있습니다. 수동으로 게임에 들어가세요",
     "rhythm.song_selected": "선택곡: %s",
     "rhythm.playing": "연주 중...",

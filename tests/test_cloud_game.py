@@ -205,6 +205,43 @@ class CloudLogicTests(unittest.TestCase):
         )
         self.owned_patch.start()
         self.addCleanup(self.owned_patch.stop)
+        # 主窗口点击也走“激活 + 原生点击”（实机证据：未激活的 Qt OpenGL 窗口
+        # 丢弃控制器合成输入）。离线测试只替换最底层的原生发送与窗口枚举，
+        # _click_main_window 自身的身份校验、坐标换算与错误语义仍真实执行。
+        self.native_click_ok = True
+        self.native_clicks = []
+        self.window_patch = patch.object(
+            cloud, "_window_by_hwnd", side_effect=self.fake_window_by_hwnd
+        )
+        self.window_patch.start()
+        self.addCleanup(self.window_patch.stop)
+        self.native_click_patch = patch.object(
+            cloud, "_native_click", side_effect=self.fake_native_click
+        )
+        self.native_click_patch.start()
+        self.addCleanup(self.native_click_patch.stop)
+
+    def fake_window_by_hwnd(self, hwnd):
+        """只认会话锁定的主窗口 1000，客户区与 720p 基准一致（换算为恒等）。"""
+        if cloud._hwnd_value(hwnd) != 1000:
+            return None
+        return cloud._WindowInfo(
+            hwnd=1000,
+            rect=(0, 0, 1280, 720),
+            client_size=(1280, 720),
+            owner=0,
+            title=cloud._CLOUD_TITLE,
+            class_name="Qt51517QWindowOwnDC",
+            pid=4242,
+        )
+
+    def fake_native_click(self, hwnd, point):
+        self.native_clicks.append((hwnd, point))
+        if not self.native_click_ok:
+            return False
+        if self.confirm_context is not None:
+            self.confirm_context.click(*point)
+        return True
 
     def fake_prepare(self, context, state):
         state.main_hwnd = 1000
@@ -278,6 +315,34 @@ class CloudLogicTests(unittest.TestCase):
                 .run(FakeContext([scene()]), arg("CloudGameStartEntrance"))
                 .success
             )
+
+    def test_confirm_click_stays_on_enter_button_at_every_scale(self):
+        """弹窗客户区不是 720p 时，换算后的点击仍必须落在“进入游戏”上。
+
+        实机夹具量得（1280x720 基准）：退出启动 x 348..627，进入游戏 x 652..933。
+        点错左侧退出按钮会立即终止本次启动，且弹窗只有 30 秒倒计时，
+        因此这里对多种客户区尺寸断言换算结果，而不是只验证 720p 这一种。
+        """
+        # 识别框来自 tests/test_cloud_game_native.py 的真实模板匹配结果。
+        centre = cloud._box_center((650, 415, 280, 65))
+        self.assertEqual(centre, (790, 447))
+        exit_span, enter_span = (348, 627), (652, 933)
+        for size in ((1280, 720), (1600, 900), (1024, 576), (1920, 1080), (960, 540)):
+            with self.subTest(client=size):
+                x, y = cloud._map_720p_to_client(centre, size)
+                scale = size[0] / 1280
+                self.assertLess(exit_span[1] * scale, x)
+                self.assertLess(enter_span[0] * scale, x)
+                self.assertLess(x, enter_span[1] * scale)
+                self.assertLess(0, y)
+                self.assertLess(y, size[1])
+
+    def test_zero_sized_client_is_rejected_instead_of_clamped(self):
+        """客户区尺寸不可用时必须报错，不能把坐标压成 0 后盲点左上角。"""
+        for size in ((0, 720), (1280, 0), (0, 0), (-1280, -720)):
+            with self.subTest(client=size):
+                with self.assertRaises(cloud._CloudError):
+                    cloud._map_720p_to_client((790, 447), size)
 
     def test_invalid_parameters_are_not_silently_defaulted(self):
         for value in (0, -1, True, "NaN", "Infinity", "garbage", 1441):
@@ -545,6 +610,69 @@ class CloudLogicTests(unittest.TestCase):
             cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait")).success
         )
         self.assertEqual(context.clicks, [])
+
+    def test_main_window_clicks_go_through_activation_not_the_controller(self):
+        """实机取证：未激活的 Qt OpenGL 窗口会丢弃控制器合成输入。
+
+        2026-09-24 20:49 控制器把 720p (640,548) 正确换算到屏幕 (960,703)，
+        但窗口 active/focus 均为 0，客户端日志无新增记录、登录窗口未出现；
+        21:24 同一像素改走“激活 + 原生点击”后立刻唤出登录窗口。
+        因此主窗口输入必须走原生路径，并落在会话锁定的那个 HWND 上。
+        """
+        context = self.reset([scene("CloudGameLoginScreen"), scene(*DAILY)])
+        self.assertTrue(
+            cloud.CloudGameWaitLogin().run(context, arg("CloudGameLoginWait")).success
+        )
+        # 客户区与 720p 基准一致，换算为恒等；HWND 必须是入口锁定的主窗口。
+        self.assertEqual(self.native_clicks, [(1000, (140, 215))])
+
+    def test_main_window_click_is_mapped_to_the_client_resolution(self):
+        """非 720p 客户区时，原生点击必须按真实客户区换算，而不是沿用 720p 坐标。"""
+        context = self.reset([scene("CloudGameLoginScreen"), scene(*DAILY)])
+        with patch.object(
+            cloud,
+            "_window_by_hwnd",
+            return_value=cloud._WindowInfo(
+                hwnd=1000,
+                rect=(0, 0, 1600, 900),
+                client_size=(1600, 900),
+                owner=0,
+                title=cloud._CLOUD_TITLE,
+                class_name="Qt51517QWindowOwnDC",
+                pid=4242,
+            ),
+        ):
+            self.assertTrue(
+                cloud.CloudGameWaitLogin()
+                .run(context, arg("CloudGameLoginWait"))
+                .success
+            )
+        self.assertEqual(self.native_clicks, [(1000, (175, 269))])
+
+    def test_rejected_native_input_fails_without_a_second_attempt(self):
+        """激活失败或安全检查拒绝时必须显式失败，不静默继续、也不改用控制器重试。"""
+        self.native_click_ok = False
+        context = self.reset([scene(*HOME)])
+        self.assertFalse(
+            cloud.CloudGameClick()
+            .run(context, arg("CloudGameEnterButton", {"kind": "enter"}))
+            .success
+        )
+        self.assertTrue(self.messages("cloud_game.input_rejected"))
+        self.assertEqual(len(self.native_clicks), 1)
+        self.assertEqual(context.clicks, [])
+
+    def test_unverified_main_window_is_never_clicked(self):
+        """会话锁定的窗口消失或身份不符时，不得回退到其他窗口发送输入。"""
+        context = self.reset([scene(*HOME)])
+        with patch.object(cloud, "_window_by_hwnd", return_value=None):
+            self.assertFalse(
+                cloud.CloudGameClick()
+                .run(context, arg("CloudGameEnterButton", {"kind": "enter"}))
+                .success
+            )
+        self.assertTrue(self.messages("cloud_game.client_missing"))
+        self.assertEqual(self.native_clicks, [])
 
     def test_enter_click_once_and_wait_for_delayed_queue(self):
         context = self.reset([scene(*HOME), scene(*HOME), scene(*CONFIRM)])
