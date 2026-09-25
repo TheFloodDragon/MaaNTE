@@ -1,13 +1,11 @@
+name: Build and release
+
 on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+*"
     branches:
       - "**"
-    paths:
-      - ".github/workflows/install.yml"
-      - "assets/**"
-      - "**.py"
   pull_request:
     branches:
       - "**"
@@ -22,8 +20,7 @@ env:
   MXU_VERSION: "v2.1.3"
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
   meta:
@@ -35,7 +32,7 @@ jobs:
       - id: set_tag
         run: |
           # 检查标签格式
-          if [[ ${{ github.ref }} =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*)?$ ]]; then
+          if [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*)?$ ]]; then
             is_release=true
             tag=${GITHUB_REF#refs/tags/}
             echo "Release tag format is valid: $tag"
@@ -80,11 +77,17 @@ jobs:
             runner: windows-latest
       fail-fast: false
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Set platform variables
         id: platform
@@ -231,15 +234,42 @@ jobs:
           rm -rf install-mxu/deps
           echo "Deps directory removed. Package size reduced by ~171MB."
 
-      - uses: actions/upload-artifact@v4
+      - name: Verify build output
+        shell: python
+        run: |
+          from pathlib import Path
+
+          output = Path("install-mxu")
+          required = [
+              "MaaNTE.exe",
+              "interface.json",
+              "python/python.exe",
+              "agent/main.py",
+              "maafw/MaaFramework.dll",
+              "resource/base/model/ocr/det.onnx",
+              "resource/base/model/ocr/rec.onnx",
+              "resource/base/model/ocr/keys.txt",
+          ]
+          missing = [path for path in required if not (output / path).is_file()]
+          if missing:
+              raise SystemExit("Missing build files: " + ", ".join(missing))
+          print("Build output verified.")
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
         with:
           name: MaaNTE-win-${{ matrix.arch }}-${{ needs.meta.outputs.tag }}-MXU
           path: "install-mxu"
+          if-no-files-found: error
+          retention-days: 14
 
   release:
     if: ${{ needs.meta.outputs.is_release == 'true' }}
     needs: [meta, windows]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
