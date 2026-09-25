@@ -65,7 +65,7 @@
     "cloud_game.queue_timeout": "云异环排队超时，已停止自动操作；不会取消现有队列或重新排队",
     "cloud_game.invalid_config": "云启动配置无效，请检查开关和等待时间（排队上限为 1–1440 分钟）",
     "cloud_game.wrong_controller": "云启动仅支持云异环-前台控制器",
-    "cloud_game.calibration_required": "云异环界面识别尚未完成实机校准，当前不执行自动点击；需要首页、队列和每日登录弹窗截图",
+    "cloud_game.calibration_required": "云异环界面识别部分未完成实机校准：✓ 首页（5 帧实机回放验证）、✓ 登录界面 | ✗ 启动时长确认弹窗、✗ 排队界面、✗ 每日登录弹窗。当前不执行自动点击；可在 .narrafork/ 中查看已有实机脚本和首页回放结果",
     "cloud_game.invalid_frame": "云异环截图尺寸或格式不兼容，请确认控制器画面为无黑边的 1280×720",
     "cloud_game.recognition_failed": "云异环识别未能运行，请检查资源和 OCR 模型；不会将识别失败当作弹窗消失",
     "cloud_game.unknown_state": "云异环画面不在已知状态，请手动检查；未执行重连或重复点击",
