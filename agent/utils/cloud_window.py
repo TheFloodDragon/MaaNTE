@@ -1,8 +1,10 @@
-"""原生客户区截图与受保护的单击；阻塞的 PrintWindow 仅在独立进程执行。"""
+"""原生客户区截图与后台单击；阻塞的 PrintWindow 仅在独立进程执行，点击用 PostMessage 投递。"""
 
 from __future__ import annotations
 
 import ctypes
+from collections import OrderedDict
+from collections.abc import Callable
 from contextlib import contextmanager
 from functools import lru_cache
 import logging
@@ -11,6 +13,8 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
+from threading import Lock
+import time
 
 import numpy as np
 
@@ -28,13 +32,23 @@ _GA_ROOT = 2
 _DPI_PER_MONITOR_V2 = -4
 _PW_CLIENTONLY = 0x1
 _PW_RENDERFULLCONTENT = 0x2
-_LEFT_DOWN = 0x0002
-_LEFT_UP = 0x0004
-_VK_LBUTTON = 0x01
-
-
-class _Point(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_int32), ("y", ctypes.c_int32)]
+_WM_MOUSEMOVE = 0x0200
+_WM_LBUTTONDOWN = 0x0201
+_WM_LBUTTONUP = 0x0202
+_MK_LBUTTON = 0x0001
+_CAPTURE_LOG_LIMIT = 16
+_CAPTURE_WAIT_SLICE = 0.1
+_CAPTURE_REAP_TIMEOUT = 1.0
+_capture_failures = OrderedDict()
+_capture_log_lock = Lock()
+_CHECK_REASONS = frozenset({
+    "invalid_timeout", "frame_payload_invalid", "frame_length_mismatch",
+    "dimensions_out_of_bounds", "client_origin_invalid", "dpi_context_unavailable",
+    "dpi_restore_failed", "window_invalid", "window_hidden", "window_minimized",
+    "client_bounds_query_failed", "window_disabled", "target_not_root",
+    "target_outside_client", "move_post_failed", "button_down_failed",
+    "button_release_failed", "native_call_failed",
+})
 
 
 class _Rect(ctypes.Structure):
@@ -61,26 +75,6 @@ class _BitmapInfo(ctypes.Structure):
     _fields_ = [("header", _BitmapInfoHeader), ("colors", ctypes.c_uint32 * 1)]
 
 
-class _MouseInput(ctypes.Structure):
-    _fields_ = [
-        ("dx", ctypes.c_int32),
-        ("dy", ctypes.c_int32),
-        ("mouseData", ctypes.c_uint32),
-        ("dwFlags", ctypes.c_uint32),
-        ("time", ctypes.c_uint32),
-        ("dwExtraInfo", ctypes.c_size_t),
-    ]
-
-
-class _InputUnion(ctypes.Union):
-    # MOUSEINPUT 是 INPUT 联合体的最大成员，保留其原生对齐即可。
-    _fields_ = [("mi", _MouseInput)]
-
-
-class _Input(ctypes.Structure):
-    _anonymous_ = ("data",)
-    _fields_ = [("type", ctypes.c_uint32), ("data", _InputUnion)]
-
 
 class _Win32:
     def __init__(self):
@@ -96,15 +90,8 @@ class _Win32:
             ("IsWindowEnabled", [handle], integer),
             ("IsIconic", [handle], integer),
             ("GetAncestor", [handle, uint], handle),
-            ("GetForegroundWindow", [], handle),
             ("GetClientRect", [handle, pointer(_Rect)], integer),
-            ("ClientToScreen", [handle, pointer(_Point)], integer),
-            ("WindowFromPoint", [_Point], handle),
-            ("GetSystemMetrics", [integer], integer),
-            ("SetCursorPos", [integer, integer], integer),
-            ("GetCursorPos", [pointer(_Point)], integer),
-            ("GetAsyncKeyState", [integer], ctypes.c_int16),
-            ("SendInput", [uint, pointer(_Input), integer], uint),
+            ("PostMessageW", [handle, uint, ctypes.c_size_t, ctypes.c_ssize_t], integer),
             ("SetThreadDpiAwarenessContext", [handle], handle),
             ("GetDC", [handle], handle),
             ("ReleaseDC", [handle, handle], integer),
@@ -136,9 +123,65 @@ def _get_win32():
     return _Win32()
 
 
-def _debug_failure(stage: str, error_type: str) -> None:
-    # 不记录句柄、坐标、截图、命令行、异常正文或子进程输出。
-    logger.debug("窗口辅助失败 | stage=%s | error=%s", stage, error_type)
+def _safe_failure(exc, fallback):
+    # 只读取预定义检查码，不调用 str/repr，也不回显外部异常类型名。
+    reason = fallback
+    if len(exc.args) == 1 and type(exc.args[0]) is str and exc.args[0] in _CHECK_REASONS:
+        reason = exc.args[0]
+    elif isinstance(exc, subprocess.TimeoutExpired):
+        reason = "worker_timeout"
+    elif isinstance(exc, MemoryError):
+        reason = "memory_unavailable"
+    elif isinstance(exc, PermissionError):
+        reason = "permission_denied"
+    for error_class in (
+        subprocess.TimeoutExpired, ChildProcessError, MemoryError, OverflowError,
+        ValueError, PermissionError, FileNotFoundError, OSError, Exception,
+    ):
+        if isinstance(exc, error_class):
+            return reason, error_class.__name__
+    return reason, "Exception"
+
+
+def _capture_failed(hwnd, stage, reason, error_type, started, returncode=None, timeout=None):
+    # 仅在父进程调用：按窗口保存至多 16 条纯诊断状态，不保存截图或异常对象。
+    # 耗时不参与签名；连续相同故障静默，诊断变化和恢复各记录一次。
+    key = hwnd if type(hwnd) is int and _valid_hwnd(hwnd) else None
+    returncode = returncode if type(returncode) is int else None
+    signature = (stage, reason, error_type, returncode, timeout)
+    with _capture_log_lock:
+        previous = _capture_failures.pop(key, None)
+        count = previous[1] + 1 if previous is not None else 1
+        first_failure = previous[2] if previous is not None else started
+        _capture_failures[key] = (signature, count, first_failure)
+        if len(_capture_failures) > _CAPTURE_LOG_LIMIT:
+            _capture_failures.popitem(last=False)
+    if previous is None or previous[0] != signature:
+        logger.debug(
+            "云窗口截图失败 | stage=%s | reason=%s | returncode=%s | timeout_s=%s | failures=%d | elapsed=%.3fs | error=%s",
+            stage, reason, returncode if returncode is not None else "unknown",
+            timeout if timeout is not None else "unknown", count,
+            time.monotonic() - started, error_type,
+        )
+
+
+def _capture_recovered(hwnd, image, started):
+    key = hwnd if type(hwnd) is int and _valid_hwnd(hwnd) else None
+    with _capture_log_lock:
+        previous = _capture_failures.pop(key, None)
+    if previous is not None:
+        now = time.monotonic()
+        logger.debug(
+            "云窗口截图已恢复 | stage=capture.ready | failures=%d | client=%dx%d | outage=%.3fs | elapsed=%.3fs",
+            previous[1], image.shape[1], image.shape[0], now - previous[2], now - started,
+        )
+
+
+def _click_failed(stage, reason, error_type, started):
+    logger.debug(
+        "云窗口点击未完成 | stage=%s | reason=%s | elapsed=%.3fs | error=%s",
+        stage, reason, time.monotonic() - started, error_type,
+    )
 
 
 def _valid_hwnd(hwnd) -> bool:
@@ -160,9 +203,9 @@ def _valid_point(point) -> bool:
     )
 
 
-def _require(value) -> None:
+def _require(value, reason="native_call_failed") -> None:
     if not value:
-        raise OSError
+        raise OSError(reason)
 
 
 def _check_size(width: int, height: int) -> None:
@@ -171,30 +214,30 @@ def _check_size(width: int, height: int) -> None:
         and 0 < height <= _MAX_SIDE
         and width * height <= _MAX_PIXELS
     ):
-        raise ValueError
+        raise ValueError("dimensions_out_of_bounds")
 
 
 @contextmanager
 def _thread_dpi(api):
     previous = api.user32.SetThreadDpiAwarenessContext(_DPI_PER_MONITOR_V2)
-    _require(previous)
+    _require(previous, "dpi_context_unavailable")
     try:
         yield
     finally:
-        _require(api.user32.SetThreadDpiAwarenessContext(previous))
+        _require(api.user32.SetThreadDpiAwarenessContext(previous), "dpi_restore_failed")
 
 
 def _check_window(api, hwnd) -> None:
-    _require(api.user32.IsWindow(hwnd))
-    _require(api.user32.IsWindowVisible(hwnd))
-    _require(not api.user32.IsIconic(hwnd))
+    _require(api.user32.IsWindow(hwnd), "window_invalid")
+    _require(api.user32.IsWindowVisible(hwnd), "window_hidden")
+    _require(not api.user32.IsIconic(hwnd), "window_minimized")
 
 
 def _client_size(api, hwnd) -> tuple[int, int]:
     rect = _Rect()
-    _require(api.user32.GetClientRect(hwnd, ctypes.byref(rect)))
+    _require(api.user32.GetClientRect(hwnd, ctypes.byref(rect)), "client_bounds_query_failed")
     if rect.left != 0 or rect.top != 0:
-        raise ValueError
+        raise ValueError("client_origin_invalid")
     width, height = rect.right, rect.bottom
     _check_size(width, height)
     return width, height
@@ -205,11 +248,11 @@ def _decode_frame(payload: bytes) -> np.ndarray:
         not isinstance(payload, bytes)
         or not _HEADER.size <= len(payload) <= _MAX_FRAME_BYTES
     ):
-        raise ValueError
+        raise ValueError("frame_payload_invalid")
     width, height = _HEADER.unpack_from(payload)
     _check_size(width, height)
     if len(payload) != _HEADER.size + width * height * 3:
-        raise ValueError
+        raise ValueError("frame_length_mismatch")
     return (
         np.frombuffer(payload, dtype=np.uint8, offset=_HEADER.size)
         .reshape(height, width, 3)
@@ -217,46 +260,136 @@ def _decode_frame(payload: bytes) -> np.ndarray:
     )
 
 
-def capture_window(hwnd, timeout: float = 3.0) -> np.ndarray | None:
-    """返回原生客户区尺寸的 BGR 图像；失败或超时返回 None，不缩放、不改进程 DPI。"""
+def _cleanup_capture_worker(process, completed):
+    """只回收本次截图进程；清理失败不得覆盖取帧/停止原因。"""
+    if not completed:
+        # 截止后的这段时间只用于回收，不能继续取帧或启动另一个 worker。
+        # 即使 kill 失败也尝试 wait，避免已退出进程未被回收。
+        for stage, operation in (
+            ("capture.cleanup.kill", process.kill),
+            ("capture.cleanup.wait", lambda: process.wait(timeout=_CAPTURE_REAP_TIMEOUT)),
+        ):
+            try:
+                operation()
+            except BaseException as exc:
+                reason, error_type = _safe_failure(exc, "worker_cleanup_failed")
+                logger.debug(
+                    "截图工作进程清理未完成 | stage=%s | reason=%s | error=%s",
+                    stage, reason, error_type,
+                )
+    for pipe in (process.stdin, process.stdout, process.stderr):
+        if pipe is not None:
+            try:
+                pipe.close()
+            except BaseException as exc:
+                reason, error_type = _safe_failure(exc, "worker_pipe_close_failed")
+                logger.debug(
+                    "截图工作进程管道关闭未完成 | stage=capture.cleanup.close | reason=%s | error=%s",
+                    reason, error_type,
+                )
+
+
+def _capture_worker(command, options, timeout, deadline, stopped):
+    """同一 worker 的有界等待；切片超时只继续等它，不重启截图。"""
+    if stopped():
+        return None
+    if time.monotonic() >= deadline:
+        raise subprocess.TimeoutExpired(command, timeout)
+    process = subprocess.Popen(command, **options)
+    completed = False
+    try:
+        while True:
+            if stopped():
+                return None
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command, timeout)
+            try:
+                stdout, _ = process.communicate(timeout=min(_CAPTURE_WAIT_SLICE, remaining))
+            except subprocess.TimeoutExpired:
+                continue
+            if stopped():
+                return None
+            if time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(command, timeout)
+            # communicate 成功返回已完成 wait；无需再 kill 一个已经退出的进程。
+            completed = True
+            return subprocess.CompletedProcess(command, process.returncode, stdout)
+    finally:
+        _cleanup_capture_worker(process, completed)
+
+
+def capture_window(
+    hwnd, timeout: float = 3.0, *, stopped: Callable[[], bool] | None = None,
+) -> np.ndarray | None:
+    """返回原生 BGR 图像，失败/超时/停止返回 None，不缩放、不改进程 DPI。
+
+    stopped 存在时，创建和等待单个 worker 共用 timeout 截止时间，等待阶段
+    以不超过 0.1 秒的切片检查停止；超时/取消后最多额外等待 1 秒回收，不重试截图。
+    调用方在 None 返回后复查停止状态，决定是否转为业务停止。
+    """
+    started = time.monotonic()
     if sys.platform != "win32":
-        _debug_failure("capture.platform", "UnsupportedPlatform")
+        _capture_failed(hwnd, "capture.platform", "unsupported_platform", "UnsupportedPlatform", started)
         return None
     if not _valid_hwnd(hwnd):
-        _debug_failure("capture.arguments", "ValueError")
+        _capture_failed(hwnd, "capture.arguments", "invalid_handle", "ValueError", started)
         return None
     stage = "capture.arguments"
+    reason = "invalid_timeout"
+    returncode = validated_timeout = None
     try:
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-            raise ValueError
+            raise ValueError("invalid_timeout")
         timeout = float(timeout)
         if not math.isfinite(timeout) or timeout <= 0:
-            raise ValueError
+            raise ValueError("invalid_timeout")
+        validated_timeout = timeout
         stage = "capture.worker"
-        # run 在 TimeoutExpired 时 kill + communicate/wait，回收进程和管道。
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                "-I",
-                str(Path(__file__).resolve()),
-                "--capture",
-                str(hwnd),
-            ],
+        reason = "worker_execution_failed"
+        command = [
+            sys.executable,
+            "-B",
+            "-I",
+            str(Path(__file__).resolve()),
+            "--capture",
+            str(hwnd),
+        ]
+        options = dict(
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            timeout=timeout,
             shell=False,
             close_fds=True,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        if result.returncode != 0:
+        if stopped is None:
+            # 保留既有调用；run 在超时时 kill + communicate/wait 并关闭管道。
+            result = subprocess.run(command, timeout=timeout, **options)
+        else:
+            result = _capture_worker(command, options, timeout, started + timeout, stopped)
+            if result is None:
+                return None
+        returncode = result.returncode
+        if returncode != 0:
+            reason = (
+                "worker_capture_failed" if returncode == 1 else
+                "worker_arguments_rejected" if returncode == 2 else "worker_exit_nonzero"
+            )
             raise ChildProcessError
         stage = "capture.decode"
-        return _decode_frame(result.stdout)
+        reason = "frame_decode_failed"
+        image = _decode_frame(result.stdout)
+        if stopped is not None:
+            if stopped():
+                return None
+            if time.monotonic() >= started + timeout:
+                raise subprocess.TimeoutExpired(command, timeout)
+        _capture_recovered(hwnd, image, started)
+        return image
     except Exception as exc:
-        _debug_failure(stage, type(exc).__name__)
+        reason, error_type = _safe_failure(exc, reason)
+        _capture_failed(hwnd, stage, reason, error_type, started, returncode, validated_timeout)
         return None
 
 
@@ -325,73 +458,63 @@ def _capture_native(hwnd) -> np.ndarray:
                     _require(api.user32.ReleaseDC(hwnd, window_dc))
 
 
-def _click_target(api, hwnd, point) -> tuple[int, int, int, int]:
+def _click_target(api, hwnd, point) -> tuple[int, int]:
     _check_window(api, hwnd)
-    _require(api.user32.IsWindowEnabled(hwnd))
-    _require(api.user32.GetAncestor(hwnd, _GA_ROOT) == hwnd)
-    foreground = api.user32.GetForegroundWindow()
-    _require(foreground and api.user32.GetAncestor(foreground, _GA_ROOT) == hwnd)
+    _require(api.user32.IsWindowEnabled(hwnd), "window_disabled")
+    _require(api.user32.GetAncestor(hwnd, _GA_ROOT) == hwnd, "target_not_root")
     width, height = _client_size(api, hwnd)
     if point[0] >= width or point[1] >= height:
-        raise ValueError
-    screen = _Point(*point)
-    _require(api.user32.ClientToScreen(hwnd, ctypes.byref(screen)))
-    left, top, screen_width, screen_height = (
-        api.user32.GetSystemMetrics(index) for index in (76, 77, 78, 79)
-    )
-    _require(
-        screen_width > 0
-        and screen_height > 0
-        and left <= screen.x < left + screen_width
-        and top <= screen.y < top + screen_height
-    )
-    hit = api.user32.WindowFromPoint(screen)
-    _require(hit and api.user32.GetAncestor(hit, _GA_ROOT) == hwnd)
-    # 不接管用户已经按住的左键，避免 finally 释放用户的输入。
-    _require(not api.user32.GetAsyncKeyState(_VK_LBUTTON) & 0x8000)
-    return screen.x, screen.y, width, height
+        raise ValueError("target_outside_client")
+    return width, height
 
 
-def _send_button(api, flags: int) -> bool:
-    event = _Input()
-    event.mi.dwFlags = flags
-    return api.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(_Input)) == 1
+def _post_mouse(api, hwnd, message: int, wparam: int, point) -> bool:
+    # lParam 低 16 位为 x、高 16 位为 y，坐标已限定在客户区内且小于 _MAX_SIDE。
+    lparam = (point[1] << 16) | point[0]
+    return bool(api.user32.PostMessageW(hwnd, message, wparam, lparam))
 
 
 def click_window(hwnd, point: tuple[int, int]) -> bool:
-    """按原生客户区坐标单击；不抢焦点，遮挡、窗口移动或光标不符时拒绝发送。"""
+    """按原生客户区坐标向窗口投递一次左键单击（PostMessage）。
+
+    不激活窗口、不移动真实鼠标，因此桌面断开或锁屏时同样可用，也不打扰用户操作。
+    实机取证（2026-09-26，会话断开）：投递到 Qt 主窗口的 WM_LBUTTON* 被客户端接收并执行。
+    窗口不可见、最小化、禁用、不是顶层窗口或坐标超出客户区时拒绝投递，不盲发。
+    """
+    started = time.monotonic()
     if sys.platform != "win32":
-        _debug_failure("click.platform", "UnsupportedPlatform")
+        _click_failed("click.platform", "unsupported_platform", "UnsupportedPlatform", started)
         return False
     if not _valid_hwnd(hwnd) or not _valid_point(point):
-        _debug_failure("click.arguments", "ValueError")
+        _click_failed("click.arguments", "invalid_handle_or_point", "ValueError", started)
         return False
+    logger.debug("开始云窗口后台点击 | stage=click.begin")
     stage = "click.api"
+    reason = "native_api_unavailable"
     try:
         api = _get_win32()
         stage = "click.dpi"
+        reason = "dpi_context_failed"
         with _thread_dpi(api):
             stage = "click.validate"
-            target = _click_target(api, hwnd, point)
-            stage = "click.cursor"
-            _require(api.user32.SetCursorPos(*target[:2]))
-            stage = "click.revalidate"
-            if _click_target(api, hwnd, point) != target:
-                raise ValueError
-            cursor = _Point()
-            _require(api.user32.GetCursorPos(ctypes.byref(cursor)))
-            if (cursor.x, cursor.y) != target[:2]:
-                raise ValueError
+            reason = "target_validation_failed"
+            _click_target(api, hwnd, point)
             stage = "click.input"
+            reason = "button_input_failed"
+            # 先投递一次移动，让客户端更新悬停位置，再发按下/抬起。
+            _require(_post_mouse(api, hwnd, _WM_MOUSEMOVE, 0, point), "move_post_failed")
             try:
-                pressed = _send_button(api, _LEFT_DOWN)
+                pressed = _post_mouse(api, hwnd, _WM_LBUTTONDOWN, _MK_LBUTTON, point)
             finally:
-                # 按下调用即使异常也可能已经送达，必须在 finally 尝试释放一次。
-                released = _send_button(api, _LEFT_UP)
-            _require(pressed and released)
+                # 按下即使异常也可能已进入消息队列，必须在 finally 尝试抬起一次。
+                released = _post_mouse(api, hwnd, _WM_LBUTTONUP, 0, point)
+            _require(pressed, "button_down_failed")
+            _require(released, "button_release_failed")
+        logger.debug("云窗口后台点击完成 | stage=click.ready | elapsed=%.3fs", time.monotonic() - started)
         return True
     except Exception as exc:
-        _debug_failure(stage, type(exc).__name__)
+        reason, error_type = _safe_failure(exc, reason)
+        _click_failed(stage, reason, error_type, started)
         return False
 
 

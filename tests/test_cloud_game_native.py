@@ -3,11 +3,13 @@
 import copy
 import json
 import os
+import sys
 import tempfile
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
-from unittest.mock import patch
+from types import ModuleType
+from unittest.mock import Mock, patch
 
 import maa
 from maa.library import Library
@@ -65,11 +67,18 @@ LOGIN_NODES = (
     "CloudGameVerification",
     "CloudGameAuthorization",
     "CloudGameLoginFailure",
+    "CloudGameLoginOtherMethods",
+    "CloudGameLoginSubmit",
 )
 HOME_TEMPLATE_LAYOUTS = {
-    # 当前 720p 首页裁剪坐标；测试仅拼入无账号信息的模板，不读取个人截图。
+    # 新版客户端 720p 首页（实机 1280x720 重拍）；测试只拼入无账号信息的模板。
     "current_720p": {
-        "CloudGameHomeScreen": ("HomeSettingsIcon720.png", (1046, 76, 45, 45)),
+        "CloudGameHomeScreen": ("HomeSettingsIcon720.png", (1044, 72, 48, 48)),
+        "CloudGameEnterText": ("StartGame720.png", (965, 568, 91, 29)),
+    },
+    # 上一版 720p 首页的设置图标（45px），继续保留兼容。
+    "previous_720p": {
+        "CloudGameHomeScreen": ("HomeSettingsIcon720_v1.png", (1046, 76, 45, 45)),
         "CloudGameEnterText": ("StartGame720.png", (965, 568, 91, 29)),
     },
     # 旧坐标来自仓库夹具 tests/fixtures/cloud_game/home_720p.png 的精确模板匹配；
@@ -78,6 +87,11 @@ HOME_TEMPLATE_LAYOUTS = {
         "CloudGameHomeScreen": ("HomeSettingsIcon.png", (988, 65, 56, 56)),
         "CloudGameEnterText": ("StartGameSmall.png", (888, 681, 110, 31)),
     },
+}
+# 两版启动确认弹窗实机夹具及其“进入游戏”命中框（1280x720 基准）。
+CONFIRM_FIXTURES = {
+    "start_confirm_720p.png": (650, 415, 280, 65),
+    "start_confirm_v2_720p.png": (650, 406, 220, 52),
 }
 
 
@@ -147,14 +161,18 @@ class SyntheticCloudRecognition(CustomRecognition):
 
 
 class VirtualEnterWorld(CustomAction):
-    def __init__(self, controller):
+    """仅验证公开接口被调用及返回状态传播，不模拟真实 SceneManager/Seize 输入。"""
+
+    def __init__(self, controller, succeeds=True):
         self.controller = controller
+        self.succeeds = succeeds
         super().__init__()
 
     def run(self, context, argv):
         self.controller.world_navigation += 1
-        self.controller.stage = 6
-        return True
+        if self.succeeds:
+            self.controller.stage = 6
+        return self.succeeds
 
 
 class NativeCloudFlowTests(unittest.TestCase):
@@ -169,7 +187,23 @@ class NativeCloudFlowTests(unittest.TestCase):
         cloud.PrintT.reset_mock()
         self.bundles = 0
 
-    def run_flow(self, stage=7, calibrated=True, auto_queue=True, game_login=False):
+    def run_flow(
+        self,
+        stage=7,
+        calibrated=True,
+        auto_queue=True,
+        game_login=False,
+        unknown_owned=False,
+        interactive=True,
+        branch=None,
+        expired_queue=False,
+        navigation_succeeds=True,
+    ):
+        """真实调度云节点；窗口、桌面能力及公开场景子任务均为离线替身。
+
+        branch 仅用于将入口重置后的流程指向待测安全边界，不修改其生产动作。
+        SceneAnyEnterWorld 的替身只能证明交接契约，不能证明真实游戏内输入可用。
+        """
         data = copy.deepcopy(PIPELINE)
         data["CloudGameProfile"]["attach"]["calibrated"] = calibrated
         # 登录障碍节点也改为合成识别，避免在没有 OCR 模型的 bundle 中真实运行 OCR。
@@ -193,6 +227,9 @@ class NativeCloudFlowTests(unittest.TestCase):
             "post_delay": 0,
             "rate_limit": 0,
         }
+        if branch is not None:
+            data["CloudGameStartEntrance"]["next"] = [branch]
+            data[branch]["recognition"] = {"type": "DirectHit"}
         params = data["CloudGameStartEntrance"]["action"]["param"][
             "custom_action_param"
         ]
@@ -207,17 +244,42 @@ class NativeCloudFlowTests(unittest.TestCase):
             rect=(0, 0, 1280, 720),
             client_size=(1280, 720),
             box=(100, 200, 80, 30),
+            pid=4242,
+        )
+        known_dialog = cloud._WindowInfo(
+            hwnd=1001,
+            owner=1000,
+            rect=(0, 0, 1280, 720),
+            client_size=(1280, 720),
+            title="离线确认窗口",
+            class_name="Qt51517QWindowOwnDC",
+            pid=4242,
+        )
+        unknown_dialog = cloud._WindowInfo(
+            hwnd=1002,
+            owner=1000,
+            rect=(0, 0, 1280, 720),
+            client_size=(1280, 720),
+            title="离线未知窗口",
+            class_name="Qt51517QWindowOwnDC",
+            pid=4242,
         )
 
-        def find_confirm(_context, _screen, _target, expected_hwnd=None):
-            if not controller.dialog:
-                return None
-            cloud._confirm_target = confirm_target
-            if cloud._session is not None:
-                cloud._session.confirm_target = confirm_target
-            return confirm_target
+        def owned_candidates():
+            candidates = [known_dialog] if controller.dialog else []
+            if unknown_owned:
+                candidates.append(unknown_dialog)
+            return candidates
 
-        def click_confirm(target):
+        def capture_owned(item, context=None):
+            # 与生产签名保持一致；绝不调用 capture_window 或真实桌面截图。
+            if item.hwnd == known_dialog.hwnd and controller.dialog:
+                return controller.dialog_frame()
+            if item.hwnd == unknown_dialog.hwnd and unknown_owned:
+                return controller._frame(10)
+            return None
+
+        def click_confirm(target, context=None):
             if target != confirm_target:
                 return False
             return controller.click(
@@ -232,6 +294,9 @@ class NativeCloudFlowTests(unittest.TestCase):
             # 真实调度器下没有本地云窗口；只提供会话锁定的主窗口句柄，
             # 让 _click_main_window 的身份校验与坐标换算仍真实执行。
             state.main_hwnd = 1000
+            state.main_pid = 4242
+            if expired_queue:
+                state.queue_deadline = cloud.time.monotonic() - 1
 
         def main_window(hwnd):
             if cloud._hwnd_value(hwnd) != 1000:
@@ -259,9 +324,10 @@ class NativeCloudFlowTests(unittest.TestCase):
             "cloud_game_queue_wait": cloud.CloudGameQueueWait(),
             "cloud_game_click": cloud.CloudGameClick(),
             "cloud_game_confirm_ready": cloud.CloudGameConfirmReady(),
+            "cloud_game_handoff": cloud.CloudGameHandoff(),
             "cloud_game_fail": cloud.CloudGameFail(),
             "cloud_game_finish": cloud.CloudGameFinish(),
-            "test_enter_world": VirtualEnterWorld(controller),
+            "test_enter_world": VirtualEnterWorld(controller, navigation_succeeds),
         }
         for name, action in callbacks.items():
             self.assertTrue(resource.register_custom_action(name, action))
@@ -285,7 +351,11 @@ class NativeCloudFlowTests(unittest.TestCase):
             ).replace('"{minutes}"', "7")
         )
         overrides.update(time_override)
+        desktop = ModuleType("cloud_start")
+        desktop.desktop_interactive = Mock(return_value=interactive)
         with ExitStack() as stack:
+            # 源码在交接动作内部导入桌面检查；模块替身避免任何真实 Windows API。
+            stack.enter_context(patch.dict(sys.modules, {"cloud_start": desktop}))
             # 真实调度器下同样没有本地云窗口；入口的本地就绪检查由 test_cloud_start 覆盖。
             stack.enter_context(
                 patch.object(cloud, "_prepare_cloud_client", side_effect=prepare)
@@ -299,14 +369,16 @@ class NativeCloudFlowTests(unittest.TestCase):
                 patch.object(cloud, "_native_click", side_effect=native_click)
             )
             stack.enter_context(
-                patch.object(cloud, "_owned_dialog_candidates", return_value=[])
+                patch.object(
+                    cloud, "_owned_dialog_candidates", side_effect=owned_candidates
+                )
             )
             # 结束节点会释放会话；这里保留会话以便断言解析后的参数。
             stack.enter_context(
                 patch.object(cloud, "cleanup_cloud_session", lambda: None)
             )
             stack.enter_context(
-                patch.object(cloud, "_find_owned_confirm", side_effect=find_confirm)
+                patch.object(cloud, "_capture_owned_window", side_effect=capture_owned)
             )
             stack.enter_context(
                 patch.object(cloud, "_click_owned_target", side_effect=click_confirm)
@@ -316,6 +388,8 @@ class NativeCloudFlowTests(unittest.TestCase):
             )
             job = tasker.post_task("CloudGameStartEntrance", overrides).wait()
         result = (job.succeeded, list(controller.clicks), controller.world_navigation)
+        self.executed_nodes = [node.name for node in job.get().nodes]
+        self.desktop_checks = desktop.desktop_interactive.call_count
         self.session = cloud._session
         self.last_params = resource.get_node_data("CloudGameStartEntrance")
         tasker.post_stop().wait()
@@ -362,6 +436,90 @@ class NativeCloudFlowTests(unittest.TestCase):
         self.assertTrue(success)
         self.assertEqual([stage for stage, _, _ in clicks], [2, DIALOG_MARKER])
         self.assertEqual(navigation, 1)
+
+    def test_existing_confirm_bypasses_dispatch_and_clicks_only_confirm(self):
+        success, clicks, navigation = self.run_flow(stage=DIALOG_MARKER)
+        self.assertTrue(success)
+        self.assertEqual([stage for stage, _, _ in clicks], [DIALOG_MARKER])
+        self.assertEqual(navigation, 0)
+        login_index = self.executed_nodes.index("CloudGameLoginWait")
+        self.assertEqual(self.executed_nodes[login_index + 1], "CloudGameStartConfirm")
+
+    def test_queue_wait_confirm_bypasses_dispatch(self):
+        success, clicks, navigation = self.run_flow(
+            stage=DIALOG_MARKER, branch="CloudGameQueueWait"
+        )
+        self.assertTrue(success)
+        self.assertEqual([stage for stage, _, _ in clicks], [DIALOG_MARKER])
+        self.assertEqual(navigation, 0)
+        queue_index = self.executed_nodes.index("CloudGameQueueWait")
+        self.assertEqual(self.executed_nodes[queue_index + 1], "CloudGameStartConfirm")
+
+    def test_unknown_owned_overlay_blocks_world_success_and_main_clicks(self):
+        for stage in (2, 6, 7):
+            with self.subTest(stage=stage):
+                success, clicks, navigation = self.run_flow(
+                    stage=stage, unknown_owned=True
+                )
+                self.assertFalse(success)
+                self.assertEqual(clicks, [])
+                self.assertEqual(navigation, 0)
+                self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_ready_rejects_unknown_owned_overlay_over_world(self):
+        success, clicks, navigation = self.run_flow(
+            stage=6, unknown_owned=True, branch="CloudGameReady"
+        )
+        self.assertFalse(success)
+        self.assertEqual(clicks, [])
+        self.assertEqual(navigation, 0)
+        self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_ready_does_not_extend_an_expired_queue_deadline(self):
+        success, clicks, navigation = self.run_flow(
+            stage=6, expired_queue=True, branch="CloudGameReady"
+        )
+        self.assertFalse(success)
+        self.assertEqual(clicks, [])
+        self.assertEqual(navigation, 0)
+        self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_handoff_checks_interactive_desktop_before_virtual_public_scene(self):
+        # 只验真实云包装动作与公开节点的调用契约；不是游戏内交接的实机验收。
+        for interactive in (True, False):
+            with self.subTest(interactive=interactive):
+                success, clicks, navigation = self.run_flow(
+                    stage=9, branch="CloudGameEnterWorld", interactive=interactive
+                )
+                self.assertEqual(success, interactive)
+                self.assertEqual(clicks, [])
+                self.assertEqual(navigation, int(interactive))
+                self.assertGreater(self.desktop_checks, 0)
+
+    def test_handoff_without_desktop_only_accepts_unobstructed_world(self):
+        for unknown_owned in (False, True):
+            with self.subTest(unknown_owned=unknown_owned):
+                success, clicks, navigation = self.run_flow(
+                    stage=6,
+                    branch="CloudGameEnterWorld",
+                    interactive=False,
+                    unknown_owned=unknown_owned,
+                )
+                self.assertEqual(success, not unknown_owned)
+                self.assertEqual(clicks, [])
+                self.assertEqual(navigation, 0)
+
+    def test_handoff_propagates_virtual_public_scene_failure(self):
+        success, clicks, navigation = self.run_flow(
+            stage=9,
+            branch="CloudGameEnterWorld",
+            interactive=True,
+            navigation_succeeds=False,
+        )
+        self.assertFalse(success)
+        self.assertEqual(clicks, [])
+        self.assertEqual(navigation, 1)
+        self.assertNotIn("CloudGameStartDone", self.executed_nodes)
 
     def make_bundle(self, nodes):
         """为每次调用建立独立 bundle，便于同一测试内多次识别真实截图。"""
@@ -461,7 +619,7 @@ class NativeCloudFlowTests(unittest.TestCase):
                 with self.subTest(layout=layout, node=node):
                     self.assert_real_frame(frame, True, node, expected_box=box)
             with self.subTest(layout=layout, node="CloudGameHome"):
-                # And 必须返回开始按钮而不是设置图标的框，保证后续点击目标正确。
+                # 首页判定只以开始按钮为锚点，返回的框就是后续点击目标。
                 self.assert_real_frame(
                     frame,
                     True,
@@ -469,7 +627,8 @@ class NativeCloudFlowTests(unittest.TestCase):
                     expected_box=templates["CloudGameEnterText"][1],
                 )
 
-    def test_home_requires_both_settings_and_start_button(self):
+    def test_home_is_anchored_on_the_start_button_only(self):
+        """设置图标尺寸随客户端版本漂移，只作诊断；首页是否成立只看开始按钮。"""
         for layout, templates in HOME_TEMPLATE_LAYOUTS.items():
             for missing in templates:
                 with self.subTest(layout=layout, missing=missing):
@@ -481,7 +640,14 @@ class NativeCloudFlowTests(unittest.TestCase):
                             node,
                             expected_box=box if node != missing else None,
                         )
-                    self.assert_real_frame(frame, False, "CloudGameHome")
+                    start_box = templates["CloudGameEnterText"][1]
+                    present = missing != "CloudGameEnterText"
+                    self.assert_real_frame(
+                        frame,
+                        present,
+                        "CloudGameHome",
+                        expected_box=start_box if present else None,
+                    )
 
     def load(self, name):
         return np.asarray(
@@ -506,47 +672,57 @@ class NativeCloudFlowTests(unittest.TestCase):
         self.assert_real_frame(np.zeros((720, 1280, 3), dtype=np.uint8), False)
 
     def test_real_start_confirmation_dialog_is_recognized(self):
-        image = self.load("start_confirm_720p.png")
-        for node in ("CloudGameStartConfirmNotice", "CloudGameStartConfirmEnter"):
-            with self.subTest(node=node):
-                self.assert_real_frame(image, True, node)
-        # 启动确认弹窗不得被当成登录页，否则会误报需要重新登录。
-        self.assert_real_frame(image, False, "CloudGameLoginScreen")
+        for fixture, enter_box in CONFIRM_FIXTURES.items():
+            image = self.load(fixture)
+            with self.subTest(fixture=fixture, node="CloudGameStartConfirmNotice"):
+                self.assert_real_frame(image, True, "CloudGameStartConfirmNotice")
+            with self.subTest(fixture=fixture, node="CloudGameStartConfirmEnter"):
+                self.assert_real_frame(
+                    image, True, "CloudGameStartConfirmEnter", expected_box=enter_box
+                )
+            # 启动确认弹窗不得被当成登录页，否则会误报需要重新登录。
+            with self.subTest(fixture=fixture, node="CloudGameLoginScreen"):
+                self.assert_real_frame(image, False, "CloudGameLoginScreen")
 
     def test_confirm_enter_roi_excludes_the_exit_button(self):
         """“退出启动”会立即终止本次启动，因此确认 ROI 不能与它有任何重叠。
 
-        实机夹具量得（1280x720 基准，含抗锯齿圆角）：退出按钮 x 348..627，
-        进入按钮 x 652..933，两者间隙仅 25px。ROI 左边界 636 落在该间隙内。
-        这里断言几何关系而不只是“能命中”，避免以后调 ROI 时重新把退出按钮圈进来。
+        两版实机夹具量得（1280x720 基准，含抗锯齿圆角）：
+        旧版退出 x 348..627、进入 x 652..933；新版退出 x 406..630、进入 x 650..874。
+        ROI 左边界 636 落在两版间隙内。这里断言几何关系而不只是“能命中”，
+        避免以后调 ROI 或换模板时重新把退出按钮圈进来。
         """
-        image = self.load("start_confirm_720p.png")
         roi = PIPELINE["CloudGameStartConfirmEnter"]["recognition"]["param"]["roi"]
         roi_left, roi_right = roi[0], roi[0] + roi[2]
-        # 从夹具自身测量按钮列，不写死坐标。用整段按钮高度的逐列最大值：
-        # 窄行均值会被按钮上的深色文字拉低，把浅色的“进入游戏”整段判成背板。
-        # 阈值 80 介于背板(36)与两个按钮之间；取 100 会让偏暗的退出按钮碎成短段。
-        row = image[415:480].max(axis=(0, 2))
-        spans, start = [], None
-        for x, lit in enumerate(row > 80):
-            if lit and start is None:
-                start = x
-            elif not lit and start is not None:
-                if x - start > 100:
-                    spans.append((start, x))
-                start = None
-        self.assertEqual(len(spans), 2, spans)
-        (_, exit_right), (enter_left, enter_right) = spans
-        self.assertLessEqual(exit_right, roi_left)
-        self.assertLess(roi_left, enter_left)
-        self.assertLessEqual(enter_right, roi_right)
-        # 命中框必须落在进入按钮上，而不是间隙或退出按钮。
-        self.assert_real_frame(
-            image,
-            True,
-            "CloudGameStartConfirmEnter",
-            expected_box=(650, 415, 280, 65),
-        )
+        for fixture, enter_box in CONFIRM_FIXTURES.items():
+            with self.subTest(fixture=fixture):
+                image = self.load(fixture)
+                x, y, width, height = enter_box
+                # 从夹具自身测量按钮列，不写死坐标。用整段按钮高度的逐列最大值：
+                # 窄行均值会被按钮上的深色文字拉低。阈值 50 高于两版背板（36/43），
+                # 低于两版偏暗的退出按钮边框（78），高阈值会把退出按钮碎成短段。
+                row = image[y : y + height].max(axis=(0, 2))
+                spans, start = [], None
+                for column, lit in enumerate(list(row > 50) + [False]):
+                    if lit and start is None:
+                        start = column
+                    elif not lit and start is not None:
+                        if column - start > 100:
+                            spans.append((start, column))
+                        start = None
+                self.assertEqual(len(spans), 2, spans)
+                (_, exit_right), (enter_left, enter_right) = spans
+                self.assertLessEqual(exit_right, roi_left)
+                self.assertLess(roi_left, enter_left)
+                self.assertLessEqual(enter_right, roi_right)
+                # 命中框必须落在进入按钮上，而不是间隙或退出按钮。旧版模板左右各多截了
+                # 约 2px 深色背板，因此只要求框不越过 ROI 左边界、点击中心落在按钮亮区内。
+                self.assertLessEqual(roi_left, x)
+                self.assertLess(enter_left, x + width // 2)
+                self.assertLess(x + width // 2, enter_right)
+                self.assert_real_frame(
+                    image, True, "CloudGameStartConfirmEnter", expected_box=enter_box
+                )
 
     def _as_raw_capture(self, frame, size):
         """把 720p 夹具重采样成给定客户区尺寸，模拟独立弹窗窗口的原始取帧。"""
@@ -563,8 +739,11 @@ class NativeCloudFlowTests(unittest.TestCase):
         ROI 识别，命中框又要按客户区尺寸换算回去点击。这里覆盖整条往返链路：
         非 16:9 尺寸在归一化时会被拉伸变形，是其中最薄弱的一环。
         """
-        fixture = self.load("start_confirm_720p.png")
-        enter_left, enter_right = 652, 933
+        # 两版夹具各自的“进入游戏”按钮列范围（实机量得，1280x720 基准）。
+        enter_spans = {
+            "start_confirm_720p.png": (652, 933),
+            "start_confirm_v2_720p.png": (650, 874),
+        }
         sizes = (
             (1280, 720),  # 与基准一致，不重采样
             (1600, 900),
@@ -575,28 +754,31 @@ class NativeCloudFlowTests(unittest.TestCase):
             (1440, 720),
             (1100, 800),
         )
-        for size in sizes:
-            with self.subTest(client=size):
-                normalized = cloud._normalize_owned_frame(
-                    self._as_raw_capture(fixture, size)
-                )
-                self.assertIsNotNone(normalized)
-                self.assertEqual(normalized.shape, (720, 1280, 3))
-                # 两次 LANCZOS 重采样后模板仍须命中，且命中框保持稳定。
-                self.assert_real_frame(
-                    normalized,
-                    True,
-                    "CloudGameStartConfirmEnter",
-                    expected_box=(650, 415, 280, 65),
-                )
-                x, y = cloud._map_720p_to_client(
-                    cloud._box_center((650, 415, 280, 65)), size
-                )
-                scale = size[0] / 1280
-                self.assertLess(enter_left * scale, x)
-                self.assertLess(x, enter_right * scale)
-                self.assertLess(0, y)
-                self.assertLess(y, size[1])
+        for name, enter_box in CONFIRM_FIXTURES.items():
+            fixture = self.load(name)
+            enter_left, enter_right = enter_spans[name]
+            for size in sizes:
+                with self.subTest(fixture=name, client=size):
+                    normalized = cloud._normalize_owned_frame(
+                        self._as_raw_capture(fixture, size)
+                    )
+                    self.assertIsNotNone(normalized)
+                    self.assertEqual(normalized.shape, (720, 1280, 3))
+                    # 两次 LANCZOS 重采样后模板仍须命中，且命中框保持稳定。
+                    self.assert_real_frame(
+                        normalized,
+                        True,
+                        "CloudGameStartConfirmEnter",
+                        expected_box=enter_box,
+                    )
+                    x, y = cloud._map_720p_to_client(
+                        cloud._box_center(enter_box), size
+                    )
+                    scale = size[0] / 1280
+                    self.assertLess(enter_left * scale, x)
+                    self.assertLess(x, enter_right * scale)
+                    self.assertLess(0, y)
+                    self.assertLess(y, size[1])
 
     def test_unusable_owned_frames_are_rejected_rather_than_guessed(self):
         """取帧结果不可用时必须返回 None，不能拿残帧当弹窗画面去识别。"""
@@ -637,6 +819,7 @@ class NativeCloudFlowTests(unittest.TestCase):
             "login_required_720p.png",
             "login_required_current_125dpi.png",
             "start_confirm_720p.png",
+            "start_confirm_v2_720p.png",
         ):
             for node in ("CloudGameHomeScreen", "CloudGameEnterText", "CloudGameHome"):
                 with self.subTest(fixture=fixture, node=node):
@@ -658,6 +841,8 @@ OCR_MODEL = ROOT / "assets/MaaCommonAssets/OCR/ppocr_v3/zh_cn"
 class ShellOcrProbe(CustomAction):
     def __init__(self):
         self.hits = {}
+        self.queue_detail = None
+        self.queue_status = ""
         super().__init__()
 
     def run(self, context, argv):
@@ -666,10 +851,15 @@ class ShellOcrProbe(CustomAction):
             return False
         image = controller.cached_image
         self.hits = {}
+        self.queue_detail = None
+        self.queue_status = ""
         for node in SHELL_OCR_NODES:
             detail = context.run_recognition(node, image)
             if detail is not None and detail.hit:
                 self.hits[node] = [r.text for r in detail.filtered_results]
+                if node == "CloudGameQueueText":
+                    self.queue_detail = detail
+                    self.queue_status = cloud._queue_status(cloud._queue_texts(detail))
         return True
 
 
@@ -732,7 +922,62 @@ class ShellOcrContractTests(unittest.TestCase):
             y += 48
         return np.asarray(image)[:, :, ::-1].copy()
 
-    def test_shell_ocr_words_hit_only_their_screens(self):
+    @staticmethod
+    def render_queue_boxes(label="目前正排在第", labels=True):
+        """把标签和数值刻意分成 OCR 框；位置只测空间关联，不声称实机 ROI 已校准。"""
+        from PIL import ImageDraw, ImageFont
+
+        image = Image.new("RGB", (1280, 720), (18, 20, 26))
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.truetype(str(CJK_FONT), 28)
+        fragments = [
+            (540, 150, "排队中..."),
+            (540, 260, "12 / 350 名"),
+            (540, 380, "> 5分钟"),
+            # 同行但远离标签的数字不关联；标签下的长数字和自由文本也不关联。
+            (1050, 260, "77"),
+            (280, 425, "99887766"),
+            (280, 305, "offline-account"),
+        ]
+        if labels:
+            fragments.extend([(280, 260, label), (280, 380, "预计等待")])
+        for x, y, text in fragments:
+            draw.text((x, y), text, font=font, fill=(235, 235, 235))
+        return np.asarray(image)[:, :, ::-1].copy()
+
+    def test_queue_values_survive_real_expected_filter_without_fullscreen_echo(self):
+        # 使用生产 expected，不覆盖为 .*。先证明数字被 expected 过滤，再验证
+        # 生产提取器只从 all_results 补回标签邻近数值，避免 mock 掩盖数字丢失。
+        expected = PIPELINE["CloudGameQueueText"]["recognition"]["param"]["expected"]
+        self.assertEqual(set(expected), {"目前正排在第", "预计等待"})
+        tasker, controller, probe = self.make_ocr_tasker()
+        try:
+            controller.image = self.render_queue_boxes()
+            self.assertTrue(tasker.post_task("ShellOcrProbe").wait().succeeded)
+            self.assertIn("CloudGameQueueScreen", probe.hits)
+            self.assertIsNotNone(probe.queue_detail)
+            filtered = probe.hits["CloudGameQueueText"]
+            self.assertTrue(any("目前正排在第" in text for text in filtered), filtered)
+            self.assertFalse(
+                any(any(c.isdigit() for c in text) for text in filtered), filtered
+            )
+            all_texts = [result.text for result in probe.queue_detail.all_results]
+            self.assertTrue(any("350" in text for text in all_texts), all_texts)
+            self.assertTrue(any("99887766" in text for text in all_texts), all_texts)
+            self.assertRegex(probe.queue_status, r"目前正排在第\s+12\s*/\s*350\s*名")
+            self.assertRegex(probe.queue_status, r"预计等待\s*>?\s*5\s*分钟")
+            self.assertNotIn("99887766", probe.queue_status)
+            self.assertNotIn("77", probe.queue_status)
+            self.assertNotIn("offline", probe.queue_status)
+            controller.image = self.render_queue_boxes(labels=False)
+            self.assertTrue(tasker.post_task("ShellOcrProbe").wait().succeeded)
+            self.assertNotIn("CloudGameQueueText", probe.hits)
+            self.assertEqual(probe.queue_status, "")
+            self.assertEqual(controller.clicks, [])
+        finally:
+            tasker.post_stop().wait()
+
+    def make_ocr_tasker(self):
         tmp = tempfile.TemporaryDirectory(prefix="cloud-ocr-", dir=ROOT / ".narrafork")
         self.addCleanup(tmp.cleanup)
         bundle = Path(tmp.name) / "bundle"
@@ -756,6 +1001,10 @@ class ShellOcrContractTests(unittest.TestCase):
         self.assertTrue(controller.post_connection().wait().succeeded)
         tasker = Tasker()
         self.assertTrue(tasker.bind(resource, controller))
+        return tasker, controller, probe
+
+    def test_shell_ocr_words_hit_only_their_screens(self):
+        tasker, controller, probe = self.make_ocr_tasker()
         try:
             for title, lines, expected in self.CASES:
                 with self.subTest(screen=title):

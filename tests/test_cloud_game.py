@@ -121,18 +121,23 @@ class FakeContext:
         if node == self.current.fail_node:
             return None
         hit = self.match(node)
-        results = (
-            [SimpleNamespace(text=text) for text in self.current.texts]
-            if node == "CloudGameQueueText"
-            else []
-        )
-        if hit:
-            results = [SimpleNamespace(text="", box=[100, 200, 80, 30])] * (
-                2 if self.current.multiple else 1
-            )
-        return SimpleNamespace(
-            hit=hit, box=[100, 200, 80, 30], filtered_results=results
-        )
+        all_results = []
+        results = []
+        if node == "CloudGameQueueText":
+            row = 200
+            for text in self.current.texts:
+                # 标签在左、紧接的数值在右；真实 expected 会先剔除独立数值框。
+                labelled = bool(cloud._QUEUE_LABEL.fullmatch(cloud._normalize_text(text)))
+                if labelled:
+                    row += 60
+                box = [100 if labelled else 320, row, 180 if labelled else 120, 30]
+                all_results.append(SimpleNamespace(text=text, box=box))
+            expected = self.nodes[node]["recognition"]["param"]["expected"]
+            results = [result for result in all_results if any(re.search(pattern, result.text) for pattern in expected)]
+            hit = bool(results)
+        elif hit:
+            results = [SimpleNamespace(text="", box=[100, 200, 80, 30])] * (2 if self.current.multiple else 1)
+        return SimpleNamespace(hit=hit, box=[100, 200, 80, 30], filtered_results=results, all_results=all_results)
 
     def get_node_data(self, name):
         return self.nodes.get(name)
@@ -194,6 +199,7 @@ class CloudLogicTests(unittest.TestCase):
         self.confirm_state_patch.start()
         self.addCleanup(self.confirm_state_patch.stop)
         cloud._session = None
+        cloud._diagnostics.clear()
         # 入口的本地窗口检查在离线测试中用已就绪的假窗口替代；cloud_start 单独测试。
         self.prepare_patch = patch.object(
             cloud, "_prepare_cloud_client", side_effect=self.fake_prepare
@@ -265,7 +271,7 @@ class CloudLogicTests(unittest.TestCase):
             cloud._session.confirm_target = result
         return result
 
-    def fake_click_confirm(self, target):
+    def fake_click_confirm(self, target, context=None):
         self.confirm_clicked = True
         if self.confirm_context is not None:
             self.confirm_context.click(target.box[0] + 40, target.box[1] + 15)
@@ -440,7 +446,7 @@ class CloudLogicTests(unittest.TestCase):
                 "CloudGameLoginOtherMethods", "CloudGameLoginSubmit"
             )
 
-        def click(target):
+        def click(target, context=None):
             clicks.append(target.hwnd)
             dialog["present"] = False
             return True
@@ -674,20 +680,24 @@ class CloudLogicTests(unittest.TestCase):
         self.assertTrue(self.messages("cloud_game.client_missing"))
         self.assertEqual(self.native_clicks, [])
 
-    def test_enter_click_once_and_wait_for_delayed_queue(self):
+    def test_enter_click_confirms_immediately_without_a_dispatch_round_trip(self):
+        """确认弹窗只有 30 秒倒计时；一旦在本次 enter 点击后的轮询中看到它，必须
+        当场确认，不能把动作交还给 Dispatch 节点再走一轮全图 OCR 才轮到确认。"""
         context = self.reset([scene(*HOME), scene(*HOME), scene(*CONFIRM)])
         self.assertTrue(
             cloud.CloudGameClick()
             .run(context, arg("CloudGameEnterButton", {"kind": "enter"}))
             .success
         )
-        self.assertEqual(context.clicks, [(140, 215)])
+        # 开始游戏点击 + 同一动作内的确认点击。
+        self.assertEqual(context.clicks, [(140, 215), (140, 215)])
+        self.assertTrue(self.confirm_clicked)
         self.assertFalse(
             cloud.CloudGameClick()
             .run(context, arg("CloudGameEnterButton", {"kind": "enter"}))
             .success
         )
-        self.assertEqual(len(context.clicks), 1)
+        self.assertEqual(len(context.clicks), 2)
 
     def test_start_confirmation_is_required_before_queueing(self):
         context = self.reset([scene(*HOME), scene(*HOME)], transition_timeout_seconds=3)
@@ -775,8 +785,8 @@ class CloudLogicTests(unittest.TestCase):
                 self.assertEqual(len(context.clicks), 1)
 
     def test_queue_keeps_separate_values_and_deduplicates(self):
-        first = ("预计等待时间", "１０～２０分钟", "当前排队位置", "１２")
-        later = ("预计等待时间", "5分钟", "当前排队位置", "3")
+        first = ("预计等待时间", "１０～２０分钟", "目前正排在第", "１２")
+        later = ("预计等待时间", "5分钟", "目前正排在第", "3")
         context = self.reset(
             [
                 scene("CloudGameQueueScreen", texts=first),
@@ -890,6 +900,323 @@ class CloudLogicTests(unittest.TestCase):
         )
 
 
+    def test_logging_action_lifecycle_includes_result_and_elapsed(self):
+        context = self.reset([scene(*HOME), scene(*HOME)])
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameWaitLogin().run(context, arg("CloudGameLoginWait"))
+        self.assertTrue(result.success)
+        messages = [record.getMessage() for record in captured.records]
+        starts = [message for message in messages if "云游戏操作开始" in message]
+        ends = [message for message in messages if "云游戏操作结束" in message]
+        self.assertEqual(len(starts), 1)
+        self.assertEqual(len(ends), 1)
+        self.assertIn("action=CloudGameWaitLogin.run", starts[0])
+        self.assertIn("task_id=42", ends[0])
+        self.assertIn("result=succeeded", ends[0])
+        self.assertIn("elapsed_s=2.000", ends[0])
+        self.assertTrue(all(record.levelno < logging.WARNING for record in captured.records))
+
+
+    def test_logging_capture_failure_has_specific_cause(self):
+        context = self.reset([scene(missing=True)])
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait"))
+        self.assertFalse(result.success)
+        errors = [record for record in captured.records if record.levelno == logging.ERROR]
+        self.assertEqual(len(errors), 1)
+        self.assertIn("code=cloud_game.client_missing", errors[0].getMessage())
+        self.assertIn("reason=screencap_failed", errors[0].getMessage())
+        self.assertIn("source=_capture:", errors[0].getMessage())
+
+
+    def test_logging_unexpected_exception_excludes_sensitive_data(self):
+        secret = "PRIVATE-password-token-98765"
+        private_path = r"C:\Users\private-account\client.exe"
+        context = self.reset([scene(*HOME)])
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured, patch.object(
+            context, "run_recognition", side_effect=RuntimeError(secret + private_path)
+        ):
+            result = cloud.CloudGameClick().run(
+                context,
+                arg("private-node-98765", {"kind": "enter", "password": secret, "token": secret}),
+            )
+        self.assertFalse(result.success)
+        output = "\n".join(captured.output)
+        self.assertIn("error=RuntimeError", output)
+        self.assertIn("reason=unexpected_exception", output)
+        for value in (secret, private_path, "private-node-98765"):
+            self.assertNotIn(value, output)
+            self.assertNotIn(value, repr([record.args for record in captured.records]))
+        self.assertTrue(all(record.exc_info is None for record in captured.records))
+        self.assertIsNone(cloud._session)
+
+
+    def test_logging_invalid_option_names_the_field_not_its_value(self):
+        secret = "PRIVATE-token-in-config"
+        context = FakeContext([scene(*HOME)])
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameReset().run(
+                context, arg("CloudGameStartEntrance", {"poll_interval_seconds": secret})
+            )
+        self.assertFalse(result.success)
+        output = "\n".join(captured.output)
+        self.assertIn("option=poll_interval_seconds", output)
+        self.assertIn("reason=invalid_numeric_option", output)
+        self.assertNotIn(secret, output)
+
+
+    def test_logging_stop_is_not_reported_as_error(self):
+        context = self.reset([scene("CloudGameLoading")])
+        self.clock.on_sleep = lambda: setattr(context.tasker, "stopping", True)
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait"))
+            cloud.CloudGameFail().run(context, arg("CloudGameStartFail"))
+        self.assertFalse(result.success)
+        self.assertIn("result=stopped", "\n".join(captured.output))
+        self.assertTrue(all(record.levelno < logging.WARNING for record in captured.records))
+
+
+    def test_logging_login_state_is_not_repeated_each_poll(self):
+        context = self.reset(
+            [scene("CloudGameVerification")] * 8 + [scene(*HOME)] * 2,
+            login_timeout_seconds=30,
+        )
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameWaitLogin().run(context, arg("CloudGameLoginWait"))
+        self.assertTrue(result.success)
+        states = [record.getMessage() for record in captured.records if "phase=login" in record.getMessage()]
+        self.assertEqual(len(states), 2)
+        self.assertIn("to=cloud_game.verification_required", states[0])
+        self.assertIn("to=CloudGameHome", states[1])
+
+
+    def test_logging_queue_reports_transitions_without_ocr_text(self):
+        secret = "PRIVATE-ocr-token-12345"
+        context = self.reset(
+            [scene("CloudGameQueueScreen", texts=("预计等待 " + secret, "4~8 分钟"))] * 12
+            + [scene("CloudGameLoading")] * 4
+            + [scene(*WORLD)]
+        )
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait"))
+        self.assertTrue(result.success)
+        output = "\n".join(captured.output)
+        states = [record.getMessage() for record in captured.records if "phase=queue" in record.getMessage()]
+        self.assertEqual(len(states), 3)
+        for message, status in zip(states, ("CloudGameQueueScreen", "CloudGameLoading", "CloudGameInWorld")):
+            self.assertIn("to=" + status, message)
+        # 含凭据片段的标签整行拒绝，既不写日志也不向用户播报。
+        self.assertEqual(output.count("云游戏队列提示更新"), 0)
+        self.assertEqual(self.messages("cloud_game.queue_status"), [])
+        self.assertNotIn(secret, output)
+        self.assertNotIn("4~8 分钟", output)
+
+
+    def test_logging_click_records_kind_and_transition(self):
+        context = self.reset([scene(*HOME), scene("CloudGameQueueScreen")])
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameClick().run(context, arg("CloudGameEnter", {"kind": "enter"}))
+        self.assertTrue(result.success)
+        output = "\n".join(captured.output)
+        self.assertIn("kind=enter", output)
+        self.assertIn("phase=click_enter", output)
+        self.assertIn("to=CloudGameQueueScreen", output)
+        self.assertIn("result=succeeded", output)
+        self.assertEqual(len(self.native_clicks), 1)
+
+
+    def test_logging_owned_probe_deduplicates_failure_and_reports_recovery(self):
+        secret = "PRIVATE-window-title-token"
+        context = self.reset([scene(*CONFIRM)])
+        window = cloud._WindowInfo(
+            hwnd=1001, rect=(0, 8, 1280, 728), client_size=(1280, 720),
+            owner=1000, title=secret, class_name="Qt51517QWindowToolSaveBits", pid=7,
+        )
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            with patch.object(context, "run_recognition", side_effect=RuntimeError(secret)):
+                for _ in range(8):
+                    self.assertIsNone(cloud._recognize_owned_confirm(context, window, context.image, *CONFIRM))
+            for _ in range(8):
+                self.assertIsNotNone(cloud._recognize_owned_confirm(context, window, context.image, *CONFIRM))
+        self.assertEqual(len(captured.records), 2)
+        self.assertIn("弹窗识别异常", captured.records[0].getMessage())
+        self.assertIn("button_count=1", captured.records[1].getMessage())
+        self.assertNotIn(secret, "\n".join(captured.output))
+
+
+    def test_logging_diagnostic_cache_is_bounded_and_session_scoped(self):
+        with patch.object(cloud.logger, "debug") as log:
+            for index in range(cloud._MAX_DIAGNOSTICS + 10):
+                cloud._log_diagnostic(("probe", index), (False,), "probe=%s", False)
+            self.assertLessEqual(len(cloud._diagnostics), cloud._MAX_DIAGNOSTICS)
+            log.reset_mock()
+            for _ in range(10):
+                cloud._log_diagnostic(("repeat",), (False,), "probe=%s", False)
+            cloud._log_diagnostic(("repeat",), (True,), "probe=%s", True)
+            self.assertEqual(log.call_count, 2)
+            cloud.cleanup_cloud_session()
+            self.assertFalse(cloud._diagnostics)
+            cloud._log_diagnostic(("repeat",), (True,), "probe=%s", True)
+            self.assertEqual(log.call_count, 3)
+
+
+    def test_logging_finish_records_result_and_releases_diagnostics(self):
+        context = self.reset([scene(*WORLD)])
+        cloud._log_state(cloud._session, "ready", "CloudGameInWorld")
+        cloud._diagnostics[("probe",)] = (True,)
+        with self.assertLogs(cloud.logger, level="DEBUG") as captured:
+            result = cloud.CloudGameFinish().run(context, arg("CloudGameStartDone"))
+            cloud.cleanup_cloud_session()
+        self.assertTrue(result.success)
+        output = "\n".join(captured.output)
+        self.assertIn("云游戏流程结束 | result=succeeded", output)
+        self.assertEqual(output.count("云游戏会话清理"), 1)
+        self.assertIsNone(cloud._session)
+        self.assertFalse(cloud._diagnostics)
+
+    def test_ready_rejects_world_behind_unknown_owned_window(self):
+        context = self.reset([scene(*WORLD)], transition_timeout_seconds=2)
+        with patch.object(cloud, "_owned_dialog_candidates", return_value=[self.owned_window()]):
+            self.assertFalse(cloud.CloudGameConfirmReady().run(context, arg("CloudGameReady")).success)
+        self.assertEqual(context.clicks, [])
+        self.assertIsNone(cloud._session)
+
+    def test_main_click_rejects_owned_overlay(self):
+        context = self.reset([scene(*HOME)])
+        with patch.object(cloud, "_owned_dialog_candidates", return_value=[self.owned_window()]):
+            with self.assertRaises(cloud._CloudError):
+                cloud._click_main_window(context, cloud._session, (100, 200))
+        self.assertEqual(self.native_clicks, [])
+
+    def test_login_target_must_be_globally_unique_and_unobstructed(self):
+        for unknown in (False, True):
+            with self.subTest(unknown=unknown):
+                context = self.reset([scene(*HOME)])
+                def recognize(node, image):
+                    hit = image == 1 and node in ("CloudGameLoginOtherMethods", "CloudGameLoginSubmit")
+                    return SimpleNamespace(hit=hit, box=[100, 200, 80, 30], filtered_results=[SimpleNamespace()] if hit else [])
+                with patch.object(cloud, "_owned_dialog_candidates", return_value=[self.owned_window(), self.owned_window(1002)]), patch.object(
+                    cloud, "_capture_owned_window", side_effect=[1, None if unknown else 1]
+                ), patch.object(context, "run_recognition", side_effect=recognize):
+                    message, target = cloud._login_obstacle(context, 0)
+                self.assertIsNone(target)
+                self.assertIsNotNone(message)
+                self.assertEqual(context.clicks, [])
+
+    def test_ready_honors_existing_queue_deadline(self):
+        context = self.reset([scene(*WORLD)])
+        cloud._session.queue_deadline = self.clock.now + 0.5
+        self.assertFalse(cloud.CloudGameConfirmReady().run(context, arg("CloudGameReady")).success)
+        self.assertTrue(self.messages("cloud_game.queue_timeout"))
+
+    def test_login_existing_confirmation_routes_without_slow_dispatch(self):
+        context = self.reset([scene(*HOME, *CONFIRM)])
+        self.assertTrue(cloud.CloudGameWaitLogin().run(context, arg("CloudGameLoginWait")).success)
+        self.assertEqual(context.nodes["CloudGameLoginWait"]["next"], ["CloudGameStartConfirm"])
+        self.assertEqual(context.clicks, [])
+        self.assertIsNotNone(cloud._session.confirm_target)
+
+    def test_queue_confirmation_routes_directly(self):
+        context = self.reset([scene(*CONFIRM)])
+        self.assertTrue(cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait")).success)
+        self.assertEqual(context.nodes["CloudGameQueueWait"]["next"], ["CloudGameStartConfirm"])
+
+    def test_owned_capture_is_single_attempt_and_bounded(self):
+        context = self.reset([scene(*HOME)])
+        module = ModuleType("utils.cloud_window")
+        module.capture_window = Mock(return_value=None)
+        with patch.dict(sys.modules, {"utils.cloud_window": module}):
+            self.assertIsNone(cloud._capture_owned_window(self.owned_window(), context))
+        module.capture_window.assert_called_once()
+        self.assertLessEqual(module.capture_window.call_args.kwargs["timeout"], 3)
+        self.assertFalse(module.capture_window.call_args.kwargs["stopped"]())
+
+    def test_owned_capture_does_not_start_after_cancellation(self):
+        context = self.reset([scene(*HOME)])
+        context.tasker.stopping = True
+        module = ModuleType("utils.cloud_window")
+        module.capture_window = Mock()
+        with patch.dict(sys.modules, {"utils.cloud_window": module}), self.assertRaises(cloud._CloudError):
+            cloud._capture_owned_window(self.owned_window(), context)
+        module.capture_window.assert_not_called()
+
+    def test_queue_real_rank_text_is_not_dropped(self):
+        self.assertEqual(cloud._queue_status(["目前正排在第 12 / 350 名", "预计等待 3-5 分钟"]),
+                         "目前正排在第 12 / 350 名 | 预计等待 3-5 分钟")
+
+    def test_remembered_target_changed_to_credentials_is_not_submitted(self):
+        context = self.reset([scene(*HOME)], login_timeout_seconds=1)
+        target = cloud._ConfirmTarget(1001, 1000, (0, 0, 1280, 720), (1280, 720), (100, 200, 80, 30))
+        with patch.object(cloud, "_login_obstacle", side_effect=[
+            ("cloud_game.login_remembered", target), ("cloud_game.login_required", None)
+        ]), patch.object(cloud, "_click_owned_target") as click:
+            self.assertFalse(cloud.CloudGameWaitLogin().run(context, arg("CloudGameLoginWait")).success)
+        click.assert_not_called()
+        self.assertEqual(context.clicks, [])
+
+
+    def test_late_recognition_is_rejected_before_input(self):
+        context = self.reset([scene(*HOME)], transition_timeout_seconds=1)
+        recognize = context.run_recognition
+        def slow(node, image):
+            self.clock.now += 2
+            return recognize(node, image)
+        with patch.object(context, "run_recognition", side_effect=slow):
+            self.assertFalse(cloud.CloudGameClick().run(context, arg("CloudGameEnterButton", {"kind": "enter"})).success)
+        self.assertEqual(self.native_clicks, [])
+
+
+    def test_queue_values_require_nearby_labels(self):
+        rank = SimpleNamespace(text="目前正排在第", box=[200, 200, 200, 30])
+        details = SimpleNamespace(filtered_results=[rank], all_results=[
+            rank, SimpleNamespace(text="12 / 350名", box=[410, 200, 130, 30]),
+            SimpleNamespace(text="99887766", box=[410, 245, 150, 30]),
+            SimpleNamespace(text="77", box=[1000, 650, 50, 30]),
+            SimpleNamespace(text="token=fake-token", box=[410, 210, 150, 30]),
+        ])
+        status = cloud._queue_status(cloud._queue_texts(details))
+        self.assertIn("12 / 350名", status)
+        self.assertNotIn("99887766", status)
+        self.assertNotIn("77", status)
+        self.assertNotIn("token", status)
+
+
+    def test_owned_click_rechecks_budget_after_identity_queries(self):
+        self.click_confirm_patch.stop()
+        for cancelled in (False, True):
+            with self.subTest(cancelled=cancelled):
+                context = self.reset([scene(*HOME)])
+                cloud._session.operation_deadline = self.clock.now + 1
+                item = self.owned_window()
+                target = cloud._ConfirmTarget(item.hwnd, item.owner, item.rect, item.client_size, (100, 200, 80, 30))
+                def changed(_):
+                    if cancelled:
+                        context.tasker.stopping = True
+                    else:
+                        self.clock.now += 2
+                    return item
+                with patch.object(cloud, "_owned_dialog_candidates", return_value=[item]), patch.object(
+                    cloud, "_target_window_info", side_effect=changed
+                ), self.assertRaises(cloud._CloudError):
+                    cloud._click_owned_target(target, context)
+                self.assertEqual(self.native_clicks, [])
+
+
+    def test_main_click_rechecks_deadline_after_overlay_query(self):
+        context = self.reset([scene(*HOME)])
+        cloud._session.operation_deadline = self.clock.now + 1
+        def slow():
+            self.clock.now += 2
+            return []
+        with patch.object(cloud, "_owned_dialog_candidates", side_effect=slow), self.assertRaises(cloud._CloudError):
+            cloud._click_main_window(context, cloud._session, (100, 200))
+        self.assertEqual(self.native_clicks, [])
+
+
+    def test_queue_free_text_with_sensitive_suffix_is_not_reported(self):
+        self.assertNotIn("fake-token", cloud._queue_status(["预计等待 token=fake-token"]))
+
+
 class ResourceContractTests(unittest.TestCase):
     def test_no_unconditional_login_loop(self):
         dispatch = PIPELINE["CloudGameDispatch"]["next"]
@@ -928,7 +1255,8 @@ class ResourceContractTests(unittest.TestCase):
     }
 
     def test_shell_ocr_nodes_only_use_client_strings(self):
-        self.assertFalse(PIPELINE["CloudGameProfile"]["attach"]["calibrated"])
+        # 主路径模板已按实机(1280x720)重拍验证并跑通，校准门槛已开启。
+        self.assertTrue(PIPELINE["CloudGameProfile"]["attach"]["calibrated"])
         # 已用实机截图校准的节点必须是真实识别，不能留占位。
         for name in (
             "CloudGameLoginScreen",

@@ -1,6 +1,7 @@
 """窗口辅助回归：Win32 和输入全部 mock，不连接或操作真实客户端。"""
 
 import ctypes
+from contextlib import contextmanager
 import importlib.util
 import io
 import logging
@@ -35,9 +36,6 @@ class FakeWin32:
 
     def __init__(self, width=100, height=60):
         self.width, self.height = width, height
-        self.origin = (100, 200)
-        self.cursor = (0, 0)
-        self.desktop = {76: 0, 77: 0, 78: 1920, 79: 1080}
         self.selected = 40
         self.bitmap_info = None
         self.user32 = Mock()
@@ -49,15 +47,8 @@ class FakeWin32:
         self.user32.GetAncestor.side_effect = (
             lambda hwnd, flag: self.HWND if hwnd == self.CHILD else hwnd
         )
-        self.user32.GetForegroundWindow.return_value = self.HWND
         self.user32.GetClientRect.side_effect = self.client_rect
-        self.user32.ClientToScreen.side_effect = self.client_to_screen
-        self.user32.WindowFromPoint.return_value = self.CHILD
-        self.user32.GetSystemMetrics.side_effect = self.desktop.__getitem__
-        self.user32.SetCursorPos.side_effect = self.set_cursor
-        self.user32.GetCursorPos.side_effect = self.get_cursor
-        self.user32.GetAsyncKeyState.return_value = 0
-        self.user32.SendInput.return_value = 1
+        self.user32.PostMessageW.return_value = 1
         self.user32.SetThreadDpiAwarenessContext.return_value = 123
         self.user32.GetDC.return_value = 10
         self.user32.ReleaseDC.return_value = 1
@@ -76,18 +67,6 @@ class FakeWin32:
         rect.right, rect.bottom = self.width, self.height
         return 1
 
-    def client_to_screen(self, hwnd, pointer):
-        pointer._obj.x += self.origin[0]
-        pointer._obj.y += self.origin[1]
-        return 1
-
-    def set_cursor(self, x, y):
-        self.cursor = (x, y)
-        return 1
-
-    def get_cursor(self, pointer):
-        pointer._obj.x, pointer._obj.y = self.cursor
-        return 1
 
     def select_object(self, dc, bitmap):
         previous, self.selected = self.selected, bitmap
@@ -114,11 +93,15 @@ class FakeWin32:
         ctypes.memmove(buffer, data, len(data))
         return count
 
-    def button_flags(self):
+    def posted(self):
+        """按顺序返回 (hwnd, message, wParam, x, y)。"""
         return [
-            entry.args[1]._obj.mi.dwFlags
-            for entry in self.user32.SendInput.call_args_list
+            (entry.args[0], entry.args[1], entry.args[2], entry.args[3] & 0xFFFF, entry.args[3] >> 16)
+            for entry in self.user32.PostMessageW.call_args_list
         ]
+
+    def messages(self):
+        return [entry.args[1] for entry in self.user32.PostMessageW.call_args_list]
 
 
 class ImportAndLayoutTests(unittest.TestCase):
@@ -133,11 +116,10 @@ class ImportAndLayoutTests(unittest.TestCase):
         self.assertIs(module.logger, logging.getLogger("maante"))
 
     def test_fixed_width_windows_structure_layout(self):
-        self.assertEqual(ctypes.sizeof(cloud._Point), 8)
         self.assertEqual(ctypes.sizeof(cloud._Rect), 16)
         self.assertEqual(ctypes.sizeof(cloud._BitmapInfoHeader), 40)
-        expected = 40 if ctypes.sizeof(ctypes.c_void_p) == 8 else 28
-        self.assertEqual(ctypes.sizeof(cloud._Input), expected)
+        # 点击改为 PostMessage 后不再需要 SendInput 结构体。
+        self.assertFalse(hasattr(cloud, "_Input"))
 
     def test_lazy_api_binds_pointer_sized_handles_and_point_by_value(self):
         module = load_module()
@@ -149,7 +131,12 @@ class ImportAndLayoutTests(unittest.TestCase):
             self.assertIs(module._get_win32(), api)
         self.assertEqual(load_dll.call_count, 2)
         self.assertIs(user32.GetAncestor.restype, ctypes.c_void_p)
-        self.assertEqual(user32.WindowFromPoint.argtypes, [module._Point])
+        self.assertEqual(
+            user32.PostMessageW.argtypes,
+            [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_size_t, ctypes.c_ssize_t],
+        )
+        for name in ("SendInput", "SetCursorPos", "GetForegroundWindow", "WindowFromPoint"):
+            self.assertNotIsInstance(getattr(user32, name).argtypes, list)
         self.assertIs(gdi32.CreateCompatibleBitmap.restype, ctypes.c_void_p)
         user32.SetProcessDPIAware.assert_not_called()
         user32.SetProcessDpiAwarenessContext.assert_not_called()
@@ -167,6 +154,28 @@ class WindowTests(unittest.TestCase):
         self.addCleanup(api_patch.stop)
         self.log = logger_patch.start()
         self.addCleanup(logger_patch.stop)
+        cache_patch = patch.object(cloud, "_capture_failures", cloud.OrderedDict())
+        cache_patch.start()
+        self.addCleanup(cache_patch.stop)
+        self.clock = [0.0]
+        clock_patch = patch.object(cloud.time, "monotonic", side_effect=lambda: self.clock[0])
+        clock_patch.start()
+        self.addCleanup(clock_patch.stop)
+
+    @contextmanager
+    def recorded_logs(self):
+        with patch.object(cloud, "logger", logging.getLogger("maante")), self.assertLogs(
+            "maante", level="DEBUG"
+        ) as logs:
+            yield logs
+
+    def assert_safe_logs(self, logs):
+        text = "\n".join(logs.output) + repr([record.args for record in logs.records])
+        for secret in ("fake-password", "fake-token", "private-account", "secret-instance", "secret-title", "worker-secret-bytes"):
+            self.assertNotIn(secret, text)
+        for record in logs.records:
+            self.assertIsNone(record.exc_info)
+            self.assertIsNone(record.stack_info)
 
     def assert_restored_dpi(self):
         self.assertEqual(
@@ -175,7 +184,7 @@ class WindowTests(unittest.TestCase):
         )
 
     def assert_no_input(self):
-        self.api.user32.SendInput.assert_not_called()
+        self.api.user32.PostMessageW.assert_not_called()
 
     def test_non_windows_public_apis_fail_without_native_or_process_calls(self):
         with patch.object(cloud.sys, "platform", "linux"), patch.object(
@@ -247,30 +256,285 @@ class WindowTests(unittest.TestCase):
         self.load_api.assert_not_called()
 
     def test_capture_worker_failures_are_redacted(self):
-        secret = "do-not-log-command-or-screenshot"
+        secret = r"password=fake-password token=fake-token E:\private-account\client.exe --instance secret-instance secret-title"
         failures = (
-            subprocess.TimeoutExpired([secret], 0.1, output=secret.encode()),
+            subprocess.TimeoutExpired([secret], 0.1, output=secret.encode(), stderr=secret.encode()),
             OSError(secret),
             MemoryError(secret),
         )
-        for failure in failures:
-            with self.subTest(error_type=type(failure).__name__), patch.object(
-                cloud.subprocess, "run", side_effect=failure
+        with self.recorded_logs() as logs:
+            for failure in failures:
+                with self.subTest(error_type=type(failure).__name__), patch.object(
+                    cloud.subprocess, "run", side_effect=failure
+                ):
+                    self.assertIsNone(cloud.capture_window(self.api.HWND, 0.1))
+                    self.assertIn("stage=capture.worker", logs.records[-1].getMessage())
+                    self.assertIn("error=" + type(failure).__name__, logs.records[-1].getMessage())
+            with patch.object(
+                cloud.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=1, stdout=secret.encode(), stderr=secret.encode()),
             ):
-                self.assertIsNone(cloud.capture_window(self.api.HWND, 0.1))
-                self.log.debug.assert_called_with(
-                    "窗口辅助失败 | stage=%s | error=%s",
-                    "capture.worker",
-                    type(failure).__name__,
-                )
-        with patch.object(
-            cloud.subprocess,
-            "run",
-            return_value=SimpleNamespace(returncode=1, stdout=secret.encode()),
-        ):
-            self.assertIsNone(cloud.capture_window(self.api.HWND))
-        self.assertNotIn(secret, str(self.log.mock_calls))
-        self.assertEqual(self.log.debug.call_args.args[-1], "ChildProcessError")
+                self.assertIsNone(cloud.capture_window(self.api.HWND))
+        self.assertEqual(len(logs.records), 4)
+        self.assertTrue(all(record.levelno == logging.DEBUG for record in logs.records))
+        self.assertIn("reason=worker_capture_failed | returncode=1", logs.output[-1])
+        self.assertIn("error=ChildProcessError", logs.output[-1])
+        self.assert_safe_logs(logs)
+
+    def capture_process(self, packet=None):
+        process = Mock()
+        process.returncode = 0
+        process.stdout = io.BytesIO()
+        process.stderr = io.BytesIO()
+        process.stdin = io.BytesIO()
+        process.communicate.return_value = (
+            cloud._HEADER.pack(1, 1) + b"\x01\x02\x03" if packet is None else packet,
+            None,
+        )
+        return process
+
+    def assert_capture_pipes_closed(self, process):
+        for pipe in (process.stdin, process.stdout, process.stderr):
+            self.assertTrue(pipe.closed)
+
+    def test_capture_stopped_is_keyword_only_and_none_keeps_run_compatibility(self):
+        with patch.object(cloud.subprocess, "run", return_value=SimpleNamespace(
+            returncode=0, stdout=cloud._HEADER.pack(1, 1) + b"\x00" * 3,
+        )) as run, patch.object(cloud.subprocess, "Popen") as spawn:
+            self.assertIsNotNone(cloud.capture_window(self.api.HWND, 0.4, stopped=None))
+            with self.assertRaises(TypeError):
+                cloud.capture_window(self.api.HWND, 0.4, lambda: False)
+        run.assert_called_once()
+        spawn.assert_not_called()
+
+    def test_capture_cancelled_or_budget_exhausted_before_launch_spawns_nothing(self):
+        def use_budget():
+            self.clock[0] = 0.25
+            return False
+
+        with patch.object(cloud.subprocess, "Popen") as spawn, patch.object(
+            cloud.subprocess, "run"
+        ) as run:
+            for stopped in (lambda: True, use_budget):
+                self.clock[0] = 0.0
+                self.assertIsNone(cloud.capture_window(self.api.HWND, 0.25, stopped=stopped))
+        spawn.assert_not_called()
+        run.assert_not_called()
+
+    def test_capture_callback_success_reuses_arguments_and_closes_pipes(self):
+        process = self.capture_process()
+        with patch.object(cloud.subprocess, "run", return_value=SimpleNamespace(
+            returncode=0, stdout=process.communicate.return_value[0],
+        )) as run:
+            expected = cloud.capture_window(self.api.HWND, 0.4)
+        with patch.object(cloud.subprocess, "Popen", return_value=process) as spawn:
+            actual = cloud.capture_window(self.api.HWND, 0.4, stopped=lambda: False)
+        np.testing.assert_array_equal(actual, expected)
+        args, options = run.call_args
+        options.pop("timeout")
+        spawn.assert_called_once_with(*args, **options)
+        process.communicate.assert_called_once_with(timeout=0.1)
+        process.kill.assert_not_called()
+        self.assert_capture_pipes_closed(process)
+
+    def test_capture_cancellation_during_worker_wait_kills_reaps_without_retry(self):
+        process = self.capture_process()
+
+        def wait(*, timeout):
+            self.clock[0] += timeout
+            raise subprocess.TimeoutExpired(["fake-token"], timeout)
+
+        process.communicate.side_effect = wait
+        with patch.object(cloud.subprocess, "Popen", return_value=process) as spawn:
+            result = cloud.capture_window(
+                self.api.HWND, 3, stopped=lambda: self.clock[0] >= 0.1,
+            )
+        self.assertIsNone(result)
+        spawn.assert_called_once()
+        process.communicate.assert_called_once_with(timeout=0.1)
+        process.kill.assert_called_once()
+        process.wait.assert_called_once()
+        self.assertGreater(process.wait.call_args.kwargs["timeout"], 0)
+        self.assertLessEqual(process.wait.call_args.kwargs["timeout"], 1)
+        self.assert_capture_pipes_closed(process)
+
+    def test_capture_wait_slices_include_spawn_cost_in_deadline(self):
+        process = self.capture_process()
+        remaining_at_wait = []
+
+        def spawn(*args, **kwargs):
+            self.clock[0] += 0.03
+            return process
+
+        def wait(*, timeout):
+            remaining_at_wait.append(0.25 - self.clock[0])
+            self.assertGreater(timeout, 0)
+            self.assertLessEqual(timeout, min(0.1, remaining_at_wait[-1]))
+            self.clock[0] += timeout
+            raise subprocess.TimeoutExpired(["fake-token"], timeout)
+
+        process.communicate.side_effect = wait
+        with patch.object(cloud.subprocess, "Popen", side_effect=spawn) as launch:
+            self.assertIsNone(cloud.capture_window(self.api.HWND, 0.25, stopped=lambda: False))
+        launch.assert_called_once()
+        self.assertEqual(process.communicate.call_count, 3)
+        self.assertAlmostEqual(process.communicate.call_args.kwargs["timeout"], 0.02)
+        self.assertAlmostEqual(self.clock[0], 0.25)
+        process.kill.assert_called_once()
+        process.wait.assert_called_once()
+        self.assert_capture_pipes_closed(process)
+
+    def test_capture_expired_during_spawn_never_starts_communicate(self):
+        process = self.capture_process()
+
+        def spawn(*args, **kwargs):
+            self.clock[0] = 0.25
+            return process
+
+        with patch.object(cloud.subprocess, "Popen", side_effect=spawn) as launch:
+            self.assertIsNone(cloud.capture_window(self.api.HWND, 0.25, stopped=lambda: False))
+        launch.assert_called_once()
+        process.communicate.assert_not_called()
+        process.kill.assert_called_once()
+        process.wait.assert_called_once()
+        self.assert_capture_pipes_closed(process)
+
+    def test_capture_discards_frame_if_stopped_or_expired_on_completion(self):
+        for cancel in (False, True):
+            with self.subTest(cancel=cancel):
+                self.clock[0] = 0.0
+                process = self.capture_process()
+                packet = process.communicate.return_value
+
+                def finish(*, timeout):
+                    self.clock[0] = 0.25
+                    return packet
+
+                process.communicate.side_effect = finish
+                with patch.object(cloud.subprocess, "Popen", return_value=process):
+                    result = cloud.capture_window(
+                        self.api.HWND, 0.25,
+                        stopped=lambda: cancel and self.clock[0] >= 0.25,
+                    )
+                self.assertIsNone(result)
+                process.kill.assert_called_once()
+                process.wait.assert_called_once()
+                self.assert_capture_pipes_closed(process)
+
+    def test_capture_discards_frame_if_stopped_or_expired_during_decode(self):
+        for cancel in (False, True):
+            with self.subTest(cancel=cancel):
+                self.clock[0] = 0.0
+                process = self.capture_process()
+
+                def decode(packet):
+                    self.clock[0] = 0.25
+                    return np.zeros((1, 1, 3), dtype=np.uint8)
+
+                with patch.object(cloud.subprocess, "Popen", return_value=process), patch.object(
+                    cloud, "_decode_frame", side_effect=decode
+                ):
+                    result = cloud.capture_window(
+                        self.api.HWND, 0.25,
+                        stopped=lambda: cancel and self.clock[0] >= 0.25,
+                    )
+                self.assertIsNone(result)
+                self.assert_capture_pipes_closed(process)
+
+    def test_capture_reap_timeout_still_closes_pipes_and_never_restarts_worker(self):
+        process = self.capture_process()
+        process.communicate.side_effect = OSError("fake-token")
+        process.wait.side_effect = subprocess.TimeoutExpired(["fake-password"], 1)
+        with patch.object(cloud.subprocess, "Popen", return_value=process) as spawn, self.recorded_logs() as logs:
+            self.assertIsNone(cloud.capture_window(self.api.HWND, stopped=lambda: False))
+        spawn.assert_called_once()
+        process.kill.assert_called_once()
+        process.wait.assert_called_once()
+        self.assertGreater(process.wait.call_args.kwargs["timeout"], 0)
+        self.assertLessEqual(process.wait.call_args.kwargs["timeout"], 1)
+        self.assert_capture_pipes_closed(process)
+        self.assert_safe_logs(logs)
+
+    def test_capture_worker_and_cleanup_failures_are_redacted_and_close_all_pipes(self):
+        secret = "fake-password fake-token private-account worker-secret-bytes"
+        for cleanup_stage in (None, "kill", "wait", "close"):
+            with self.subTest(cleanup_stage=cleanup_stage):
+                process = self.capture_process()
+                process.communicate.side_effect = OSError(secret)
+                if cleanup_stage in ("kill", "wait"):
+                    getattr(process, cleanup_stage).side_effect = OSError(secret)
+                elif cleanup_stage == "close":
+                    process.stdin = Mock()
+                    process.stdin.close.side_effect = OSError(secret)
+                with patch.object(cloud.subprocess, "Popen", return_value=process), self.recorded_logs() as logs:
+                    self.assertIsNone(cloud.capture_window(self.api.HWND, stopped=lambda: False))
+                process.kill.assert_called_once()
+                process.wait.assert_called_once()
+                self.assertTrue(process.stdout.closed)
+                self.assertTrue(process.stderr.closed)
+                if cleanup_stage == "close":
+                    process.stdin.close.assert_called_once()
+                else:
+                    self.assertTrue(process.stdin.closed)
+                self.assert_safe_logs(logs)
+
+    def test_capture_callback_failure_after_spawn_still_reclaims_worker(self):
+        process = self.capture_process()
+        stopped = Mock(side_effect=[False, OSError("fake-token")])
+        with patch.object(cloud.subprocess, "Popen", return_value=process), self.recorded_logs() as logs:
+            self.assertIsNone(cloud.capture_window(self.api.HWND, stopped=stopped))
+        process.communicate.assert_not_called()
+        process.kill.assert_called_once()
+        process.wait.assert_called_once()
+        self.assert_capture_pipes_closed(process)
+        self.assert_safe_logs(logs)
+
+    def test_capture_spawn_failure_and_invalid_worker_payload_are_redacted(self):
+        with patch.object(cloud.subprocess, "Popen", side_effect=OSError("fake-token")) as spawn, self.recorded_logs() as logs:
+            self.assertIsNone(cloud.capture_window(self.api.HWND, stopped=lambda: False))
+        spawn.assert_called_once()
+        self.assert_safe_logs(logs)
+        for returncode in (0, 1, 2, 99):
+            with self.subTest(returncode=returncode):
+                process = self.capture_process(b"worker-secret-bytes")
+                process.returncode = returncode
+                with patch.object(cloud.subprocess, "Popen", return_value=process), self.recorded_logs() as logs:
+                    self.assertIsNone(cloud.capture_window(self.api.HWND, stopped=lambda: False))
+                self.assert_capture_pipes_closed(process)
+                self.assert_safe_logs(logs)
+
+    def test_capture_callback_cancels_real_inert_worker_and_closes_stdout(self):
+        # 仅启动等待事件的 Python，绝不执行 --capture 或接触客户端。
+        real_popen = subprocess.Popen
+        children = []
+        checks = []
+
+        def spawn(argv, **kwargs):
+            process = real_popen([
+                sys.executable, "-B", "-I", "-c",
+                "import threading; threading.Event().wait(30)",
+            ], **kwargs)
+            children.append(process)
+
+            def cleanup():
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=1)
+                process.stdout.close()
+
+            self.addCleanup(cleanup)
+            return process
+
+        def stopped():
+            checks.append(1)
+            return len(checks) >= 3
+
+        with patch.object(cloud.subprocess, "Popen", side_effect=spawn):
+            self.assertIsNone(cloud.capture_window(self.api.HWND, 3, stopped=stopped))
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertTrue(children[0].stdout.closed)
 
     def test_timeout_kills_and_reaps_a_real_inert_subprocess(self):
         # 只启动等待事件的 Python；不运行工作进程，不访问任何真实窗口。
@@ -331,7 +595,7 @@ class WindowTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     cloud._decode_frame(cloud._HEADER.pack(1, 1) + b"\x00" * 3)
         allocate.assert_not_called()
-        self.assertEqual(self.log.debug.call_args.args[-2], "capture.decode")
+        self.assertEqual(self.log.debug.call_args.args[1], "capture.decode")
 
     def test_invalid_points_never_load_native_api(self):
         for point in (
@@ -353,37 +617,42 @@ class WindowTests(unittest.TestCase):
                 self.assertFalse(cloud.click_window(self.api.HWND, point))
         self.load_api.assert_not_called()
 
-    def test_single_click_uses_exact_client_coordinate_and_releases_once(self):
+    def test_single_click_posts_move_down_up_at_exact_client_coordinate(self):
         self.assertTrue(cloud.click_window(self.api.HWND, (10, 20)))
-        self.api.user32.SetCursorPos.assert_called_once_with(110, 220)
-        self.assertEqual(self.api.button_flags(), [cloud._LEFT_DOWN, cloud._LEFT_UP])
-        for entry in self.api.user32.SendInput.call_args_list:
-            self.assertEqual(entry.args[0], 1)
-            self.assertEqual(entry.args[1]._obj.type, 0)
-            self.assertEqual(entry.args[2], ctypes.sizeof(cloud._Input))
-        self.assertEqual(self.api.user32.WindowFromPoint.call_count, 2)
+        self.assertEqual(
+            self.api.posted(),
+            [
+                (self.api.HWND, cloud._WM_MOUSEMOVE, 0, 10, 20),
+                (self.api.HWND, cloud._WM_LBUTTONDOWN, cloud._MK_LBUTTON, 10, 20),
+                (self.api.HWND, cloud._WM_LBUTTONUP, 0, 10, 20),
+            ],
+        )
         self.assert_restored_dpi()
 
-    def test_target_descendant_foreground_and_negative_monitor_coordinates(self):
-        self.api.user32.GetForegroundWindow.return_value = self.api.CHILD
-        self.api.origin = (-1000, -500)
-        self.api.desktop.update({76: -1920, 77: -1080, 78: 3840, 79: 2160})
-        self.assertTrue(cloud.click_window(self.api.HWND, (10, 20)))
-        self.api.user32.SetCursorPos.assert_called_once_with(-990, -480)
+    def test_background_click_never_touches_foreground_cursor_or_real_input(self):
+        """后台点击不得激活窗口、移动真实鼠标或注入硬件输入，桌面断开时同样可用。"""
+        self.assertTrue(cloud.click_window(self.api.HWND, (99, 59)))
+        for name in (
+            "SendInput",
+            "SetCursorPos",
+            "GetCursorPos",
+            "SetForegroundWindow",
+            "GetForegroundWindow",
+            "WindowFromPoint",
+            "GetAsyncKeyState",
+            "ClientToScreen",
+        ):
+            with self.subTest(api=name):
+                getattr(self.api.user32, name).assert_not_called()
+        self.assertEqual(self.api.posted()[-1][3:], (99, 59))
 
-    def test_window_focus_hit_and_user_button_checks_reject_without_input(self):
+    def test_window_state_checks_reject_without_posting(self):
         cases = (
             ("IsWindow", 0),
             ("IsWindowVisible", 0),
             ("IsWindowEnabled", 0),
             ("IsIconic", 1),
-            ("GetForegroundWindow", 0),
-            ("GetForegroundWindow", 900),
-            ("WindowFromPoint", 0),
-            ("WindowFromPoint", 900),
-            ("GetAsyncKeyState", 0x8000),
             ("GetClientRect", 0),
-            ("ClientToScreen", 0),
         )
         for name, value in cases:
             with self.subTest(check=name, value=value):
@@ -393,82 +662,36 @@ class WindowTests(unittest.TestCase):
                 method.return_value = value
                 with patch.object(cloud, "_get_win32", return_value=api):
                     self.assertFalse(cloud.click_window(api.HWND, (10, 20)))
-                api.user32.SendInput.assert_not_called()
-                api.user32.SetCursorPos.assert_not_called()
+                api.user32.PostMessageW.assert_not_called()
                 self.assertEqual(api.user32.SetThreadDpiAwarenessContext.call_count, 2)
 
     def test_child_window_handle_is_not_a_target_root(self):
         self.assertFalse(cloud.click_window(self.api.CHILD, (10, 20)))
-        self.api.user32.SetCursorPos.assert_not_called()
         self.assert_no_input()
 
-    def test_outside_client_or_virtual_desktop_rejected(self):
-        for point in ((100, 20), (10, 60)):
-            self.assertFalse(cloud.click_window(self.api.HWND, point))
-        self.api.origin = (1920, 0)
-        self.assertFalse(cloud.click_window(self.api.HWND, (10, 20)))
-        self.api.origin = (100, 200)
-        self.api.desktop[78] = 0
-        self.assertFalse(cloud.click_window(self.api.HWND, (10, 20)))
-        self.api.user32.SetCursorPos.assert_not_called()
+    def test_outside_client_is_rejected(self):
+        for point in ((100, 20), (10, 60), (100, 60)):
+            with self.subTest(point=point):
+                self.assertFalse(cloud.click_window(self.api.HWND, point))
         self.assert_no_input()
 
-    def test_failed_cursor_move_does_not_send_buttons(self):
-        self.api.user32.SetCursorPos.side_effect = None
-        self.api.user32.SetCursorPos.return_value = 0
+    def test_move_post_failure_sends_no_button(self):
+        self.api.user32.PostMessageW.side_effect = [0]
         self.assertFalse(cloud.click_window(self.api.HWND, (10, 20)))
-        self.assert_no_input()
+        self.assertEqual(self.api.messages(), [cloud._WM_MOUSEMOVE])
         self.assert_restored_dpi()
 
-    def test_clipped_or_unreadable_cursor_does_not_send_buttons(self):
-        self.api.user32.SetCursorPos.side_effect = lambda x, y: 1
-        self.assertFalse(cloud.click_window(self.api.HWND, (10, 20)))
-        self.assert_no_input()
-        self.api.user32.GetCursorPos.side_effect = None
-        self.api.user32.GetCursorPos.return_value = 0
-        self.assertFalse(cloud.click_window(self.api.HWND, (10, 20)))
-        self.assert_no_input()
-
-    def test_focus_or_occlusion_change_after_move_does_not_send_buttons(self):
-        for name, values in (
-            ("GetForegroundWindow", [self.api.HWND, 900]),
-            ("WindowFromPoint", [self.api.CHILD, 900]),
-            ("GetAsyncKeyState", [0, 0x8000]),
-        ):
-            with self.subTest(check=name):
-                api = FakeWin32()
-                getattr(api.user32, name).side_effect = values
-                with patch.object(cloud, "_get_win32", return_value=api):
-                    self.assertFalse(cloud.click_window(api.HWND, (10, 20)))
-                api.user32.SetCursorPos.assert_called_once()
-                api.user32.SendInput.assert_not_called()
-
-    def test_window_moving_or_resizing_during_cursor_move_rejects_input(self):
-        for change in ("move", "resize"):
-            with self.subTest(change=change):
-                api = FakeWin32()
-
-                def moved(x, y):
-                    api.cursor = (x, y)
-                    if change == "move":
-                        api.origin = (101, 200)
-                    else:
-                        api.width += 1
-                    return 1
-
-                api.user32.SetCursorPos.side_effect = moved
-                with patch.object(cloud, "_get_win32", return_value=api):
-                    self.assertFalse(cloud.click_window(api.HWND, (10, 20)))
-                api.user32.SendInput.assert_not_called()
-
-    def test_down_failure_or_exception_still_releases_in_finally(self):
+    def test_down_failure_or_exception_still_posts_release_in_finally(self):
         for result in (0, OSError("sensitive-input-error")):
             with self.subTest(error_type=type(result).__name__):
                 api = FakeWin32()
-                api.user32.SendInput.side_effect = [result, 1]
+                api.user32.PostMessageW.side_effect = [1, result, 1]
                 with patch.object(cloud, "_get_win32", return_value=api):
                     self.assertFalse(cloud.click_window(api.HWND, (10, 20)))
-                self.assertEqual(api.button_flags(), [cloud._LEFT_DOWN, cloud._LEFT_UP])
+                self.assertEqual(
+                    api.messages(),
+                    [cloud._WM_MOUSEMOVE, cloud._WM_LBUTTONDOWN, cloud._WM_LBUTTONUP],
+                )
                 self.assertEqual(api.user32.SetThreadDpiAwarenessContext.call_count, 2)
         self.assertNotIn("sensitive-input-error", str(self.log.mock_calls))
 
@@ -476,25 +699,29 @@ class WindowTests(unittest.TestCase):
         for result in (0, OSError("release-error")):
             with self.subTest(error_type=type(result).__name__):
                 api = FakeWin32()
-                api.user32.SendInput.side_effect = [1, result]
+                api.user32.PostMessageW.side_effect = [1, 1, result]
                 with patch.object(cloud, "_get_win32", return_value=api):
                     self.assertFalse(cloud.click_window(api.HWND, (10, 20)))
-                self.assertEqual(api.button_flags(), [cloud._LEFT_DOWN, cloud._LEFT_UP])
+                self.assertEqual(
+                    api.messages(),
+                    [cloud._WM_MOUSEMOVE, cloud._WM_LBUTTONDOWN, cloud._WM_LBUTTONUP],
+                )
                 self.assertEqual(api.user32.SetThreadDpiAwarenessContext.call_count, 2)
 
     def test_missing_dpi_context_fails_closed(self):
         self.api.user32.SetThreadDpiAwarenessContext.return_value = 0
         self.assertFalse(cloud.click_window(self.api.HWND, (10, 20)))
-        self.api.user32.SetCursorPos.assert_not_called()
         self.assert_no_input()
         self.api.user32.SetThreadDpiAwarenessContext.assert_called_once()
 
     def test_dpi_restore_failure_is_reported_after_releasing_input(self):
         self.api.user32.SetThreadDpiAwarenessContext.side_effect = [123, 0]
         self.assertFalse(cloud.click_window(self.api.HWND, (10, 20)))
-        self.assertEqual(self.api.button_flags(), [cloud._LEFT_DOWN, cloud._LEFT_UP])
+        self.assertEqual(
+            self.api.messages(),
+            [cloud._WM_MOUSEMOVE, cloud._WM_LBUTTONDOWN, cloud._WM_LBUTTONUP],
+        )
         self.assert_restored_dpi()
-
     def test_capture_deselects_before_getdibits_and_removes_padding(self):
         self.api.width, self.api.height = 3, 2
         image = cloud._capture_native(self.api.HWND)
@@ -603,7 +830,7 @@ class WindowTests(unittest.TestCase):
             stdout.buffer.getvalue(), cloud._HEADER.pack(3, 2) + bytes(range(18))
         )
         self.assertEqual(stderr.getvalue(), "")
-        self.log.debug.assert_not_called()
+        self.assertEqual(self.log.mock_calls, [])
 
     def test_worker_errors_have_no_stdout_stderr_or_logger_leak(self):
         stdout, stderr = SimpleNamespace(buffer=io.BytesIO()), io.StringIO()
@@ -614,7 +841,7 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(stdout.buffer.getvalue(), b"")
         self.assertEqual(stderr.getvalue(), "")
-        self.log.debug.assert_not_called()
+        self.assertEqual(self.log.mock_calls, [])
 
     def test_worker_rejects_bad_arguments_without_loading_native_api(self):
         for argv in (
@@ -628,8 +855,98 @@ class WindowTests(unittest.TestCase):
         with patch.object(cloud.sys, "platform", "linux"):
             self.assertNotEqual(cloud._worker_main(["--capture", "100"]), 0)
         self.load_api.assert_not_called()
-        self.log.debug.assert_not_called()
+        self.assertEqual(self.log.mock_calls, [])
 
+    def test_repeated_capture_failures_are_deduplicated_until_recovery(self):
+        packet = cloud._HEADER.pack(3, 2) + bytes(18)
+        results = [SimpleNamespace(returncode=1, stdout=b"worker-secret-bytes")] * 100
+        results += [SimpleNamespace(returncode=0, stdout=packet)] * 50
+        results += [SimpleNamespace(returncode=1, stdout=b"")]
+        with self.recorded_logs() as logs, patch.object(cloud.subprocess, "run", side_effect=results):
+            for index in range(151):
+                self.clock[0] = index * 0.1
+                cloud.capture_window(87654321)
+        self.assertEqual(len(logs.records), 3)
+        self.assertEqual(logs.records[0].levelno, logging.DEBUG)
+        self.assertIn("reason=worker_capture_failed | returncode=1 | timeout_s=3.0 | failures=1", logs.output[0])
+        self.assertEqual(logs.records[1].levelno, logging.DEBUG)
+        self.assertIn("stage=capture.ready | failures=100 | client=3x2 | outage=10.000s", logs.output[1])
+        self.assertIn("failures=1", logs.output[2])
+        self.assert_safe_logs(logs)
+        self.assertNotIn("87654321", "\n".join(logs.output))
+
+    def test_capture_diagnostic_changes_are_logged_once_each(self):
+        results = (
+            [SimpleNamespace(returncode=1, stdout=b"")] * 3
+            + [SimpleNamespace(returncode=2, stdout=b"")] * 3
+            + [SimpleNamespace(returncode=0, stdout=b"worker-secret-bytes")] * 3
+        )
+        with self.recorded_logs() as logs, patch.object(cloud.subprocess, "run", side_effect=results):
+            for _ in results:
+                self.assertIsNone(cloud.capture_window(self.api.HWND))
+        self.assertEqual(len(logs.records), 3)
+        self.assertIn("reason=worker_capture_failed | returncode=1", logs.output[0])
+        self.assertIn("reason=worker_arguments_rejected | returncode=2 | timeout_s=3.0 | failures=4", logs.output[1])
+        self.assertIn("stage=capture.decode | reason=dimensions_out_of_bounds | returncode=0", logs.output[2])
+        self.assert_safe_logs(logs)
+
+    def test_capture_failure_state_is_bounded_and_successes_are_silent(self):
+        packet = cloud._HEADER.pack(1, 1) + bytes(3)
+        with patch.object(
+            cloud.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=packet)
+        ):
+            for _ in range(20):
+                self.assertIsNotNone(cloud.capture_window(self.api.HWND))
+        self.assertEqual(self.log.mock_calls, [])
+        with patch.object(
+            cloud.subprocess, "run", return_value=SimpleNamespace(returncode=1, stdout=b"")
+        ):
+            for hwnd in range(1, 40):
+                self.assertIsNone(cloud.capture_window(hwnd))
+        self.assertEqual(len(cloud._capture_failures), cloud._CAPTURE_LOG_LIMIT)
+        self.assertNotIn(1, cloud._capture_failures)
+        self.assertIn(39, cloud._capture_failures)
+        self.assertEqual(self.log.debug.call_count, 39)
+
+    def test_click_success_and_failure_logs_have_reason_without_coordinates(self):
+        with self.recorded_logs() as logs:
+            self.assertTrue(cloud.click_window(self.api.HWND, (37, 41)))
+        self.assertEqual([record.levelno for record in logs.records], [logging.DEBUG, logging.DEBUG])
+        self.assertIn("stage=click.ready", logs.output[-1])
+        cases = (
+            ("IsWindowVisible", 0, "click.validate", "window_hidden"),
+            ("IsIconic", 1, "click.validate", "window_minimized"),
+            ("IsWindowEnabled", 0, "click.validate", "window_disabled"),
+        )
+        for name, value, stage, reason in cases:
+            with self.subTest(check=name):
+                api = FakeWin32()
+                method = getattr(api.user32, name)
+                method.side_effect = None
+                method.return_value = value
+                with patch.object(cloud, "_get_win32", return_value=api), self.recorded_logs() as logs:
+                    self.assertFalse(cloud.click_window(api.HWND, (37, 41)))
+                self.assertEqual(logs.records[-1].levelno, logging.DEBUG)
+                self.assertIn("stage=%s | reason=%s" % (stage, reason), logs.output[-1])
+                text = "\n".join(logs.output) + repr([record.args for record in logs.records])
+                for sensitive in ("37", "41"):
+                    self.assertNotIn(sensitive, text)
+                api.user32.PostMessageW.assert_not_called()
+
+    def test_click_post_failures_are_specific_and_redacted(self):
+        for sequence, reason in (
+            ([0], "move_post_failed"),
+            ([1, 0, 1], "button_down_failed"),
+            ([1, 1, 0], "button_release_failed"),
+            ([1, OSError("fake-password fake-token private-account"), 1], "button_input_failed"),
+        ):
+            with self.subTest(reason=reason):
+                api = FakeWin32()
+                api.user32.PostMessageW.side_effect = sequence
+                with patch.object(cloud, "_get_win32", return_value=api), self.recorded_logs() as logs:
+                    self.assertFalse(cloud.click_window(api.HWND, (10, 20)))
+                self.assertIn("stage=click.input | reason=%s" % reason, logs.output[-1])
+                self.assert_safe_logs(logs)
     def test_worker_revalidates_image_dimensions_before_writing(self):
         stdout = SimpleNamespace(buffer=io.BytesIO())
         invalid_image = SimpleNamespace(shape=(8001, 8000, 3), dtype=np.uint8)

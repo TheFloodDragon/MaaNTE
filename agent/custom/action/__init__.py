@@ -62,6 +62,7 @@ __all__ = [
     "CloudGameQueueWait",
     "CloudGameClick",
     "CloudGameConfirmReady",
+    "CloudGameHandoff",
     "CloudGameFail",
     "CloudGameOwnedDialog",
     "CloudGameFinish",

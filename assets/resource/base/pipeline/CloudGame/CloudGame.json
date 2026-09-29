@@ -1,9 +1,9 @@
 {
     "CloudGameProfile": {
-        "desc": "实机校准门槛：补齐下方云客户端识别、队列文本 ROI 和关闭按钮模板后才可置为 true",
+        "desc": "资源校准门槛：保留已重拍的1280x720首页与两版确认模板；calibrated仅表示允许使用当前资源，不代表排队、奖励及完整入世界已实机验收",
         "enabled": false,
         "attach": {
-            "calibrated": false
+            "calibrated": true
         },
         "rate_limit": 0,
         "pre_delay": 0,
@@ -38,7 +38,7 @@
                 "custom_action_param": {
                     "poll_interval_seconds": 2,
                     "login_timeout_seconds": 600,
-                    "transition_timeout_seconds": 30
+                    "transition_timeout_seconds": 90
                 }
             }
         },
@@ -123,7 +123,7 @@
         "post_delay": 0
     },
     "CloudGameStartConfirmNotice": {
-        "desc": "确认弹窗的时长提示文案，区分启动确认与其他弹窗",
+        "desc": "确认弹窗的时长提示文案，区分启动确认与其他弹窗。同时保留新版（StartConfirmNotice.png，实机 1280x720 重拍，文案位于 y≈296）与旧版（_v1，tests/fixtures/cloud_game/start_confirm_720p.png）客户端布局",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
@@ -133,7 +133,10 @@
                     680,
                     100
                 ],
-                "template": "CloudGame/StartConfirmNotice.png",
+                "template": [
+                    "CloudGame/StartConfirmNotice.png",
+                    "CloudGame/StartConfirmNotice_v1.png"
+                ],
                 "threshold": 0.85
             }
         },
@@ -142,7 +145,7 @@
         "post_delay": 0
     },
     "CloudGameStartConfirmEnter": {
-        "desc": "确认弹窗的进入游戏按钮。实机取证（tests/fixtures/cloud_game/start_confirm_720p.png，含抗锯齿圆角）：退出启动按钮占 x=348..627，进入游戏占 x=652..933，间隙仅 25px；ROI 左边界 636 落在间隙内，确保完全不含会终止启动的退出按钮",
+        "desc": "确认弹窗的进入游戏按钮。实机取证（含抗锯齿圆角）：旧版 start_confirm_720p.png 退出启动 x=348..627、进入游戏 x=652..933；新版 start_confirm_v2_720p.png 退出启动 x=406..630、进入游戏 x=650..874。ROI 左边界 636 在两版间隙内，确保完全不含会终止启动的退出按钮",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
@@ -152,7 +155,10 @@
                     350,
                     110
                 ],
-                "template": "CloudGame/StartConfirmEnter.png",
+                "template": [
+                    "CloudGame/StartConfirmEnter.png",
+                    "CloudGame/StartConfirmEnter_v1.png"
+                ],
                 "threshold": 0.85
             }
         },
@@ -260,7 +266,7 @@
         "post_delay": 0
     },
     "CloudGameEnterWorld": {
-        "desc": "确认已是游戏内部登录页才交给 SceneManager 公共接口",
+        "desc": "确认游戏登录页后检查独立遮挡及交互桌面，再调用SceneManager公共接口；返回后仍需两帧就绪确认",
         "recognition": {
             "type": "And",
             "param": {
@@ -269,11 +275,16 @@
                 ]
             }
         },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_game_handoff"
+            }
+        },
         "next": [
             "CloudGameCloseDailyLoginPopup",
             "CloudGameDailyLoginUnresolved",
-            "CloudGameReady",
-            "[JumpBack]SceneAnyEnterWorld"
+            "CloudGameReady"
         ],
         "on_error": [
             "CloudGameStartFailed"
@@ -388,14 +399,13 @@
         "post_delay": 0
     },
     "CloudGameHome": {
+        "desc": "云首页判定以“开始游戏”按钮为稳定锚点。实机取证：设置图标的渲染尺寸/位置随客户端窗口缩放与版本变化（曾在 48/56px、y=72/91 间漂移），不适合做强制锚点；开始游戏按钮模板在整个 ROI 内稳定命中，作为唯一锚点更鲁棒，且该文案仅出现在云首页",
         "recognition": {
             "type": "And",
             "param": {
                 "all_of": [
-                    "CloudGameHomeScreen",
                     "CloudGameEnterText"
-                ],
-                "box_index": 1
+                ]
             }
         },
         "rate_limit": 0,
@@ -505,7 +515,7 @@
         "post_delay": 0
     },
     "CloudGameHomeScreen": {
-        "desc": "已登录首页的固定设置图标；兼容两种实机 UI 缩放，不含账号信息，ROI 必须覆盖完整图标",
+        "desc": "已登录首页的设置图标（仅作诊断，不参与 CloudGameHome 判定）；兼容新版 48px（实机 1280x720 重拍）、旧版 45px（_v1）与 56px 原缩放布局，不含账号信息，ROI 必须覆盖完整图标",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
@@ -517,6 +527,7 @@
                 ],
                 "template": [
                     "CloudGame/HomeSettingsIcon720.png",
+                    "CloudGame/HomeSettingsIcon720_v1.png",
                     "CloudGame/HomeSettingsIcon.png"
                 ],
                 "threshold": 0.85
@@ -564,7 +575,7 @@
         "post_delay": 0
     },
     "CloudGameQueueText": {
-        "desc": "动态排队信息，取自客户端 QML 的排名与预计等待标签；用 expected 限定排队词表，避免 OCR 读到账号或余额信息",
+        "desc": "仅在已确认排队时读取排名/预计等待标签；Python从原始OCR结果中关联标签邻近的严格数值，保留分框排名和时间，禁止回显任意OCR原文；排队实机ROI仍待验收",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -594,7 +605,7 @@
         "post_delay": 0
     },
     "CloudGameDailyLoginCloseButton": {
-        "desc": "该弹窗没有关闭按钮：客户端 QML 底部是可点击提示 closeTip(tipbg.png + closeTipMouseArea)，点击提示本身即可关闭，无需模板也不盲按 ESC",
+        "desc": "识别点击空白区域关闭提示作为弹窗存在的证据；动作点击720p左侧空白点而非提示文字，随后重新识别。仅关闭弹窗，不报告领取时长；该点击区域仍需当前版本实机验收",
         "recognition": {
             "type": "OCR",
             "param": {
