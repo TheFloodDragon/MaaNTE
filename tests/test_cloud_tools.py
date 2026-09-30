@@ -174,6 +174,52 @@ class CloudToolsTests(unittest.TestCase):
                     self.live.start_agent(self.resource, diagnostics=self.diag)
                 close.assert_called_once_with(self.client, self.proc, self.diag)
 
+    def test_agent_waits_for_imports_before_connecting_once(self):
+        order = []
+        self.diag.wait_agent_bootstrap.side_effect = lambda proc: order.append("bootstrap")
+        self.client.connect.side_effect = lambda: order.append("connect") or True
+        with self.framework(), patch.object(self.live.subprocess, "Popen", return_value=self.proc):
+            self.live.start_agent(self.resource, diagnostics=self.diag)
+        self.assertEqual(order, ["bootstrap", "connect"])
+        self.client.connect.assert_called_once()
+
+
+    def test_bootstrap_wait_allows_imports_longer_than_transport_timeout(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+            diag = self.live.Diagnostics("BootstrapTest", root=directory, fingerprints=False)
+            stack.callback(diag.close)
+            clock = [0.0]
+            with patch.object(self.live.time, "monotonic", side_effect=lambda: clock[0]), patch.object(
+                self.live.time, "sleep", side_effect=lambda delay: clock.__setitem__(0, clock[0] + delay)
+            ), patch.object(Path, "is_file", side_effect=lambda: clock[0] >= 6.0):
+                diag.wait_agent_bootstrap(self.proc)
+            self.assertGreaterEqual(clock[0], 6)
+            self.assertLess(clock[0], 7)
+
+
+    def test_bootstrap_wait_fails_on_exit_or_deadline(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+            diag = self.live.Diagnostics("BootstrapTest", root=directory, fingerprints=False)
+            stack.callback(diag.close)
+            self.proc.poll.return_value = 1
+            with self.assertRaisesRegex(self.live.ToolError, "agent_bootstrap_exit"):
+                diag.wait_agent_bootstrap(self.proc)
+            self.proc.poll.return_value = None
+            clock = [0.0]
+            with patch.object(self.live.time, "monotonic", side_effect=lambda: clock[0]), patch.object(
+                self.live.time, "sleep", side_effect=lambda delay: clock.__setitem__(0, clock[0] + delay)
+            ), self.assertRaisesRegex(self.live.ToolError, "agent_bootstrap_timeout"):
+                diag.wait_agent_bootstrap(self.proc, timeout=0.2)
+
+
+    def test_bootstrap_marker_has_no_connection_payload(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
+            diag = self.live.Diagnostics("AgentServer", root=directory, agent=True, fingerprints=False)
+            stack.callback(diag.close)
+            diag.mark_agent_bootstrap_ready()
+            self.assertEqual((diag.path / "bootstrap.ready").read_bytes(), b"")
+
+
     def test_agent_bind_failure_never_spawns(self):
         self.client.bind.return_value = False
         with self.framework(), patch.object(self.live.subprocess, "Popen") as spawn:
@@ -397,9 +443,10 @@ class CloudToolsTests(unittest.TestCase):
         server = Mock()
         server.start_up.side_effect = lambda _: order.append("start") or True
         runtime = SimpleNamespace(server=server, i18n_init=lambda: order.append("i18n"), cleanup=Mock())
+        self.diag.mark_agent_bootstrap_ready.side_effect = lambda: order.append("bootstrap")
         with patch.object(boot, "Diagnostics", return_value=self.diag), patch.object(boot, "load_agent", return_value=runtime):
             self.assertEqual(boot.main(["PRIVATE_IDENTIFIER"]), 0)
-        self.assertEqual(order, ["i18n", "start"])
+        self.assertEqual(order, ["i18n", "bootstrap", "start"])
         runtime.cleanup.assert_called_once()
         server.shut_down.assert_called_once()
         self.assertNotIn("PRIVATE", str(self.diag.event.call_args_list))

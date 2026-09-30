@@ -78,6 +78,8 @@ def main(argv=None):
             runtime = load_agent(diag)
             runtime.i18n_init()
             diag.event("i18n", "ready")
+            # 在可能需要对端参与的原生握手前发布标记，避免双方相互等待。
+            diag.mark_agent_bootstrap_ready()
             require(runtime.server.start_up(args.identifier), "agent_startup")
             diag.event("agent", "started")
             runtime.server.join()

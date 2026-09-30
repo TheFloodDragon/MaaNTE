@@ -92,6 +92,7 @@ ERROR_CODES = frozenset({
     "window_prepare", "controller_connect", "resource_load", "probe_register",
     "agent_create", "agent_timeout", "agent_identifier", "agent_bind", "agent_connect",
     "agent_unavailable", "probe_override", "calibration_override", "agent_startup", "png_required", "job_invalid",
+    "agent_bootstrap_exit", "agent_bootstrap_timeout",
 })
 
 
@@ -211,6 +212,27 @@ class Diagnostics:
             require(api.Tasker.set_save_on_error(False), "log_on_error")
             require(api.Tasker.set_debug_mode(False), "log_debug")
         _framework_log_path = (self.path, True)
+
+    def mark_agent_bootstrap_ready(self):
+        """只表示导入和 i18n 已完成；不假定原生连接已经建立。"""
+        (self.path / "bootstrap.ready").touch(exist_ok=False)
+        self.event("agent_bootstrap", "ready")
+
+
+    def wait_agent_bootstrap(self, proc, timeout=30.0):
+        """先等冷启动完成，再进行一次连接；不把导入时间算进传输超时。"""
+        deadline = time.monotonic() + timeout
+        marker = self.path / "agent" / "bootstrap.ready"
+        self.event("agent_bootstrap", "waiting")
+        while True:
+            require(proc.poll() is None, "agent_bootstrap_exit")
+            remaining = deadline - time.monotonic()
+            require(remaining > 0, "agent_bootstrap_timeout")
+            if marker.is_file():
+                self.event("agent_bootstrap", "ready")
+                return
+            time.sleep(min(0.05, remaining))
+
 
     def close(self):
         for handler in self.logger.handlers[:]:
@@ -387,6 +409,7 @@ def start_agent(resource, *, diagnostics=None):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         diag.event("agent", "spawned")
+        diag.wait_agent_bootstrap(proc)
         require(bounded_call(client.connect, 10.0), "agent_connect")
         require(client.connected and client.alive, "agent_unavailable")
         diag.event("agent", "connected")
