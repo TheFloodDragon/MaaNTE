@@ -111,8 +111,10 @@ class _InterceptHandler(logging.Handler):
             level = _loguru_logger.level(record.levelname).name
         except (ValueError, AttributeError):
             level = record.levelno
-        frame, depth = logging.currentframe(), 2
-        while frame and frame.f_code.co_filename == logging.__file__:
+        # Skip this handler first, then logging's dispatch frames. Starting at
+        # depth=2 while still inspecting emit() incorrectly reports callHandlers.
+        frame, depth = logging.currentframe(), 0
+        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
             frame = frame.f_back
             depth += 1
         _loguru_logger.opt(depth=depth, exception=record.exc_info).log(
@@ -167,6 +169,8 @@ def _setup_loguru_logger(log_dir="debug/custom", console_level="INFO"):
         format=_resolve_console_format(),
         colorize=False,
         level=console_level,
+        backtrace=False,
+        diagnose=False,
         filter=_enrich_record,
     )
     _loguru_logger.add(
@@ -178,8 +182,8 @@ def _setup_loguru_logger(log_dir="debug/custom", console_level="INFO"):
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
         encoding="utf-8",
         enqueue=True,
-        backtrace=True,
-        diagnose=True,
+        backtrace=False,
+        diagnose=False,
         filter=_enrich_record,
     )
 

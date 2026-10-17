@@ -1,0 +1,385 @@
+{
+    "CloudWebAutoQueueConfig": {
+        "desc": "网页端自动排队开关（独立节点，避免与其他选项互相覆盖）",
+        "enabled": false,
+        "attach": {
+            "auto_queue": true
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebLoginTimeoutConfig": {
+        "desc": "网页端等待登录上限，单位分钟",
+        "enabled": false,
+        "attach": {
+            "minutes": 10
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebQueueTimeoutConfig": {
+        "desc": "网页端排队上限，单位分钟；超时点击退出排队",
+        "enabled": false,
+        "attach": {
+            "minutes": 60
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebFullscreenConfig": {
+        "desc": "串流就绪后切换浏览器全屏，使 Win32 控制器客户区为无标题栏的 16:9",
+        "enabled": false,
+        "attach": {
+            "fullscreen": true
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebStartEntrance": {
+        "desc": "网页端唯一入口：校验控制器、打开/复用专用浏览器、连接 CDP、等待页面加载（失败刷新 3 次）",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_reset"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CloudWebLogin"
+        ],
+        "on_error": [
+            "CloudWebStartFailed"
+        ],
+        "focus": {
+            "Node.Action.Starting": "$cloud_web_focus_start"
+        }
+    },
+    "CloudWebLogin": {
+        "desc": "未登录时提示用户在浏览器中登录并等待（不代填账号/验证码），随后检查剩余时长",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_login"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CloudWebLobby"
+        ],
+        "on_error": [
+            "CloudWebStartFailed"
+        ]
+    },
+    "CloudWebLobby": {
+        "desc": "首页→进入游戏→节点选择→时长确认→排队；关闭每日赠送等弹窗，绝不点击购买/充值",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_lobby"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CloudWebQueue"
+        ],
+        "on_error": [
+            "CloudWebStartFailed"
+        ]
+    },
+    "CloudWebQueue": {
+        "desc": "排队播报与超时退出；串流首帧就绪后可选全屏；回到首页则交回大厅重试",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_queue"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CloudWebWorld"
+        ],
+        "on_error": [
+            "CloudWebStartFailed"
+        ]
+    },
+    "CloudWebWorld": {
+        "desc": "CDP 截取 1280x720 帧，依次识别 CloudWebWorld* 节点并执行 web_action，两帧稳定命中大世界即完成",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_world"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "CloudWebStartDone"
+        ],
+        "on_error": [
+            "CloudWebStartFailed"
+        ]
+    },
+    "CloudWebManualEnterNotice": {
+        "desc": "自动排队关闭：登录并确认时长后结束，交由用户手动进入",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_finish"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "on_error": [
+            "CloudWebStartFailed"
+        ],
+        "focus": {
+            "Node.Action.Succeeded": "$cloud_web_focus_manual"
+        }
+    },
+    "CloudWebStartDone": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_finish"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "on_error": [
+            "CloudWebStartFailed"
+        ],
+        "focus": {
+            "Node.Action.Succeeded": "$cloud_web_focus_done"
+        }
+    },
+    "CloudWebStartFailed": {
+        "desc": "显式失败，不用空节点吞掉错误",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "cloud_web_fail"
+            }
+        },
+        "focus": {
+            "Node.Action.Failed": "$cloud_web_focus_failed"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldReady": {
+        "desc": "大世界：ESC 手机与任务按钮（公共 Status 节点）",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "InWorld"
+                ]
+            }
+        },
+        "attach": {
+            "web_action": "ready",
+            "report": "ready"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldLoginEnter": {
+        "desc": "游戏登录页：左下退出图标 + 中下“进入游戏”文字，点击文字（参数同 SceneManager 登录继续）",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CloudGameGameLogin",
+                    {
+                        "recognition": {
+                            "type": "OCR",
+                            "param": {
+                                "roi": [
+                                    400,
+                                    550,
+                                    600,
+                                    140
+                                ],
+                                "expected": [
+                                    "进入游戏",
+                                    "進入遊戲",
+                                    "(?i)Start",
+                                    "ゲーム開始",
+                                    "点击进入",
+                                    "點擊進入",
+                                    "게임"
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "box_index": 1
+            }
+        },
+        "attach": {
+            "web_action": "click",
+            "report": "login_enter"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldAnnouncement": {
+        "desc": "登录公告：右上关闭按钮 + 标题“公告”，点击关闭按钮",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    {
+                        "recognition": {
+                            "type": "TemplateMatch",
+                            "param": {
+                                "roi": [
+                                    1090,
+                                    84,
+                                    70,
+                                    70
+                                ],
+                                "template": [
+                                    "Common/Scene/Login/LoginAnnouncementClose.png"
+                                ],
+                                "green_mask": true
+                            }
+                        }
+                    },
+                    {
+                        "recognition": {
+                            "type": "OCR",
+                            "param": {
+                                "roi": [
+                                    429,
+                                    88,
+                                    413,
+                                    69
+                                ],
+                                "expected": [
+                                    "游戏公告",
+                                    "公告",
+                                    "NOTICE",
+                                    "Notice",
+                                    "お知らせ",
+                                    "공지"
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "box_index": 0
+            }
+        },
+        "attach": {
+            "web_action": "click",
+            "report": "announcement"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldMonthlyPass": {
+        "desc": "月卡每日奖励弹窗（无法跳过），按 ESC 收下",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    400,
+                    50,
+                    480,
+                    634
+                ],
+                "expected": [
+                    "异晶开采凭证",
+                    "異晶開採憑證",
+                    "今日奖励",
+                    "今日獎勵",
+                    "剩余天数",
+                    "剩餘天數",
+                    "(?i)Riftcrystal\\s*Mining\\s*Permit"
+                ]
+            }
+        },
+        "attach": {
+            "web_action": "esc",
+            "report": "monthly_pass"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldClickBlank": {
+        "desc": "“点击空白区域关闭”类弹窗（公共 Scene 节点），按 ESC",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "SceneClickBlankToExit"
+                ]
+            }
+        },
+        "attach": {
+            "web_action": "esc",
+            "report": "popup"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldCloseButton": {
+        "desc": "通用关闭按钮（公共 Scene 节点），点击",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "SceneClickCloseButton"
+                ]
+            }
+        },
+        "attach": {
+            "web_action": "click",
+            "report": "popup"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldLoading": {
+        "desc": "加载画面（公共 Scene 节点），等待",
+        "recognition": {
+            "type": "Or",
+            "param": {
+                "any_of": [
+                    "SceneLoadingType1",
+                    "SceneLoadingType2"
+                ]
+            }
+        },
+        "attach": {
+            "web_action": "wait",
+            "report": "loading"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}
