@@ -1,10 +1,11 @@
-"""云异环网页端启动器：专用浏览器 profile + 本机 CDP，供 MXU pretask 与 Agent 共用。
+"""云异环网页端启动器：专用浏览器 profile + 本机 CDP，供云异环启动流程与命令行共用。
 
 只使用独立的 cloud-web-profile，不触碰日常浏览器配置，也不读取 cookie 或凭据。
 远程调试只监听 127.0.0.1 的随机端口；DevToolsActivePort 中的 GUID 必须与
 /json/version 一致，且监听进程必须是浏览器本身，避免连到陈旧或他人的端口。
 就绪只表示唯一的“异环云游戏”应用窗口与云页面已出现；登录、排队、串流由
-Agent 任务（CloudGameWebStart）处理。本模块只依赖标准库，可在依赖安装前运行。
+cloud_web_flow（MXU 中经预任务 cloud_web_pretask.py 运行）处理。本模块只依赖标准库，
+直接运行时只打开网页并等待窗口就绪，便于手动排查。
 """
 
 import argparse
@@ -525,11 +526,11 @@ class _SafeParser(argparse.ArgumentParser):
 
 
 def build_parser():
-    parser = _SafeParser(description="打开云异环网页并等待窗口就绪（MXU pretask / 命令行）", allow_abbrev=False)
+    parser = _SafeParser(description="打开云异环网页并等待窗口就绪（命令行排查用）", allow_abbrev=False)
     parser.add_argument("--browser", help="可选：msedge.exe 或 chrome.exe 的绝对路径")
     parser.add_argument("--profile", help="可选：cloud-web-profile[-后缀] 专用目录（绝对路径）")
     parser.add_argument("--timeout", type=float, default=90, help="等待秒数（默认 90，最大 600）")
-    parser.add_argument("options", nargs="?", help="MXU pretask 追加的选项 JSON（当前不使用）")
+    parser.add_argument("options", nargs="?", help="兼容旧版预任务追加的选项 JSON（忽略）")
     return parser
 
 

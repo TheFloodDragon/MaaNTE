@@ -91,7 +91,13 @@
             "description": "$pretask_cloud_web_desc",
             "controller": ["CloudGame-Web"],
             "exec": "python",
-            "args": ["../agent/cloud_web_start.py"]
+            "args": ["../agent/cloud_web_pretask.py"],
+            "option": [
+                "CloudWebAutoQueue",
+                "CloudWebLoginTimeout",
+                "CloudWebQueueTimeout",
+                "CloudWebFullscreen"
+            ]
         }
     ],
     "resource": [
@@ -187,7 +193,7 @@
         "resource/tasks/preset/AFK.json",
         // "resource/tasks/preset/FullDaily.json",
         // "resource/tasks/preset/QuickDaily.json",
-        "resource/tasks/preset/RealtimeAssistance.json",
+        "resource/tasks/preset/RealtimeAssistance.json"
     ],
     "option": {}
 }

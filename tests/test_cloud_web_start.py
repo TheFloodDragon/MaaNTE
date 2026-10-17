@@ -108,20 +108,13 @@ class LobbyPopupTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        import importlib.util
+        import importlib
 
-        # 按文件加载，避免包 __init__ 连带导入全部动作（其他用例可能已替换 AgentServer）。
-        path = ROOT / "agent" / "custom" / "action" / "cloud_game_web.py"
-        spec = importlib.util.spec_from_file_location("maante_cloud_game_web_under_test", path)
-        module = importlib.util.module_from_spec(spec)
+        # 流程逻辑不依赖 AgentServer，直接按模块名导入（不经过 custom 包）。
         try:
-            from maa.agent.agent_server import AgentServer
-
-            with patch.object(AgentServer, "custom_action", staticmethod(lambda name: (lambda cls: cls))):
-                spec.loader.exec_module(module)
+            cls.mod = importlib.import_module("cloud_web_flow")
         except ImportError as exc:  # 缺少 MaaFW 时跳过
             raise unittest.SkipTest(str(exc))
-        cls.mod = module
 
     def setUp(self):
         self.clicks = []

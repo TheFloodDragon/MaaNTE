@@ -15,24 +15,6 @@
                 "CloudGameAutoQueue",
                 "CloudGameQueueTimeout"
             ]
-        },
-        {
-            "name": "CloudGameWebStart",
-            "label": "$task_cloud_web_label",
-            "entry": "CloudWebStartEntrance",
-            "description": "$task_cloud_web_desc",
-            "controller": [
-                "CloudGame-Web"
-            ],
-            "group": [
-                "CloudGame"
-            ],
-            "option": [
-                "CloudWebAutoQueue",
-                "CloudWebLoginTimeout",
-                "CloudWebQueueTimeout",
-                "CloudWebFullscreen"
-            ]
         }
     ],
     "option": {
