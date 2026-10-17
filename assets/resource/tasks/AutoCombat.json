@@ -1,0 +1,95 @@
+{
+    "task": [
+        {
+            "name": "AutoCombat",
+            "label": "$task_auto_combat_label",
+            "entry": "AutoCombatMain",
+            "description": "$task_auto_combat_desc",
+            "option": [
+                "AutoCombatMode",
+                "AutoCombatMaxDuration"
+            ],
+            "controller": [
+                "Win32-Front"
+            ],
+            "group": [
+                "RealTimeAssist"
+            ]
+        }
+    ],
+    "option": {
+        "AutoCombatMode": {
+            "type": "select",
+            "label": "$task_auto_combat_option_mode",
+            "description": "$task_auto_combat_option_mode_desc",
+            "default_case": "Once",
+            "cases": [
+                {
+                    "name": "Once",
+                    "label": "$task_auto_combat_option_mode_once",
+                    "description": "$task_auto_combat_option_mode_once_desc",
+                    "option": [
+                        "AutoCombatWaitTimeout"
+                    ]
+                },
+                {
+                    "name": "Continuous",
+                    "label": "$task_auto_combat_option_mode_continuous",
+                    "description": "$task_auto_combat_option_mode_continuous_desc",
+                    "pipeline_override": {
+                        "AutoCombatMain": {
+                            "next": [
+                                "AutoCombatMain"
+                            ]
+                        },
+                        "AutoCombat_ModeOption": {
+                            "attach": {
+                                "wait_timeout": 0
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "AutoCombatWaitTimeout": {
+            "type": "input",
+            "label": "$task_auto_combat_option_wait_timeout",
+            "description": "$task_auto_combat_option_wait_timeout_desc",
+            "inputs": [
+                {
+                    "name": "wait_timeout",
+                    "default": "30",
+                    "pipeline_type": "int",
+                    "verify": "^\\d{1,5}$"
+                }
+            ],
+            "pipeline_override": {
+                "AutoCombat_WaitTimeoutOption": {
+                    "attach": {
+                        "wait_timeout": "{wait_timeout}"
+                    }
+                }
+            }
+        },
+        "AutoCombatMaxDuration": {
+            "type": "input",
+            "label": "$task_auto_combat_option_max_duration",
+            "description": "$task_auto_combat_option_max_duration_desc",
+            "inputs": [
+                {
+                    "name": "max_duration",
+                    "default": "300",
+                    "pipeline_type": "int",
+                    "verify": "^\\d{1,5}$"
+                }
+            ],
+            "pipeline_override": {
+                "AutoCombat_MaxDurationOption": {
+                    "attach": {
+                        "max_duration": "{max_duration}"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,42 @@
+// 自定义战斗方案示例。复制到安装目录 config/combat/ 下改名后，在「设置 → 任务设置 → 战斗配置」
+// 选择「自定义方案」并填写文件名。出招表语法见 docs/zh_cn/introduction/AutoCombat.md。
+{
+    "version": 1,
+    "name": "自定义方案示例",
+    "description": "演示位移、跳跃、闪避、切人与按住类指令",
+    // team 只用于开战前提示：请自行按此编队，脚本不会检查
+    "team": [
+        {
+            "slot": 1,
+            "character": "零",
+            "note": "主C"
+        },
+        {
+            "slot": 2,
+            "character": "薄荷"
+        }
+    ],
+    "combos": {
+        // 1 号位：先 Q，再前冲接普攻，最后重击
+        "1": [
+            "ultimate",
+            "walk(w, 0.3), jump, l_click(1)",
+            "skill, heavy(0.8)"
+        ],
+        // 2 号位：放 E 后闪避躲开，再普攻，并在出招表里直接切回 1 号位
+        "2": [
+            "skill(0.3), dodge",
+            "l_click(0.5), switch(1)"
+        ],
+        // 其余槽位通用
+        "default": "ultimate, skill, l_click(1)"
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            1,
+            2
+        ],
+        "min_field_time": 1.0
+    }
+}

@@ -1,0 +1,31 @@
+// 主C站场：1 号位放主C，长时间站场输出；2~4 号位上场放 Q/E 后立刻切回主C。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.main_dps",
+    "description": "1 号位主C站场输出，其余角色 Q → E 后切回 1 号位",
+    "team": [
+        {
+            "slot": 1,
+            "note": "$combat.team.main_dps"
+        }
+    ],
+    "combos": {
+        "1": [
+            "ultimate, skill",
+            "l_click(3), skill, l_click(2)"
+        ],
+        "default": "ultimate, skill, l_click(0.5)"
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            1,
+            2,
+            1,
+            3,
+            1,
+            4
+        ],
+        "min_field_time": 1.0
+    }
+}

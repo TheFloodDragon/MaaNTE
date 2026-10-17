@@ -1,0 +1,40 @@
+{
+    "AutoCombatMain": {
+        "desc": "自动战斗入口：按全局战斗配置执行战斗。持续模式下 next 被选项改为指回自身",
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "combat_run",
+                "custom_action_param": {
+                    "option_nodes": [
+                        "AutoCombat_ModeOption",
+                        "AutoCombat_WaitTimeoutOption",
+                        "AutoCombat_MaxDurationOption"
+                    ]
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": []
+    },
+    "AutoCombat_ModeOption": {
+        "desc": "选项载体：运行模式（持续模式写入 wait_timeout=0）",
+        "enabled": false,
+        "attach": {}
+    },
+    "AutoCombat_WaitTimeoutOption": {
+        "desc": "选项载体：单次模式的进战等待时间（秒）",
+        "enabled": false,
+        "attach": {}
+    },
+    "AutoCombat_MaxDurationOption": {
+        "desc": "选项载体：单场战斗最长时长（秒，0 为不限）",
+        "enabled": false,
+        "attach": {}
+    }
+}

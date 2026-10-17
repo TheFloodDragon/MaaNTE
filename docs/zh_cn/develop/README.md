@@ -61,7 +61,8 @@
 
 | 文档 | 说明 |
 |------|------|
-| 自动战斗 | ⚠ 开发中 |
+| [战斗系统](./combat.md) | 战斗内核架构、`combat_run` 调用方式、方案文件与出招表 DSL |
+| [自动配队计划](./combat-auto-team-plan.md) | 配队能力与复杂战斗能力的分阶段规划（未实现） |
 | 自动导航 | ⚠ 开发中 |
 
 ## 任务维护文档
@@ -82,6 +83,7 @@
 | 写 Python 自定义逻辑 | [custom-action.md](./custom-action.md) |
 | 调用地图传送 | [map-teleport.md](./map-teleport.md) |
 | 调用本地路线寻路 | [local-route-navigation.md](./local-route-navigation.md) |
+| 在任务里调用战斗 | [combat.md](./combat.md) |
 | 场景跳转/界面导航 | [scene-manager.md](./scene-manager.md) |
 | 调试单个节点 | [node-testing.md](./node-testing.md) |
 | 查阅编码规范 | [coding-standards.md](./coding-standards.md) |

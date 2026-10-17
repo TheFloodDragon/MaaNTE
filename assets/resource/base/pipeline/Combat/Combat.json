@@ -1,0 +1,98 @@
+{
+    "CombatSetting_Scheme": {
+        "desc": "全局战斗配置载体：战斗方案（由设置页「战斗配置」覆盖 attach，节点本身不执行）",
+        "enabled": false,
+        "attach": {
+            "scheme": "team_rotation"
+        }
+    },
+    "CombatSetting_CustomScheme": {
+        "desc": "全局战斗配置载体：自定义方案文件名或路径（仅方案为 custom 时生效）",
+        "enabled": false,
+        "attach": {
+            "custom_scheme": ""
+        }
+    },
+    "CombatInHud": {
+        "desc": "公开识别：处于可操作的战斗/大世界界面（底部血条可见且非黑屏）",
+        "recognition": {
+            "type": "Custom",
+            "param": {
+                "custom_recognition": "combat_in_hud"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatEnemyVisible": {
+        "desc": "公开识别：画面中有敌人血条（参数与 PinkPawHeist_CheckMonsterOnce 一致）",
+        "recognition": {
+            "type": "ColorMatch",
+            "param": {
+                "roi": [
+                    33,
+                    27,
+                    1222,
+                    639
+                ],
+                "method": 4,
+                "lower": [
+                    242,
+                    31,
+                    32
+                ],
+                "upper": [
+                    244,
+                    33,
+                    34
+                ],
+                "count": 3,
+                "connected": true
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatRun": {
+        "desc": "公开接口：执行一场战斗（读取全局战斗配置）。可直接作为子流程使用，也可参考此节点在自己的流程中调用 combat_run",
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "combat_run",
+                "custom_action_param": {}
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatFightWhenEnemy": {
+        "desc": "公开接口：看到敌人才开打，打完回到父节点（建议以 [JumpBack]CombatFightWhenEnemy 挂在 next 中）",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CombatInHud",
+                    "CombatEnemyVisible"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "combat_run",
+                "custom_action_param": {
+                    "wait_timeout": 5
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

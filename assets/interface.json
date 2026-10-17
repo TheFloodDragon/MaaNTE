@@ -116,6 +116,21 @@
             "default_expand": true
         }
     ],
+    // 全局选项：对所有任务生效（MXU >= v2.3.0 在「设置 → 任务设置」中编辑）
+    "global_option": [
+        "CombatScheme"
+    ],
+    "setting": [
+        {
+            "name": "Combat",
+            "label": "$setting_combat_label",
+            "description": "$setting_combat_desc",
+            "option": [
+                "CombatScheme"
+            ],
+            "default_expand": true
+        }
+    ],
     "task": [],
     "import": [
         // group:Daily
@@ -141,6 +156,9 @@
         "resource/tasks/OnlineMapNavigation.json",
         "resource/tasks/SoundDodge.json",
         "resource/tasks/AutoFScroll.json",
+        "resource/tasks/AutoCombat.json",
+        // setting:Combat（全局战斗配置，只定义 option）
+        "resource/tasks/CombatSetting.json",
         // group:others
         "resource/tasks/FountainCheckin.json",
         "resource/tasks/AutoPiano.json",

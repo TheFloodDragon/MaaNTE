@@ -1,0 +1,13 @@
+// 单人循环：不切人，当前角色反复 Q → E → 普攻。适合单人或不想切人的场景。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.solo_skill",
+    "description": "不切人，当前角色 Q → E → 普攻 2 秒循环",
+    "combos": {
+        "default": "ultimate, skill, l_click(2)"
+    },
+    "rotation": {
+        "mode": "stay",
+        "min_field_time": 0
+    }
+}

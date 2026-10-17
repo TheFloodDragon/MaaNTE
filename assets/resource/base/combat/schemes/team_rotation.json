@@ -1,0 +1,19 @@
+// 全队轮转（默认方案）：每位角色上场后 Q → E → 普攻，然后切下一位。适用 1~4 人任意配队，空槽位会自动移出轮转。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.team_rotation",
+    "description": "每位角色 Q → E → 普攻 1.5 秒，按 1→2→3→4 轮转",
+    "combos": {
+        "default": "ultimate, skill, l_click(1.5)"
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            1,
+            2,
+            3,
+            4
+        ],
+        "min_field_time": 1.0
+    }
+}

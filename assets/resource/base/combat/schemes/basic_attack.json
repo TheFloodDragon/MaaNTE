@@ -1,0 +1,13 @@
+// 仅普攻：不切人、不放技能，只持续普攻。用于兜底或测试。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.basic_attack",
+    "description": "不切人、不放技能，持续普攻",
+    "combos": {
+        "default": "l_click(1)"
+    },
+    "rotation": {
+        "mode": "stay",
+        "min_field_time": 0
+    }
+}

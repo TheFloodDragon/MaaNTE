@@ -1,0 +1,96 @@
+{
+    "option": {
+        "CombatScheme": {
+            "type": "select",
+            "label": "$setting_combat_scheme",
+            "description": "$setting_combat_scheme_desc",
+            "default_case": "team_rotation",
+            "cases": [
+                {
+                    "name": "team_rotation",
+                    "label": "$setting_combat_scheme_team_rotation",
+                    "description": "$setting_combat_scheme_team_rotation_desc",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "team_rotation"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "main_dps",
+                    "label": "$setting_combat_scheme_main_dps",
+                    "description": "$setting_combat_scheme_main_dps_desc",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "main_dps"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "solo_skill",
+                    "label": "$setting_combat_scheme_solo_skill",
+                    "description": "$setting_combat_scheme_solo_skill_desc",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "solo_skill"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "basic_attack",
+                    "label": "$setting_combat_scheme_basic_attack",
+                    "description": "$setting_combat_scheme_basic_attack_desc",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "basic_attack"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "custom",
+                    "label": "$setting_combat_scheme_custom",
+                    "description": "$setting_combat_scheme_custom_desc",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "custom"
+                            }
+                        }
+                    },
+                    "option": [
+                        "CombatCustomScheme"
+                    ]
+                }
+            ]
+        },
+        "CombatCustomScheme": {
+            "type": "input",
+            "label": "$setting_combat_custom_scheme",
+            "description": "$setting_combat_custom_scheme_desc",
+            "inputs": [
+                {
+                    "name": "custom_scheme",
+                    "label": "$setting_combat_custom_scheme_input",
+                    "default": "custom_example.json",
+                    "pipeline_type": "string",
+                    "verify": "^[^<>|?*]+$"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_CustomScheme": {
+                    "attach": {
+                        "custom_scheme": "{custom_scheme}"
+                    }
+                }
+            }
+        }
+    }
+}
