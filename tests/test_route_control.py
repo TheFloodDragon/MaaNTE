@@ -447,6 +447,73 @@ class RouteControlTests(unittest.TestCase):
         self.controller.post_key_up.assert_called_once_with(87)
         self.assertFalse(navigator.w_down)
 
+    def test_online_runner_releases_failed_key_up_before_idle(self):
+        route, runner = self.runner([(0, -10)])
+        navigator = self.navigator()
+        runner.navigator = navigator
+        self.provider.locate.side_effect = [self.pose(), self.pose((0, -10))]
+        self.controller.post_key_up.side_effect = [Job(succeeded=False), Job()]
+        held_after_failure = []
+
+        def stop_after_failed_route():
+            if route.payload()["status"] == "failed":
+                held_after_failure.append(navigator.w_down)
+                self.context.tasker.stopping = True
+
+        self.assertEqual(
+            runner.run_until_stopped(on_tick=stop_after_failed_route), "stopped"
+        )
+        self.assertEqual(held_after_failure, [False])
+        self.assertEqual(self.controller.post_key_up.call_count, 2)
+        self.controller.post_key_down.assert_called_once_with(87)
+
+    def test_online_runner_exits_when_release_keeps_failing(self):
+        route, runner = self.runner([(0, 0)])
+        navigator = self.navigator()
+        runner.navigator = navigator
+        self.provider.locate.return_value = self.pose()
+        self.assertTrue(navigator.press_forward())
+        self.controller.post_key_up.return_value = Job(succeeded=False)
+        ticks = []
+
+        def guard_unexpected_idle_loop():
+            ticks.append(None)
+            if len(ticks) > 1:
+                self.context.tasker.stopping = True
+
+        self.assertEqual(
+            runner.run_until_stopped(on_tick=guard_unexpected_idle_loop), "failed"
+        )
+        self.assertFalse(self.context.tasker.stopping)
+        self.assertEqual(len(ticks), 1)
+        self.assertEqual(route.payload()["status"], "failed")
+        self.assertEqual(route.payload()["reason"], "controller_failed")
+        self.assertFalse(route.payload()["active"])
+        self.assertEqual(self.controller.post_key_up.call_count, 3)
+        self.controller.post_key_down.assert_called_once_with(87)
+
+    def test_release_failure_cannot_fail_replacement_route(self):
+        route, runner = self.runner([(10, 10)])
+        runner.navigator.release.return_value = False
+
+        def replace_route(_):
+            if runner.navigator.move_to.call_count == 1:
+                route.reset([(20, 20)], True, None)
+            return True
+
+        def guard_unexpected_arrival():
+            if route.payload()["status"] == "arrived":
+                self.context.tasker.stopping = True
+
+        runner.navigator.move_to.side_effect = replace_route
+        self.assertEqual(
+            runner.run_until_stopped(on_tick=guard_unexpected_arrival), "failed"
+        )
+        self.assertEqual(route.payload()["status"], "running")
+        self.assertTrue(route.payload()["active"])
+        self.assertEqual(route.payload()["currentIndex"], 0)
+        runner.navigator.move_to.assert_called_once()
+
     def test_failed_key_up_cannot_report_arrival(self):
         self.provider.locate.return_value = self.pose()
         navigator = self.navigator()

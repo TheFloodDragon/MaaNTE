@@ -135,6 +135,14 @@ class RouteRunner:
                     with self._lock:
                         self._moving_target = None
 
+                # move_to may leave W held when its final key-up fails. Give
+                # cleanup one more attempt before idle sampling or a new route.
+                # Persistent input failure ends the service instead of retrying
+                # business movement or polling indefinitely with a held key.
+                if not self.navigator.release():
+                    self.route.fail(*target, "controller_failed")
+                    logger.error("RouteRunner could not release movement input")
+                    return "failed"
                 if self.context.tasker.stopping:
                     break
                 if arrived:
