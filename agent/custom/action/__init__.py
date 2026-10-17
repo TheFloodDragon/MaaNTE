@@ -38,6 +38,7 @@ from .auto_volleyball import *
 from .BidKing.place_bid import PlaceBid
 from .auto_volleyball_weekly import *
 from .lucky_star_round import *
+from .Gift import *
 
 __all__ = [
     "AutoMakeCoffee",
@@ -96,4 +97,23 @@ __all__ = [
     "LuckyStarReset",
     "LuckyStarRoundGate",
     "LuckyStarRetryOrFinish",
+    "GiftReset",
+    "GiftChooseCharacter",
+    "GiftWaitCharacter",
+    "GiftWaitCharacterList",
+    "GiftOpenTab",
+    "GiftWaitGiftPage",
+    "GiftCheckQuota",
+    "GiftFindGift",
+    "GiftScrollList",
+    "GiftWaitScroll",
+    "GiftVerifyGift",
+    "GiftSendOne",
+    "GiftWaitReceipt",
+    "GiftReceiptFailed",
+    "GiftWarnCurrent",
+    "GiftRecoverCurrent",
+    "GiftNextCharacter",
+    "GiftNavigationFailed",
+    "GiftSummary",
 ]

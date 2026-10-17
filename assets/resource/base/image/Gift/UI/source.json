@@ -1,0 +1,65 @@
+{
+    "schema_version": 1,
+    "purpose": "UI 模板的来源记录；不是第三份角色或礼物主库",
+    "upstream": {
+        "repository": "https://github.com/BnanZ0/ok-nte",
+        "commit": "3c478c233c35e102889e36aa89a0e46e2f8d2f80",
+        "image_path": "assets/images/7.png",
+        "image_url": "https://github.com/BnanZ0/ok-nte/blob/3c478c233c35e102889e36aa89a0e46e2f8d2f80/assets/images/7.png",
+        "image_git_blob_sha1": "3e677e96d4afa996ee40a96c57c7dea6d564f78f",
+        "image_sha256": "d73167ee15fbf6e1a00c194d7754d47ce83c66a62d72b3915cadd91d1b15ca34",
+        "image_size": [2560, 1440],
+        "annotation_path": "assets/coco_annotations.json",
+        "license": "GPL-3.0",
+        "license_url": "https://github.com/BnanZ0/ok-nte/blob/3c478c233c35e102889e36aa89a0e46e2f8d2f80/LICENSE"
+    },
+    "license_notice": {
+        "game_artwork": "《异环》界面/游戏美术归游戏及素材原权利人所有；上游代码GPL-3.0不当然覆盖游戏美术。",
+        "permission_confirmed": false,
+        "redistribution_requires_permission": true,
+        "notice": "仅保留识别必需的小图；来源追溯不等于再分发许可，也不将模板标成MaaNTE的AGPL。公开发布前需确认相应授权。"
+    },
+    "extraction": {
+        "method": "gh contents API读取固定提交的base64，在内存解码原图，按COCO框裁剪后Pillow LANCZOS缩放到720p；未保存整图",
+        "source_is_full_screenshot": false,
+        "source_observation": "原图为白底图集。3,681,176/3,686,400像素纯白，只有两个非白连通区域，恰好为羁遇标记和无限徽记；不含页签、发送按钮、选中边框、数量控件或滚动条。",
+        "target_resolution": [1280, 720],
+        "runtime_network": false
+    },
+    "templates": [
+        {
+            "path": "Gift/UI/BondPanel.png",
+            "annotation_label": "bond_panel",
+            "crop_xywh": [48, 46, 61, 69],
+            "size": [31, 35],
+            "sha256": "e47226de7a5325842a6065ede0f238ca6b6065dc60be4cc787d6c279f50339ca",
+            "use": "羁遇页图标证据；还需完整赠礼页签确认页面"
+        },
+        {
+            "path": "Gift/UI/InfiniteGift.png",
+            "annotation_label": "unlimit_gift",
+            "crop_xywh": [1359, 678, 35, 29],
+            "size": [18, 15],
+            "sha256": "4033207ffb78e39f3dbb2df3ad7142190095227925e537c0ed3cd8c3f7a9601e",
+            "use": "∞徽记保守拦截；不推断库存、免费或每日额度语义"
+        }
+    ],
+    "calibration": {
+        "real_game_validation": false,
+        "reference_only": {
+            "character_header_roi": [671, 106, 289, 54],
+            "quota_roi": [754, 549, 168, 36],
+            "layout_url": "https://github.com/BnanZ0/ok-nte/blob/3c478c233c35e102889e36aa89a0e46e2f8d2f80/src/gifts/layout.py",
+            "task_url": "https://github.com/BnanZ0/ok-nte/blob/3c478c233c35e102889e36aa89a0e46e2f8d2f80/src/tasks/daily/GiftTask.py"
+        },
+        "unverified_ui": [
+            "完整礼物详情与持有数量布局",
+            "选中头像/礼物的实机独立标记",
+            "数量控件及无数量控件时的单件布局",
+            "当前分类、当前可见总数与列表边框/滚动条/完整页码；相关完整文本为证据解析支持条件，不表示已在实机观察到",
+            "全角色每日额度限制的实机完整文案"
+        ],
+        "safe_behavior": "只接受画面中完整语义文本及独立匹配证据；缺少选择/数量/边界证据返回未知，不猜颜色、不盲点、不用未变化页面证明到底。无数量控件不默认数量1。",
+        "tests": "合成帧上的真实Maa TemplateMatch与离线OCR证据解析测试不代表真实账号或实机界面验收。"
+    }
+}

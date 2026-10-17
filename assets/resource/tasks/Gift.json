@@ -1,0 +1,1391 @@
+{
+    "task": [
+        {
+            "name": "Gift",
+            "label": "$task_gift_label",
+            "entry": "GiftEntry",
+            "description": "$task_gift_desc",
+            "group": [
+                "Daily"
+            ],
+            "option": [
+                "GiftRecipients",
+                "GiftDryRun"
+            ]
+        }
+    ],
+    "option": {
+        "GiftRecipients": {
+            "type": "checkbox",
+            "label": "$task_gift_recipients",
+            "description": "$task_gift_recipients_desc",
+            "default_case": [],
+            "cases": [
+                {
+                    "name": "char_129",
+                    "label": "$task_gift_recipient_char_129",
+                    "icon": "resource/base/image/Gift/Characters/char_129.png",
+                    "option": [
+                        "GiftPriority_char_129",
+                        "GiftLimit_char_129"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_129": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_132",
+                    "label": "$task_gift_recipient_char_132",
+                    "icon": "resource/base/image/Gift/Characters/char_132.png",
+                    "option": [
+                        "GiftPriority_char_132",
+                        "GiftLimit_char_132"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_132": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_134",
+                    "label": "$task_gift_recipient_char_134",
+                    "icon": "resource/base/image/Gift/Characters/char_134.png",
+                    "option": [
+                        "GiftPriority_char_134",
+                        "GiftLimit_char_134"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_134": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_142",
+                    "label": "$task_gift_recipient_char_142",
+                    "icon": "resource/base/image/Gift/Characters/char_142.png",
+                    "option": [
+                        "GiftPriority_char_142",
+                        "GiftLimit_char_142"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_142": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_146",
+                    "label": "$task_gift_recipient_char_146",
+                    "icon": "resource/base/image/Gift/Characters/char_146.png",
+                    "option": [
+                        "GiftPriority_char_146",
+                        "GiftLimit_char_146"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_146": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_148",
+                    "label": "$task_gift_recipient_char_148",
+                    "icon": "resource/base/image/Gift/Characters/char_148.png",
+                    "option": [
+                        "GiftPriority_char_148",
+                        "GiftLimit_char_148"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_148": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_198",
+                    "label": "$task_gift_recipient_char_198",
+                    "icon": "resource/base/image/Gift/Characters/char_198.png",
+                    "option": [
+                        "GiftPriority_char_198",
+                        "GiftLimit_char_198"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_198": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_201",
+                    "label": "$task_gift_recipient_char_201",
+                    "icon": "resource/base/image/Gift/Characters/char_201.png",
+                    "option": [
+                        "GiftPriority_char_201",
+                        "GiftLimit_char_201"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_201": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_219",
+                    "label": "$task_gift_recipient_char_219",
+                    "icon": "resource/base/image/Gift/Characters/char_219.png",
+                    "option": [
+                        "GiftPriority_char_219",
+                        "GiftLimit_char_219"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_219": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_227",
+                    "label": "$task_gift_recipient_char_227",
+                    "icon": "resource/base/image/Gift/Characters/char_227.png",
+                    "option": [
+                        "GiftPriority_char_227",
+                        "GiftLimit_char_227"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_227": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_230",
+                    "label": "$task_gift_recipient_char_230",
+                    "icon": "resource/base/image/Gift/Characters/char_230.png",
+                    "option": [
+                        "GiftPriority_char_230",
+                        "GiftLimit_char_230"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_230": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_233",
+                    "label": "$task_gift_recipient_char_233",
+                    "icon": "resource/base/image/Gift/Characters/char_233.png",
+                    "option": [
+                        "GiftPriority_char_233",
+                        "GiftLimit_char_233"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_233": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_235",
+                    "label": "$task_gift_recipient_char_235",
+                    "icon": "resource/base/image/Gift/Characters/char_235.png",
+                    "option": [
+                        "GiftPriority_char_235",
+                        "GiftLimit_char_235"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_235": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_238",
+                    "label": "$task_gift_recipient_char_238",
+                    "icon": "resource/base/image/Gift/Characters/char_238.png",
+                    "option": [
+                        "GiftPriority_char_238",
+                        "GiftLimit_char_238"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_238": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_240",
+                    "label": "$task_gift_recipient_char_240",
+                    "icon": "resource/base/image/Gift/Characters/char_240.png",
+                    "option": [
+                        "GiftPriority_char_240",
+                        "GiftLimit_char_240"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_240": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_242",
+                    "label": "$task_gift_recipient_char_242",
+                    "icon": "resource/base/image/Gift/Characters/char_242.png",
+                    "option": [
+                        "GiftPriority_char_242",
+                        "GiftLimit_char_242"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_242": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_244",
+                    "label": "$task_gift_recipient_char_244",
+                    "icon": "resource/base/image/Gift/Characters/char_244.png",
+                    "option": [
+                        "GiftPriority_char_244",
+                        "GiftLimit_char_244"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_244": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_246",
+                    "label": "$task_gift_recipient_char_246",
+                    "icon": "resource/base/image/Gift/Characters/char_246.png",
+                    "option": [
+                        "GiftPriority_char_246",
+                        "GiftLimit_char_246"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_246": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_248",
+                    "label": "$task_gift_recipient_char_248",
+                    "icon": "resource/base/image/Gift/Characters/char_248.png",
+                    "option": [
+                        "GiftPriority_char_248",
+                        "GiftLimit_char_248"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_248": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_634",
+                    "label": "$task_gift_recipient_char_634",
+                    "icon": "resource/base/image/Gift/Characters/char_634.png",
+                    "option": [
+                        "GiftPriority_char_634",
+                        "GiftLimit_char_634"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_634": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_854",
+                    "label": "$task_gift_recipient_char_854",
+                    "icon": "resource/base/image/Gift/Characters/char_854.png",
+                    "option": [
+                        "GiftPriority_char_854",
+                        "GiftLimit_char_854"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_854": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_2396",
+                    "label": "$task_gift_recipient_char_2396",
+                    "icon": "resource/base/image/Gift/Characters/char_2396.png",
+                    "option": [
+                        "GiftPriority_char_2396",
+                        "GiftLimit_char_2396"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_2396": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "char_2427",
+                    "label": "$task_gift_recipient_char_2427",
+                    "icon": "resource/base/image/Gift/Characters/char_2427.png",
+                    "option": [
+                        "GiftPriority_char_2427",
+                        "GiftLimit_char_2427"
+                    ],
+                    "pipeline_override": {
+                        "GiftConfig_char_2427": {
+                            "attach": {
+                                "selected": true
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "GiftDryRun": {
+            "type": "switch",
+            "label": "$task_gift_dry_run",
+            "description": "$task_gift_dry_run_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "GiftSettings": {
+                            "attach": {
+                                "dry_run": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "GiftSettings": {
+                            "attach": {
+                                "dry_run": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "GiftPriority_char_129": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_129": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_129": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_129": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_132": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_132": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_132": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_132": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_134": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_134": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_134": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_134": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_142": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_142": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_142": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_142": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_146": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_146": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_146": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_146": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_148": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_148": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_148": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_148": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_198": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_198": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_198": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_198": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_201": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_201": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_201": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_201": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_219": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_219": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_219": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_219": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_227": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_227": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_227": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_227": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_230": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_230": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_230": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_230": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_233": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_233": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_233": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_233": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_235": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_235": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_235": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_235": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_238": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_238": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_238": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_238": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_240": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_240": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_240": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_240": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_242": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_242": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_242": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_242": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_244": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_244": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_244": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_244": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_246": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_246": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_246": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_246": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_248": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_248": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_248": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_248": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_634": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_634": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_634": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_634": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_854": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_854": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_854": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_854": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_2396": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_2396": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_2396": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_2396": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        },
+        "GiftPriority_char_2427": {
+            "type": "input",
+            "label": "$task_gift_priority",
+            "description": "$task_gift_priority_desc",
+            "inputs": [
+                {
+                    "name": "gifts",
+                    "label": "$task_gift_priority_input",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_2427": {
+                    "attach": {
+                        "gifts": "{gifts}"
+                    }
+                }
+            }
+        },
+        "GiftLimit_char_2427": {
+            "type": "input",
+            "label": "$task_gift_limit",
+            "description": "$task_gift_limit_desc",
+            "inputs": [
+                {
+                    "name": "limit",
+                    "label": "$task_gift_limit_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^[1-3]$",
+                    "pattern_msg": "$task_gift_limit_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "GiftConfig_char_2427": {
+                    "attach": {
+                        "limit": "{limit}"
+                    }
+                }
+            }
+        }
+    }
+}

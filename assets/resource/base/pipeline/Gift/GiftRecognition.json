@@ -1,0 +1,336 @@
+{
+    "GiftBondMarker": {
+        "desc": "羁遇页标记；仅使用固定上游图集的720p局部裁剪，来源见Gift/UI/source.json",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": "Gift/UI/BondPanel.png",
+                "roi": [8, 8, 88, 78],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftInfiniteMarker": {
+        "desc": "无限徽记；只作保守拦截，不据此推断库存或赠礼语义",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": "Gift/UI/InfiniteGift.png",
+                "roi": [560, 165, 565, 425],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftLoadingMarker": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": "Common/Scene/SceneLoading.png",
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftListButton": {
+        "desc": "复用通用列表图；仅由已确认羁遇页的视觉层返回其命中框",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": "Common/Button/ListButtonType1.png",
+                "roi": [1184, 621, 70, 70],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftCloseButton": {
+        "desc": "仅在完整标题已确认的羁遇列表或礼物详情中使用，未知弹窗不得点击",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "template": "Common/Button/CloseButtonType1.png",
+                "roi": [1180, 0, 100, 100],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftTabOCR": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [936, 60, 174, 58],
+                // @i18n-skip 完整名称锚定；未核实的游戏译名不编造
+                "expected": ["^赠礼$", "^贈禮$"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftCharacterNameOCR": {
+        "desc": "固定身份头部完整名称，Python用全部原始OCR结果拒绝低分/多候选/重名",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [671, 106, 289, 54],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftCharacterSelectedOCR": {
+        "desc": "显式选中语义才可作独立证据；未采集到的边框/高亮颜色不授权",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [1120, 75, 155, 535],
+                "expected": ["已选择", "已選擇", "当前角色", "當前角色"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftCharacterListTitleOCR": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [65, 12, 460, 95],
+                "expected": ["角色列表", "羁遇列表", "羈遇列表"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftQuotaOCR": {
+        "desc": "只接受完整n/3且0<=n<=3，不截取13/3中的3/3，不截断或clamp",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [754, 549, 168, 36],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftDetailTitleOCR": {
+        "desc": "完整详情标题；缺少真实详情截图时，不能把网格任意文本当详情",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [560, 165, 565, 110],
+                "expected": ["礼物详情", "禮物詳情", "道具详情", "道具詳情"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftDetailNameOCR": {
+        "desc": "详情完整名称与Wiki名称唯一严格对应；此ROI需只识别实机校准",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [675, 175, 435, 82],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftSelectedOCR": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [560, 250, 565, 285],
+                "expected": ["已选择", "已選擇", "已选中", "已選中"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftInventoryOCR": {
+        "desc": "详情持有数量；仅当详情名、图、选择态一致时才解析，缺OCR不是0",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [680, 420, 420, 80],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftQuantityOCR": {
+        "desc": "必须完整识别带数量语义的文本；没有spinner且缺单件布局证据时保持未知",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [680, 480, 420, 66],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftInfiniteOCR": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [560, 165, 565, 425],
+                // @i18n-skip 数学符号，任一可靠通道命中均阻止消耗
+                "expected": ["^∞$"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftSendOCR": {
+        "desc": "仅返回完整文字的实际命中框，不使用上游send固定点",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [740, 535, 240, 80],
+                "expected": ["赠送", "贈送", "送礼", "送禮"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftCancelOCR": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [560, 480, 565, 160],
+                "expected": ["取消"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftUnexpectedDialogOCR": {
+        "desc": "底层羁遇仍可见时识别未知确认/购买/解锁/提交按钮；仅作阻断，绝不通用确定",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [240, 150, 850, 460],
+                "threshold": 0.5
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftGlobalLimitOCR": {
+        "desc": "只认明确指向全角色总额度的完整限制文案，不把单角色额度当全局",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [240, 150, 850, 440],
+                "expected": ["今日赠礼总次数已达上限", "今日所有角色赠礼次数已达上限", "今日已达到赠礼总次数上限"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftCategoryOCR": {
+        "desc": "必须有当前分类的显式语义，未选中的全部页签不算正确分类",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [65, 60, 1060, 230],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftEmptyListOCR": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [70, 95, 1150, 510],
+                "expected": ["暂无礼物", "暫無禮物", "暂无角色", "暫無角色"],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftVisibleNameOCR": {
+        "desc": "视觉层动态传入已检测卡片框；每格完整名加图一致才算正面识别",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [70, 95, 1150, 510],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftVisibleCountOCR": {
+        "desc": "当前显示n件礼物/名角色的完整可见数量；缺失或与卡片数不等时不能宣称遍历覆盖，未实机校准",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [550, 210, 575, 400],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftPaginationOCR": {
+        "desc": "第n页/共m页完整页码；没有滚动条、画面不动均不能证明到底或单页",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [550, 535, 575, 100],
+                "threshold": 0.9
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

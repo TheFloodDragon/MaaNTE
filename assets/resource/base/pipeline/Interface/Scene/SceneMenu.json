@@ -70,5 +70,18 @@
             "__ScenePrivateAnyEnterScarboroughFairSuccess",
             "[JumpBack]__ScenePrivateAnyEnterWorld"
         ]
+    },
+    "SceneAnyEnterBondMenu": {
+        "desc": "从已确认的羁遇、Esc或大世界进入羁遇；未知弹窗安全失败，不通用确定",
+        "recognition": { "type": "DirectHit" },
+        "action": { "type": "DoNothing" },
+        "next": [
+            "__ScenePrivateAnyEnterBondMenuSuccess",
+            "__ScenePrivateEscEnterBondMenu",
+            "__ScenePrivateWorldEnterBondMenu"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     }
 }
