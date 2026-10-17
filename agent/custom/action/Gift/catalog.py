@@ -116,15 +116,16 @@ def _validate_image(base: Path, record: dict, kind: str, seen: dict) -> None:
     relative = _text(image.get("path"), "image.path")
     path = PurePosixPath(relative)
     directory = "Gifts" if kind == "gifts" else "Characters"
+    image_format = {".png": "PNG", ".webp": "WEBP"}.get(path.suffix.lower())
     if (
         path.is_absolute()
         or "\\" in relative
         or ":" in relative
         or any(part in ("", ".", "..") for part in relative.split("/"))
         or path.parts[:2] != ("Gift", directory)
-        or path.suffix.lower() != ".png"
+        or image_format is None
     ):
-        raise CatalogError("图片路径越界或不是展示 PNG: %s" % relative)
+        raise CatalogError("图片路径越界或不是展示 PNG/WebP: %s" % relative)
     root = (base / "image").resolve()
     actual = (root / relative).resolve()
     if not root.is_relative_to(base.resolve()) or not actual.is_relative_to(root):
@@ -147,7 +148,7 @@ def _validate_image(base: Path, record: dict, kind: str, seen: dict) -> None:
         return
     try:
         if actual.stat().st_size > 2 * 1024 * 1024:
-            raise CatalogError("展示 PNG 体积异常")
+            raise CatalogError("展示图片体积异常")
         payload = actual.read_bytes()
         if hashlib.sha256(payload).hexdigest() != digest:
             raise CatalogError("图片 SHA-256 不匹配: %s" % relative)
@@ -155,7 +156,7 @@ def _validate_image(base: Path, record: dict, kind: str, seen: dict) -> None:
         from PIL import Image
 
         with Image.open(io.BytesIO(payload)) as preview:
-            if preview.format != "PNG" or preview.size != (width, height):
+            if preview.format != image_format or preview.size != (width, height):
                 raise CatalogError("图片格式或尺寸与清单不符: %s" % relative)
             if getattr(preview, "n_frames", 1) != 1:
                 raise CatalogError("展示图不能包含动画帧")

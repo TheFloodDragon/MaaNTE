@@ -947,6 +947,38 @@ def _read_text(path: Path) -> str:
         return stream.read()
 
 
+def _task_json(document: dict) -> str:
+    """保持原生 PI 数据结构；生成的每个 case 一行，避免数 MB 重复缩进。"""
+
+    def compact(value: Any) -> str:
+        return json.dumps(
+            value, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        )
+
+    lines = ["{", '    "task":' + compact(document["task"]) + ",", '    "option":{']
+    options = list(document["option"].items())
+    for option_index, (name, option) in enumerate(options):
+        lines.append("        " + compact(name) + ":{")
+        fields = list(option.items())
+        for field_index, (key, value) in enumerate(fields):
+            suffix = "," if field_index + 1 < len(fields) else ""
+            prefix = "            " + compact(key) + ":"
+            if key == "cases":
+                lines.append(prefix + "[")
+                lines.extend(
+                    "                "
+                    + compact(case)
+                    + ("," if index + 1 < len(value) else "")
+                    for index, case in enumerate(value)
+                )
+                lines.append("            ]" + suffix)
+            else:
+                lines.append(prefix + compact(value) + suffix)
+        lines.append("        }" + ("," if option_index + 1 < len(options) else ""))
+    lines.extend(["    }", "}", ""])
+    return "\n".join(lines)
+
+
 def _plan(root: Path, characters: dict | None, gifts: dict | None) -> dict[Path, str]:
     if characters is None:
         characters = _loads(_read_text(root / CHARACTERS_PATH))
@@ -954,11 +986,7 @@ def _plan(root: Path, characters: dict | None, gifts: dict | None) -> dict[Path,
         gifts = _loads(_read_text(root / GIFTS_PATH))
     # Validate and read every input before the first write, including shared files.
     plan = {
-        root
-        / TASK_PATH: json.dumps(
-            render_task(characters, gifts), ensure_ascii=False, indent=4
-        )
-        + "\n",
+        root / TASK_PATH: _task_json(render_task(characters, gifts)),
         root
         / CONFIG_PATH: json.dumps(
             render_config(characters), ensure_ascii=False, indent=4

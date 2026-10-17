@@ -508,6 +508,45 @@ class ImageAndResourceContractTests(unittest.TestCase):
         blank = np.zeros_like(frame)
         self.assertEqual(reader.gift_candidates(blank, "A"), [])
 
+    def test_lossless_webp_keeps_candidate_pixels_alpha_crop_and_matching(self):
+        from PIL import Image
+
+        pixels = np.random.default_rng(23).integers(0, 256, (64, 64, 4), dtype=np.uint8)
+        pixels[:, :, 3] = 0
+        pixels[12:49, 7:47, 3] = 255
+        with tempfile.TemporaryDirectory(
+            prefix="gift-lossless-candidates-"
+        ) as temporary:
+            base = Path(temporary)
+            folder = base / "image/Gift/Gifts"
+            folder.mkdir(parents=True)
+            picture = Image.fromarray(pixels)
+            picture.save(folder / "same.png", format="PNG")
+            picture.save(
+                folder / "same.webp",
+                format="WEBP",
+                lossless=True,
+                quality=100,
+                method=4,
+                exact=True,
+            )
+            records = {
+                kind: {"image": {"path": "Gift/Gifts/same." + kind}}
+                for kind in ("png", "webp")
+            }
+            catalog = SimpleNamespace(base=base, gifts=records, characters={})
+            reader = vision.GiftVision(FakeContext(), catalog)
+            png = reader._image(records["png"])
+            webp = reader._image(records["webp"])
+            self.assertEqual(png.shape, (37, 40, 4))
+            np.testing.assert_array_equal(png, webp)
+            frame = np.full((720, 1280, 3), 96, dtype=np.uint8)
+            frame[302:339, 713:753] = png[:, :, :3]
+            self.assertEqual(reader.gift_candidates(frame, "png"), [[713, 302, 40, 37]])
+            self.assertEqual(
+                reader.gift_candidates(frame, "webp"), [[713, 302, 40, 37]]
+            )
+
     def test_real_rectangle_detector_requires_track_and_thumb(self):
         frame = np.zeros((720, 1280, 3), dtype=np.uint8)
         cells = [[680, 280, 76, 78], [770, 280, 76, 78]]
@@ -704,6 +743,43 @@ class NativeSmallTemplateTests(unittest.TestCase):
                 self.assertEqual(controller.clicks, [])
             finally:
                 tasker.post_stop().wait()
+
+    def test_native_bundle_accepts_webp_candidates_with_unchanged_png_templates(self):
+        from maa.resource import Resource
+
+        candidates = [
+            json.loads((BASE / "data" / (kind + ".json")).read_text(encoding="utf-8"))[
+                kind
+            ][0]["image"]["path"]
+            for kind in ("gifts", "characters")
+        ]
+        self.assertTrue(all(Path(path).suffix == ".webp" for path in candidates))
+        with tempfile.TemporaryDirectory(prefix="gift-webp-resource-") as temporary:
+            bundle = Path(temporary)
+            for relative in candidates + ["Gift/UI/BondPanel.png"]:
+                target = bundle / "image" / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((BASE / "image" / relative).read_bytes())
+            pipeline = bundle / "pipeline"
+            pipeline.mkdir()
+            (pipeline / "probe.json").write_text(
+                json.dumps(
+                    {
+                        "GiftFormatProbe": {
+                            "recognition": {
+                                "type": "TemplateMatch",
+                                "param": {"template": "Gift/UI/BondPanel.png"},
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            resource = Resource()
+            try:
+                self.assertTrue(resource.post_bundle(bundle).wait().succeeded)
+            finally:
+                del resource
 
     def test_native_public_navigation_uses_confirmed_states_and_verifies_arrival(self):
         from maa.controller import CustomController

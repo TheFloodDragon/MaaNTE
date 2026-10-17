@@ -11,3 +11,8 @@ deps/tools/
 # 锁文件
 pnpm-lock.yaml
 package-lock.json
+
+# 紧凑生成资源由 gift_task_config.py / sync_gift_catalog.py 校验，避免格式化回胀
+assets/resource/tasks/Gift.json
+assets/resource/base/data/gifts.json
+assets/resource/base/data/characters.json

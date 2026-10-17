@@ -15,6 +15,8 @@ import unittest
 from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlsplit
 
+import cv2
+import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -170,7 +172,32 @@ def fixture(base, color=(64, 128, 192, 200)):
 def write_documents(base, documents):
     (base / "data").mkdir(parents=True, exist_ok=True)
     for kind, document in documents.items():
+        (base / "data" / (kind + ".json")).write_bytes(sync.document_json(document))
+
+
+def legacy_fixture(base):
+    """模拟发布过的 PNG9 / 缩进主库，不依赖网络重新获取原图。"""
+    documents, original = fixture(base)
+    recipe = "rgba-lanczos-256-png9-v1"
+    for kind, document in documents.items():
+        document["source"]["generation"]["recipe"] = recipe
+        for record in document[kind]:
+            image = record["image"]
+            previous = base / "image" / image["path"]
+            relative = Path(image["path"]).with_suffix(".png").as_posix()
+            stream = io.BytesIO()
+            with Image.open(io.BytesIO(previous.read_bytes())) as pixels:
+                pixels.save(stream, format="PNG", compress_level=9)
+            payload = stream.getvalue()
+            (base / "image" / relative).write_bytes(payload)
+            previous.unlink()
+            image.update(path=relative, sha256=sync.sha256(payload), recipe=recipe)
+    with patch.object(sync, "RECIPE", recipe):
+        identifier = sync.snapshot_id(documents)
+    for kind, document in documents.items():
+        document["source"]["snapshot_id"] = identifier
         (base / "data" / (kind + ".json")).write_bytes(sync.canonical_json(document))
+    return documents, original
 
 
 def fingerprint(base):
@@ -427,6 +454,76 @@ class APITests(unittest.TestCase):
         client.opener.assert_not_called()
 
 
+class PreviewTests(unittest.TestCase):
+    def test_document_storage_does_not_change_source_hash_contract(self):
+        value = {"name": "白藏", "rows": [1, None]}
+        self.assertEqual(
+            sync.document_json(value), '{"name":"白藏","rows":[1,null]}\n'.encode()
+        )
+        self.assertEqual(
+            sync.canonical_json(value),
+            (json.dumps(value, ensure_ascii=False, indent=4) + "\n").encode(),
+        )
+        self.assertEqual(json.loads(sync.document_json(value)), value)
+        with self.assertRaises(ValueError):
+            sync.document_json({"invalid": float("nan")})
+
+    def test_webp_is_exact_including_transparent_rgb_and_is_idempotent(self):
+        source_image = Image.new("RGBA", (17, 19))
+        source_image.putdata(
+            [
+                ((index * 17) % 256, (index * 37) % 256, index % 256, index % 4 * 85)
+                for index in range(17 * 19)
+            ]
+        )
+        source = io.BytesIO()
+        source_image.save(source, format="PNG", compress_level=9)
+        original = source.getvalue()
+        preview, size = sync.preview_bytes(original)
+        self.assertEqual(size, source_image.size)
+        with Image.open(io.BytesIO(preview)) as image:
+            self.assertEqual(image.format, "WEBP")
+            self.assertEqual(image.convert("RGBA").tobytes(), source_image.tobytes())
+        self.assertEqual(
+            cv2.imdecode(
+                np.frombuffer(preview, np.uint8), cv2.IMREAD_UNCHANGED
+            ).tobytes(),
+            cv2.imdecode(
+                np.frombuffer(original, np.uint8), cv2.IMREAD_UNCHANGED
+            ).tobytes(),
+        )
+        self.assertEqual(sync.preview_bytes(preview), (preview, size))
+        self.assertIn(b"VP8L", preview)
+
+    def test_pixel_verifier_rejects_changes_and_failed_opencv_decode(self):
+        streams = []
+        for color in ((23, 41, 67, 0), (23, 41, 68, 0)):
+            stream = io.BytesIO()
+            Image.new("RGBA", (2, 2), color).save(stream, format="PNG")
+            streams.append(stream.getvalue())
+        with self.assertRaisesRegex(sync.SyncError, "RGBA"):
+            sync.verify_lossless_pixels(*streams)
+        with patch.object(cv2, "imdecode", return_value=None):
+            with self.assertRaisesRegex(sync.SyncError, "OpenCV"):
+                sync.preview_bytes(streams[0])
+        with patch.object(
+            cv2, "imdecode", return_value=np.zeros((2, 2, 4), dtype=np.uint8)
+        ):
+            with self.assertRaisesRegex(sync.SyncError, "BGRA"):
+                sync.preview_bytes(streams[0])
+
+    def test_source_dimension_guard_precedes_decoding(self):
+        source = Mock(width=4097, height=4097, n_frames=1)
+        opened = Mock()
+        opened.__enter__ = Mock(return_value=source)
+        opened.__exit__ = Mock(return_value=False)
+        with patch.object(sync.Image, "open", return_value=opened):
+            with self.assertRaisesRegex(sync.SyncError, "太大"):
+                sync.preview_bytes(b"large image header")
+        source.verify.assert_not_called()
+        source.convert.assert_not_called()
+
+
 class CatalogTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="gift-catalog-test-")
@@ -552,6 +649,13 @@ class CatalogTests(unittest.TestCase):
             "Gift\\Gifts\\bad.png",
             "Gift/Characters/mix.png",
             "Gift//Gifts/bad.png",
+            "Gift/Gifts/bad.gif",
+            "Gift/Gifts/./bad.webp",
+            "Gift/Gifts/../bad.webp",
+            "Gift/Characters/mix.webp",
+            "Gift\\Gifts\\bad.webp",
+            "Gift//Gifts/bad.webp",
+            "Gift/Gifts/C:bad.webp",
         ):
             image["path"] = path
             self.write()
@@ -627,18 +731,14 @@ class CatalogTests(unittest.TestCase):
     def test_check_is_offline_and_does_not_write_or_reencode_files(self):
         before = fingerprint(self.base)
         forbidden = AssertionError("--check 不得联网或写文件")
-        with patch.object(
-            sync.MediaWikiClient, "read_url", side_effect=forbidden
-        ), patch("socket.socket", side_effect=forbidden), patch.object(
-            Path, "write_bytes", side_effect=forbidden
-        ), patch.object(
-            Path, "write_text", side_effect=forbidden
-        ), patch.object(
-            Path, "mkdir", side_effect=forbidden
-        ), patch.object(
-            Path, "unlink", side_effect=forbidden
-        ), patch.object(
-            os, "replace", side_effect=forbidden
+        with (
+            patch.object(sync.MediaWikiClient, "read_url", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+            patch.object(Path, "write_bytes", side_effect=forbidden),
+            patch.object(Path, "write_text", side_effect=forbidden),
+            patch.object(Path, "mkdir", side_effect=forbidden),
+            patch.object(Path, "unlink", side_effect=forbidden),
+            patch.object(os, "replace", side_effect=forbidden),
         ):
             self.assertEqual(sync.main(["--check", "--base", str(self.base)]), 0)
         self.assertEqual(fingerprint(self.base), before)
@@ -712,7 +812,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(fingerprint(self.base), before)
         self.assertFalse(list(self.base.glob(".gift-sync-*")))
 
-    def test_sync_updates_generated_config_only_after_complete_validation(self):
+    def test_maintenance_updates_generated_config_only_after_complete_validation(self):
         root = Path(self.temporary.name) / "package"
         base = root / "assets" / "resource" / "base"
         documents, _ = fixture(base)
@@ -732,16 +832,24 @@ class CatalogTests(unittest.TestCase):
         helper.check.return_value = []
         client = Mock()
         client.read_url.side_effect = AssertionError("应复用缓存，不下载")
-        with patch.object(sync, "ROOT", root), patch.object(
-            sync, "collect_documents", return_value=copy.deepcopy(documents)
-        ), patch.object(sync, "_load_module", return_value=helper):
-            sync.synchronize(base, client)
-            helper.update.assert_called_once()
-            helper.check.assert_called_once()
-            helper.reset_mock()
-            sync.synchronize(base, client, data_only=True)
-            helper.update.assert_not_called()
-            helper.check.assert_not_called()
+        with (
+            patch.object(sync, "ROOT", root),
+            patch.object(
+                sync, "collect_documents", return_value=copy.deepcopy(documents)
+            ),
+            patch.object(sync, "_load_module", return_value=helper),
+        ):
+            for operation in (
+                lambda data_only: sync.synchronize(base, client, data_only=data_only),
+                lambda data_only: sync.optimize(base, data_only=data_only),
+            ):
+                operation(False)
+                helper.update.assert_called_once()
+                helper.check.assert_called_once()
+                helper.reset_mock()
+                operation(True)
+                helper.update.assert_not_called()
+                helper.check.assert_not_called()
 
     def test_failed_rollback_preserves_image_only_backup_for_recovery(self):
         def fail_publish(stage, base, documents):
@@ -750,37 +858,237 @@ class CatalogTests(unittest.TestCase):
             backup.write_bytes(b"must preserve")
             raise sync.RecoveryError("模拟外部文件锁阻止回滚")
 
-        with patch.object(
-            sync, "collect_documents", return_value=copy.deepcopy(self.documents)
-        ), patch.object(sync, "publish_stage", side_effect=fail_publish):
-            with self.assertRaises(sync.RecoveryError):
-                sync.synchronize(self.base, Mock(), data_only=True)
-        stages = list(self.base.glob(".gift-sync-*"))
-        self.assertEqual(len(stages), 1)
+        with (
+            patch.object(
+                sync, "collect_documents", return_value=copy.deepcopy(self.documents)
+            ),
+            patch.object(sync, "publish_stage", side_effect=fail_publish),
+        ):
+            for mode, operation in (
+                ("sync", lambda: sync.synchronize(self.base, Mock(), data_only=True)),
+                ("optimize", lambda: sync.optimize(self.base, data_only=True)),
+            ):
+                with self.subTest(mode=mode), self.assertRaises(sync.RecoveryError):
+                    operation()
+                stages = list(self.base.glob(".gift-%s-*" % mode))
+                self.assertEqual(len(stages), 1)
+                self.assertEqual(
+                    (stages[0] / "previous" / "image" / "old.png").read_bytes(),
+                    b"must preserve",
+                )
+
+    def test_png_catalog_remains_runtime_compatible(self):
+        documents, _ = legacy_fixture(self.base)
+        loaded = Catalog.load(self.base)
+        self.assertEqual(loaded.documents, documents)
         self.assertEqual(
-            (stages[0] / "previous" / "image" / "old.png").read_bytes(),
-            b"must preserve",
+            loaded.parse_priority("冰点冷萃 > 9331"), ("Food_003", "Furniture_draw_004")
         )
 
-    def test_truncated_and_animated_png_are_rejected_even_with_matching_hash(self):
+    def test_suffix_must_match_decoded_format_for_png_and_webp(self):
+        image = self.documents["gifts"]["gifts"][0]["image"]
+        webp = (self.base / "image" / image["path"]).read_bytes()
+        for suffix, payload in ((".png", webp), (".webp", self.original)):
+            image["path"] = Path(image["path"]).with_suffix(suffix).as_posix()
+            image["sha256"] = sync.sha256(payload)
+            (self.base / "image" / image["path"]).write_bytes(payload)
+            self.write()
+            with (
+                self.subTest(suffix=suffix),
+                self.assertRaisesRegex(CatalogError, "格式"),
+            ):
+                Catalog.load(self.base)
+
+    def test_truncated_and_animated_images_rejected_with_matching_hash(self):
+        image = self.documents["gifts"]["gifts"][0]["image"]
+        for image_format, suffix in (("PNG", ".png"), ("WEBP", ".webp")):
+            image["path"] = Path(image["path"]).with_suffix(suffix).as_posix()
+            path = self.base / "image" / image["path"]
+            valid = io.BytesIO()
+            animated = io.BytesIO()
+            first = Image.new("RGBA", (12, 16), (255, 0, 0, 255))
+            first.save(valid, format=image_format, lossless=True, exact=True)
+            first.save(
+                animated,
+                format=image_format,
+                save_all=True,
+                append_images=[Image.new("RGBA", (12, 16), (0, 255, 0, 255))],
+                lossless=True,
+                exact=True,
+                duration=100,
+                loop=0,
+            )
+            for payload in (valid.getvalue()[:-12], animated.getvalue()):
+                path.write_bytes(payload)
+                image["sha256"] = sync.sha256(payload)
+                self.write()
+                with self.subTest(format=image_format, size=len(payload)):
+                    with self.assertRaises(CatalogError):
+                        Catalog.load(self.base)
+                    with self.assertRaises(sync.SyncError):
+                        sync.preview_bytes(payload)
+
+    def test_file_size_guard_rejects_even_hash_matching_data(self):
         image = self.documents["gifts"]["gifts"][0]["image"]
         path = self.base / "image" / image["path"]
-        valid = path.read_bytes()
-        animated = io.BytesIO()
-        Image.new("RGBA", (12, 16), (255, 0, 0, 255)).save(
-            animated,
-            format="PNG",
-            save_all=True,
-            append_images=[Image.new("RGBA", (12, 16), (0, 255, 0, 255))],
-            duration=100,
-            loop=0,
-        )
-        for payload in (valid[:-12], animated.getvalue()):
-            path.write_bytes(payload)
-            image["sha256"] = sync.sha256(payload)
+        payload = path.read_bytes() + bytes(2 * 1024 * 1024)
+        path.write_bytes(payload)
+        image["sha256"] = sync.sha256(payload)
+        self.write()
+        with self.assertRaisesRegex(CatalogError, "体积异常"):
+            Catalog.load(self.base)
+
+    def test_check_rejects_changed_image_recipe_and_source_evidence(self):
+        image = self.documents["gifts"]["gifts"][0]["image"]
+        for key, value in (
+            ("recipe", "lossy-webp"),
+            ("source_url", "https://www.ntestation.com/images/other.png"),
+            ("source_sha1", "f" * 40),
+            ("source_description_url", sync.wiki_url("File:Other.png")),
+            ("source_width", 13),
+            ("source_height", 17),
+        ):
+            original = image[key]
+            image[key] = value
             self.write()
-            with self.assertRaises(CatalogError):
-                Catalog.load(self.base)
+            with self.subTest(key=key), self.assertRaises(sync.SyncError):
+                sync.check_catalog(self.base, check_generated=False)
+            image[key] = original
+
+
+class OptimizeTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="gift-optimize-test-")
+        self.base = Path(self.temporary.name) / "base"
+        self.documents, _ = legacy_fixture(self.base)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def test_optimize_is_offline_exact_preserves_metadata_and_is_idempotent(self):
+        original = copy.deepcopy(self.documents)
+        payloads = {
+            record["id"]: (self.base / "image" / record["image"]["path"]).read_bytes()
+            for kind, document in original.items()
+            for record in document[kind]
+        }
+        forbidden = AssertionError("离线优化不得联网")
+        with (
+            patch.object(sync, "collect_documents", side_effect=forbidden),
+            patch.object(sync.MediaWikiClient, "read_url", side_effect=forbidden),
+            patch("socket.socket", side_effect=forbidden),
+        ):
+            self.assertEqual(
+                sync.main(["--optimize", "--data-only", "--base", str(self.base)]), 0
+            )
+        optimized = sync.check_catalog(self.base, check_generated=False)
+        normalized = copy.deepcopy(optimized.documents)
+        for kind, document in normalized.items():
+            self.assertEqual(document["source"]["generation"]["recipe"], sync.RECIPE)
+            self.assertEqual(
+                document["source"]["snapshot_id"], sync.snapshot_id(optimized.documents)
+            )
+            self.assertNotEqual(
+                document["source"]["snapshot_id"],
+                original[kind]["source"]["snapshot_id"],
+            )
+            document["source"]["generation"]["recipe"] = original[kind]["source"][
+                "generation"
+            ]["recipe"]
+            document["source"]["snapshot_id"] = original[kind]["source"]["snapshot_id"]
+            for previous, record in zip(original[kind][kind], document[kind]):
+                image = record["image"]
+                path = self.base / "image" / image["path"]
+                self.assertEqual(image["path"], sync.preview_path(kind, record["id"]))
+                self.assertEqual(image["recipe"], sync.RECIPE)
+                self.assertEqual(image["sha256"], sync.sha256(path.read_bytes()))
+                with (
+                    Image.open(io.BytesIO(payloads[record["id"]])) as before,
+                    Image.open(path) as after,
+                ):
+                    self.assertEqual(before.size, after.size)
+                    self.assertEqual(
+                        before.convert("RGBA").tobytes(),
+                        after.convert("RGBA").tobytes(),
+                    )
+                for key in ("path", "sha256", "recipe"):
+                    image[key] = previous["image"][key]
+        self.assertEqual(normalized, original)
+        self.assertFalse(list((self.base / "image").rglob("*.png")))
+        self.assertEqual(
+            len(list((self.base / "image").rglob("*.webp"))), len(payloads)
+        )
+        before = fingerprint(self.base)
+        sync.optimize(self.base, data_only=True)
+        self.assertEqual(fingerprint(self.base), before)
+        self.assertEqual(
+            sync.main(["--check", "--data-only", "--base", str(self.base)]), 0
+        )
+        self.assertEqual(fingerprint(self.base), before)
+        self.assertFalse(list(self.base.glob(".gift-optimize-*")))
+
+    def test_failed_pixel_validation_leaves_original_library_and_no_stage(self):
+        before = fingerprint(self.base)
+        with (
+            patch.object(
+                sync, "verify_lossless_pixels", side_effect=sync.SyncError("像素不一致")
+            ),
+            patch.object(sync, "_update_generated_config") as update,
+        ):
+            with self.assertRaisesRegex(sync.SyncError, "像素"):
+                sync.optimize(self.base)
+            update.assert_not_called()
+        self.assertEqual(fingerprint(self.base), before)
+        self.assertFalse(list(self.base.glob(".gift-optimize-*")))
+
+    def test_bad_local_input_is_rejected_before_staging(self):
+        record = self.documents["gifts"]["gifts"][0]
+        path = self.base / "image" / record["image"]["path"]
+        path.write_bytes(b"bad png")
+        record["image"]["sha256"] = sync.sha256(path.read_bytes())
+        write_documents(self.base, self.documents)
+        before = fingerprint(self.base)
+        with self.assertRaises(CatalogError):
+            sync.optimize(self.base, data_only=True)
+        self.assertEqual(fingerprint(self.base), before)
+        self.assertFalse(list(self.base.glob(".gift-optimize-*")))
+
+    def test_bad_source_replay_keeps_old_png_and_both_libraries(self):
+        self.documents["gifts"]["gifts"][0]["default_likeability"] = 999
+        write_documents(self.base, self.documents)
+        before = fingerprint(self.base)
+        with self.assertRaisesRegex(sync.SyncError, "重现"):
+            sync.optimize(self.base, data_only=True)
+        self.assertEqual(fingerprint(self.base), before)
+        self.assertFalse(list(self.base.glob(".gift-optimize-*")))
+
+    def test_failure_removing_old_png_rolls_back_new_images_and_both_libraries(self):
+        paths = [
+            self.base / "image" / record["image"]["path"]
+            for record in self.documents["gifts"]["gifts"]
+        ]
+        before = fingerprint(self.base)
+        real_replace = os.replace
+        removed = []
+
+        def replace(src, dst):
+            if Path(src) in paths:
+                removed.append(Path(src))
+                if len(removed) == 2:
+                    raise OSError("模拟清理第二张旧图失败")
+            return real_replace(src, dst)
+
+        with (
+            patch.object(sync.os, "replace", side_effect=replace),
+            patch.object(sync, "_update_generated_config") as update,
+        ):
+            with self.assertRaisesRegex(OSError, "清理"):
+                sync.optimize(self.base)
+            update.assert_not_called()
+        self.assertEqual(len(removed), 2)
+        self.assertEqual(fingerprint(self.base), before)
+        self.assertFalse(list(self.base.glob(".gift-optimize-*")))
+        Catalog.load(self.base)
 
 
 class CompleteLibraryTests(unittest.TestCase):
@@ -796,8 +1104,9 @@ class CompleteLibraryTests(unittest.TestCase):
             catalog.parse_priority(" > ".join(catalog.gifts)), tuple(catalog.gifts)
         )
         for text in ("白藏", "娜娜莉", "char_14", "溶月茶具 > 白藏", "溶月"):
-            with self.subTest(text=text), self.assertRaisesRegex(
-                CatalogError, "未知礼物"
+            with (
+                self.subTest(text=text),
+                self.assertRaisesRegex(CatalogError, "未知礼物"),
             ):
                 catalog.parse_priority(text)
 

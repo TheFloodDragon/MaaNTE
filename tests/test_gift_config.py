@@ -590,6 +590,18 @@ class GiftRenderingTests(unittest.TestCase):
         config.render_interface_locales(self.characters, self.gifts)
         self.assertEqual((self.characters, self.gifts), originals)
 
+    def test_compact_task_serialization_preserves_all_ui_and_override_values(self):
+        original = copy.deepcopy(self.task)
+        encoded = config._task_json(self.task)
+        self.assertEqual(json.loads(encoded), self.task)
+        self.assertEqual(self.task, original)
+        self.assertEqual(encoded, config._task_json(json.loads(encoded)))
+        self.assertTrue(encoded.endswith("\n"))
+        pretty = json.dumps(self.task, ensure_ascii=False, indent=4) + "\n"
+        self.assertLess(
+            len(encoded.encode("utf-8")), len(pretty.encode("utf-8")) * 0.55
+        )
+
     def test_invalid_catalog_inputs_fail_closed(self):
         invalids = []
         for version in (True, "1", 0, 2):
@@ -971,6 +983,22 @@ class GiftRepositoryTests(unittest.TestCase):
         self.assertEqual(config.check(ROOT), [])
         self.assertEqual(self.task, config.render_task(self.characters, self.gifts))
         self.assertEqual(self.nodes, config.render_config(self.characters))
+
+    def test_generated_task_remains_compact_without_collapsing_cases_into_one_line(
+        self,
+    ):
+        text = (ROOT / config.TASK_PATH).read_text(encoding="utf-8")
+        pretty = json.dumps(self.task, ensure_ascii=False, indent=4) + "\n"
+        self.assertLess(len(text.encode("utf-8")), len(pretty.encode("utf-8")) * 0.5)
+        self.assertLess(max(map(len, text.splitlines())), 4096)
+        self.assertEqual(json.loads(text), self.task)
+        ignored = (ROOT / ".prettierignore").read_text(encoding="utf-8").splitlines()
+        for path in (
+            "assets/resource/tasks/Gift.json",
+            "assets/resource/base/data/gifts.json",
+            "assets/resource/base/data/characters.json",
+        ):
+            self.assertIn(path, ignored)
 
     def test_all_eligible_characters_have_independent_options_and_existing_icons(self):
         self.assertEqual(len(self.characters["characters"]), 24)

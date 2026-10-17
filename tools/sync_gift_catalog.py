@@ -1,8 +1,8 @@
 """显式维护 Wiki 赠礼库；--check 完全离线、只读，运行时不使用本工具。
 
-用现有环境执行：python tools/sync_gift_catalog.py --sync / --check
-同步前应关闭使用此资源的任务。所有原图仅在内存解码；最终只保存 <=256px
-展示 PNG。没有开放素材许可，本工具不发布、不替权利人授予再分发许可。
+用现有环境执行：python tools/sync_gift_catalog.py --sync / --optimize / --check
+维护前应关闭使用此资源的任务。所有原图仅在内存解码；最终只保存 <=256px
+无损 WebP。没有开放素材许可，本工具不发布、不替权利人授予再分发许可。
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import sys
 sys.dont_write_bytecode = True
 
 import argparse
+import copy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -37,7 +38,7 @@ API_URL = "https://www.ntestation.com/api.php"
 GIFT_CATEGORY = "Category:礼物"
 CHARACTER_CATEGORIES = ("Category:S级角色", "Category:A级角色")
 GALLERY_PATH = "/images/character_data.json"
-RECIPE = "rgba-lanczos-256-png9-v1"
+RECIPE = "rgba-exact-lossless-webp4-v2"
 MAX_DOWNLOAD = 16 * 1024 * 1024
 LOG = logging.getLogger("gift_catalog_sync")
 
@@ -73,6 +74,14 @@ class RecoveryError(SyncError):
 def canonical_json(value: object) -> bytes:
     return (
         json.dumps(value, ensure_ascii=False, indent=4, allow_nan=False) + "\n"
+    ).encode("utf-8")
+
+
+def document_json(value: object) -> bytes:
+    """主库紧凑存储；来源快照哈希继续使用 canonical_json 的既有字节契约。"""
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        + "\n"
     ).encode("utf-8")
 
 
@@ -564,21 +573,69 @@ def normalized_sha1(value: str) -> str:
     return value.zfill(40)
 
 
+def verify_lossless_pixels(original: bytes, preview: bytes) -> None:
+    """两个解码器都逐字节比较，包含全透明像素下的 RGB。"""
+    import cv2
+    import numpy as np
+
+    try:
+        with (
+            Image.open(io.BytesIO(original)) as before,
+            Image.open(io.BytesIO(preview)) as after,
+        ):
+            size = before.size
+            pixels = before.convert("RGBA").tobytes()
+            if after.size != size or after.convert("RGBA").tobytes() != pixels:
+                raise SyncError("无损转换改变了 Pillow RGBA 像素或尺寸")
+        expected = np.frombuffer(pixels, dtype=np.uint8).reshape(size[1], size[0], 4)[
+            :, :, [2, 1, 0, 3]
+        ]
+        for payload in (original, preview):
+            decoded = cv2.imdecode(
+                np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_UNCHANGED
+            )
+            if decoded is None or decoded.dtype != np.uint8:
+                raise SyncError("展示图无法由 OpenCV 完整解码")
+            if decoded.ndim == 2:
+                decoded = cv2.cvtColor(decoded, cv2.COLOR_GRAY2BGRA)
+            elif decoded.ndim == 3 and decoded.shape[2] == 3:
+                decoded = cv2.cvtColor(decoded, cv2.COLOR_BGR2BGRA)
+            if decoded.shape != expected.shape or not np.array_equal(decoded, expected):
+                raise SyncError("无损转换改变了 OpenCV BGRA 像素或尺寸")
+    except SyncError:
+        raise
+    except Exception as exc:
+        raise SyncError("展示图无法完成双解码器像素校验") from exc
+
+
 def preview_bytes(payload: bytes) -> tuple[bytes, tuple[int, int]]:
     try:
+        if len(payload) > MAX_DOWNLOAD:
+            raise SyncError("来源图片体积太大")
         with Image.open(io.BytesIO(payload)) as source:
             if (
                 source.width * source.height > 16_000_000
                 or getattr(source, "n_frames", 1) != 1
             ):
                 raise SyncError("来源图片太大或包含动画")
+            original_size = source.size
             source.verify()
         with Image.open(io.BytesIO(payload)) as source:
             preview = source.convert("RGBA")
+        # 在线同步仍将原图派生为 <=256px；离线优化输入已通过 Catalog 尺寸校验。
         preview.thumbnail((256, 256), Image.Resampling.LANCZOS, reducing_gap=3.0)
         output = io.BytesIO()
-        preview.save(output, format="PNG", optimize=False, compress_level=9)
-        return output.getvalue(), preview.size
+        preview.save(
+            output, format="WEBP", lossless=True, quality=100, method=4, exact=True
+        )
+        encoded = output.getvalue()
+        reference = payload
+        if preview.size != original_size:
+            reference_stream = io.BytesIO()
+            preview.save(reference_stream, format="PNG", compress_level=0)
+            reference = reference_stream.getvalue()
+        verify_lossless_pixels(reference, encoded)
+        return encoded, preview.size
     except SyncError:
         raise
     except Exception as exc:
@@ -588,7 +645,12 @@ def preview_bytes(payload: bytes) -> tuple[bytes, tuple[int, int]]:
 def preview_path(kind: str, identifier: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_-]+", identifier):
         raise SyncError("无法生成安全的图片路径")
-    return "Gift/%s/%s.png" % ("Gifts" if kind == "gifts" else "Characters", identifier)
+    if kind not in ("gifts", "characters"):
+        raise SyncError("未知的展示图目录")
+    return "Gift/%s/%s.webp" % (
+        "Gifts" if kind == "gifts" else "Characters",
+        identifier,
+    )
 
 
 def gallery_snapshot(client: MediaWikiClient) -> dict:
@@ -869,7 +931,7 @@ def _check_generated_config(base: Path, catalog: Catalog) -> None:
 
 
 def check_catalog(base: Path, *, check_generated: bool = True) -> Catalog:
-    """只读校验全库、PNG、来源快照和能离线重放的生成字段。"""
+    """只读校验全库、无损 WebP、来源快照和能离线重放的生成字段。"""
     catalog = Catalog.load(base)
     documents = catalog.documents
     gallery = documents["characters"]["source"].get("portrait_gallery")
@@ -880,7 +942,7 @@ def check_catalog(base: Path, *, check_generated: bool = True) -> Catalog:
     expected_snapshot = snapshot_id(documents)
     for kind in ("gifts", "characters"):
         document = documents[kind]
-        if (base / "data" / (kind + ".json")).read_bytes() != canonical_json(document):
+        if (base / "data" / (kind + ".json")).read_bytes() != document_json(document):
             raise SyncError("%s.json 不是可重现的规范 JSON" % kind)
         if document["source"].get("snapshot_id") != expected_snapshot:
             raise SyncError("同步快照校验失败")
@@ -914,10 +976,14 @@ def check_catalog(base: Path, *, check_generated: bool = True) -> Catalog:
             info = source["imageinfo"]
             if image["path"] != preview_path(kind, record["id"]):
                 raise SyncError("展示图路径不符合生成规则")
+            if image.get("recipe") != RECIPE:
+                raise SyncError("展示图生成规则与主库不一致")
             if image["source_url"] != info["url"] or image[
                 "source_sha1"
             ] != normalized_sha1(info["sha1"]):
                 raise SyncError("原图 URL/SHA-1 与 imageinfo 证据不一致")
+            if image.get("source_description_url") != info["descriptionurl"]:
+                raise SyncError("原图描述页与 imageinfo 证据不一致")
             if (image.get("source_width"), image.get("source_height")) != (
                 info["width"],
                 info["height"],
@@ -928,20 +994,40 @@ def check_catalog(base: Path, *, check_generated: bool = True) -> Catalog:
             payload = (base / "image" / image["path"]).read_bytes()
             canonical, _ = preview_bytes(payload)
             if canonical != payload:
-                raise SyncError("展示图不是可重复生成的规范 PNG")
+                raise SyncError("展示图不是可重复生成的规范无损 WebP")
     if check_generated:
         _check_generated_config(base, catalog)
     return catalog
 
 
 def publish_stage(stage: Path, base: Path, documents: dict) -> None:
-    """先完整校验；替换失败时反向恢复库与小图，不留下半套主库。"""
-    check_catalog(stage, check_generated=False)
-    relatives = [
+    """先完整校验；替换和旧图清理失败时反向恢复库与图片。"""
+    validated = check_catalog(stage, check_generated=False)
+    if validated.documents != documents:
+        raise SyncError("待发布清单与已校验的临时主库不一致")
+    images = [
         Path("image") / record["image"]["path"]
         for kind in ("gifts", "characters")
         for record in documents[kind][kind]
-    ] + [Path("data/gifts.json"), Path("data/characters.json")]
+    ]
+    obsolete = set()
+    if all((base / "data" / (kind + ".json")).is_file() for kind in documents):
+        try:
+            previous = Catalog.load(base)
+        except CatalogError:
+            # 无法验证的旧目录不参与清理；也不能凭文件名删除其他资源。
+            previous = None
+        if previous is not None:
+            obsolete = {
+                Path("image") / record["image"]["path"]
+                for kind in ("gifts", "characters")
+                for record in previous.documents[kind][kind]
+            } - set(images)
+    relatives = (
+        images
+        + [Path("data/gifts.json"), Path("data/characters.json")]
+        + sorted(obsolete)
+    )
     journal = []
     try:
         for relative in relatives:
@@ -949,7 +1035,11 @@ def publish_stage(stage: Path, base: Path, documents: dict) -> None:
             if not target.resolve().is_relative_to(base.resolve()):
                 raise SyncError("目标资源目录含越界符号链接")
             target.parent.mkdir(parents=True, exist_ok=True)
-            if target.is_file() and incoming.read_bytes() == target.read_bytes():
+            if (
+                relative not in obsolete
+                and target.is_file()
+                and incoming.read_bytes() == target.read_bytes()
+            ):
                 continue
             backup = stage / "previous" / relative
             had_previous = target.exists()
@@ -957,7 +1047,8 @@ def publish_stage(stage: Path, base: Path, documents: dict) -> None:
                 backup.parent.mkdir(parents=True, exist_ok=True)
                 os.replace(target, backup)
             journal.append((target, backup, had_previous))
-            os.replace(incoming, target)
+            if relative not in obsolete:
+                os.replace(incoming, target)
     except BaseException:
         recovery_errors = []
         for target, backup, had_previous in reversed(journal):
@@ -996,7 +1087,7 @@ def synchronize(
         stage_images(client, documents, stage, cache)
         (stage / "data").mkdir(parents=True, exist_ok=True)
         for kind, document in documents.items():
-            (stage / "data" / (kind + ".json")).write_bytes(canonical_json(document))
+            (stage / "data" / (kind + ".json")).write_bytes(document_json(document))
         publish_stage(stage, base, documents)
     except RecoveryError:
         preserve_stage = True
@@ -1005,22 +1096,81 @@ def synchronize(
         if not preserve_stage:
             shutil.rmtree(stage)
     catalog = check_catalog(base, check_generated=False)
-    if (
-        not data_only
-        and base.resolve() == (ROOT / "assets" / "resource" / "base").resolve()
-    ):
-        helper = ROOT / "tools" / "gift_task_config.py"
-        if not helper.is_file():
-            raise SyncError(
-                "两库已完整同步；配置生成器缺失，可使用 --data-only 仅维护数据"
+    if not data_only:
+        _update_generated_config(base, catalog)
+    return catalog
+
+
+def _update_generated_config(base: Path, catalog: Catalog) -> None:
+    if base.resolve() != (ROOT / "assets" / "resource" / "base").resolve():
+        return
+    helper = ROOT / "tools" / "gift_task_config.py"
+    if not helper.is_file():
+        raise SyncError("两库已完整维护；配置生成器缺失，可使用 --data-only 仅维护数据")
+    generator = _load_module("_maante_gift_task_config", helper)
+    generator.update(
+        ROOT,
+        characters=catalog.documents["characters"],
+        gifts=catalog.documents["gifts"],
+    )
+    _check_generated_config(base, catalog)
+
+
+def optimize(base: Path, *, data_only: bool = False) -> Catalog:
+    """只读取已校验的本地图；全部双解码器像素一致后才建立发布事务。"""
+    catalog = Catalog.load(base)
+    documents = copy.deepcopy(catalog.documents)
+    previews = []
+    original_bytes = 0
+    for kind in ("gifts", "characters"):
+        for record in documents[kind][kind]:
+            image = record["image"]
+            payload = (base / "image" / image["path"]).read_bytes()
+            if sha256(payload) != image["sha256"]:
+                raise SyncError("优化期间本地图片 SHA-256 发生变化")
+            preview, dimensions = preview_bytes(payload)
+            if dimensions != (image["width"], image["height"]):
+                raise SyncError("离线无损优化不能改变图片尺寸")
+            image.update(
+                path=preview_path(kind, record["id"]),
+                sha256=sha256(preview),
+                recipe=RECIPE,
             )
-        generator = _load_module("_maante_gift_task_config", helper)
-        generator.update(
-            ROOT,
-            characters=catalog.documents["characters"],
-            gifts=catalog.documents["gifts"],
-        )
-        _check_generated_config(base, catalog)
+            previews.append((image["path"], preview))
+            original_bytes += len(payload)
+        generation = documents[kind]["source"].get("generation")
+        if not isinstance(generation, dict):
+            raise SyncError("主库缺少生成规则")
+        generation["recipe"] = RECIPE
+    identifier = snapshot_id(documents)
+    for document in documents.values():
+        document["source"]["snapshot_id"] = identifier
+    stage = Path(tempfile.mkdtemp(prefix=".gift-optimize-", dir=base))
+    preserve_stage = False
+    try:
+        for relative, preview in previews:
+            target = stage / "image" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(preview)
+        (stage / "data").mkdir(parents=True, exist_ok=True)
+        for kind, document in documents.items():
+            (stage / "data" / (kind + ".json")).write_bytes(document_json(document))
+        publish_stage(stage, base, documents)
+    except RecoveryError:
+        preserve_stage = True
+        raise
+    finally:
+        if not preserve_stage:
+            shutil.rmtree(stage)
+    catalog = check_catalog(base, check_generated=False)
+    if not data_only:
+        _update_generated_config(base, catalog)
+    LOG.info(
+        "离线无损优化：%d 张图片经 Pillow/OpenCV 像素校验，%d -> %d 字节",
+        len(previews),
+        original_bytes,
+        sum(len(preview) for _, preview in previews),
+    )
     return catalog
 
 
@@ -1033,30 +1183,32 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         "--sync", action="store_true", help="显式联网维护，整体验证后替换两库和小图"
     )
+    mode.add_argument(
+        "--optimize", action="store_true", help="完全离线，逐像素无损压缩现有完整目录"
+    )
     parser.add_argument(
         "--base", type=Path, default=ROOT / "assets" / "resource" / "base"
     )
     parser.add_argument(
         "--data-only",
         action="store_true",
-        help="仅与 --sync 使用，跳过任务配置派生文件更新",
+        help="仅维护或校验两库和图片，跳过任务配置派生文件",
     )
     args = parser.parse_args(argv)
-    if args.check and args.data_only:
-        parser.error("--data-only 仅可与 --sync 同时使用")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     try:
-        catalog = (
-            check_catalog(args.base)
-            if args.check
-            else synchronize(args.base, data_only=args.data_only)
-        )
+        if args.check:
+            catalog = check_catalog(args.base, check_generated=not args.data_only)
+        elif args.optimize:
+            catalog = optimize(args.base, data_only=args.data_only)
+        else:
+            catalog = synchronize(args.base, data_only=args.data_only)
     except (CatalogError, SyncError, OSError, ValueError) as exc:
         LOG.error("目录维护失败: %s", exc)
         return 2
     LOG.info(
         "%s完成：%d 礼物、%d 角色（%d 可赠礼）；运行时离线，图片不授权送礼",
-        "只读校验" if args.check else "同步",
+        "只读校验" if args.check else "离线优化" if args.optimize else "同步",
         len(catalog.gifts),
         len(catalog.characters),
         sum(character["giftable"] for character in catalog.characters.values()),
