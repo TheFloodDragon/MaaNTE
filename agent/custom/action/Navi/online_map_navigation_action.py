@@ -50,17 +50,17 @@ class OnlineMapNavigationAction(CustomAction):
         try:
             network.start()
             runner.start()
-            logger.info(
-                "OnlineMapNavigation service started: ws://0.0.0.0:%s", port
-            )
+            logger.info("OnlineMapNavigation service started: ws://0.0.0.0:%s", port)
             runner.run_until_stopped(on_tick=network.publish_route)
             return CustomAction.RunResult(success=False)
         except Exception as exc:
             logger.error("OnlineMapNavigation failed: %s", exc)
             return CustomAction.RunResult(success=False)
         finally:
-            runner.close()
-            network.stop()
+            try:
+                runner.close()
+            finally:
+                network.stop()
 
     @staticmethod
     def load_option_params(context: Context) -> dict[str, Any]:

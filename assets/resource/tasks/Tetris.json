@@ -45,7 +45,7 @@
                                 "repeat_count": 1
                             },
                             "on_error": [
-                                "TetrisExit"
+                                "TetrisExitWithError"
                             ]
                         }
                     }
@@ -113,7 +113,7 @@
                         "repeat_count": "{repeat_count}"
                     },
                     "on_error": [
-                        "TetrisExit"
+                        "TetrisExitWithError"
                     ]
                 }
             }

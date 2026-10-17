@@ -50,11 +50,10 @@
         "action": "DoNothing",
         "post_delay": 0,
         "next": [
-            "RealTimeSkipStoryDialogCheckbox"
+            "RealTimeSkipStoryDialogCheckbox",
+            "RealTimeSkipStoryDialogConfirm"
         ],
-        "on_error": [
-            "RealTimeFakeTrue"
-        ]
+        "on_error": []
     },
     "RealTimeSkipStoryDialogCheckbox": {
         "desc": "跳过今日剧情复选框",
@@ -206,9 +205,7 @@
         "next": [
             "RealTimeSkipImportantStoryConfirm"
         ],
-        "on_error": [
-            "RealTimeFakeTrue"
-        ]
+        "on_error": []
     },
     "RealTimeSkipImportantStoryConfirm": {
         "desc": "跳过重要剧情确认按钮",

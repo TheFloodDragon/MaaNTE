@@ -4,6 +4,7 @@ from maa.context import Context
 
 from utils.logger import logger
 from utils.maafocus import PrintT
+from utils.task_control import run_task_checked
 
 FURNITURE_RECOG_NODES = [
     ("FurnitureHamsterBall", "仓鼠球", "hamster_ball"),
@@ -20,28 +21,42 @@ class FurnitureClaim(CustomAction):
     ) -> CustomAction.RunResult:
         controller = context.tasker.controller
         for node_name, name, msg_key in FURNITURE_RECOG_NODES:
-            image = controller.post_screencap().wait().get()
+            if context.tasker.stopping:
+                return CustomAction.RunResult(success=False)
+            job = controller.post_screencap().wait()
+            if context.tasker.stopping or not job.succeeded:
+                return CustomAction.RunResult(success=False)
+            image = job.get()
+            if context.tasker.stopping or image is None:
+                return CustomAction.RunResult(success=False)
             result = context.run_recognition(node_name, image)
-            if result and result.box:
-                roi = [result.box.x, result.box.y, result.box.w, result.box.h]
-                result = context.run_recognition(
-                    "FurnitureClaim",
-                    image,
-                    pipeline_override={
-                        "FurnitureClaim": {"roi": roi}
-                    },
-                )
-                if result.hit:
-                    context.run_task(
-                        "FurnitureClaim",
-                        pipeline_override={
-                            "FurnitureClaim": {"roi": roi}
-                        },
-                    )
-                    PrintT(context, f"furniture.claimed.{msg_key}")
-                else:
-                    logger.debug(f"识别到但无法领取 {name}")
-            else:
-                logger.debug(f"未识别到 {name}")
+            if context.tasker.stopping:
+                return CustomAction.RunResult(success=False)
+            if result is None or not result.hit or not result.box:
+                logger.debug("未识别到 %s", name)
+                continue
 
-        return CustomAction.RunResult(success=True)
+            box = result.box
+            if isinstance(box, (list, tuple)):
+                roi = list(box)
+            else:
+                roi = [box.x, box.y, box.w, box.h]
+            claim_override = {"FurnitureClaim": {"roi": roi}}
+            result = context.run_recognition(
+                "FurnitureClaim", image, pipeline_override=claim_override
+            )
+            if context.tasker.stopping:
+                return CustomAction.RunResult(success=False)
+            if result is None or not result.hit:
+                logger.debug("识别到但无法领取 %s", name)
+                continue
+
+            if not run_task_checked(
+                context, "FurnitureClaim", pipeline_override=claim_override
+            ):
+                return CustomAction.RunResult(success=False)
+            if context.tasker.stopping:
+                return CustomAction.RunResult(success=False)
+            PrintT(context, f"furniture.claimed.{msg_key}")
+
+        return CustomAction.RunResult(success=not context.tasker.stopping)

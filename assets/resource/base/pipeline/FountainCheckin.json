@@ -54,10 +54,10 @@
         "next": [
             "FountainFindButton",
             "FountainCheckinNotFound"
+        ],
+        "on_error": [
+            "FountainCheckinNotFound"
         ]
-        // "on_error": [
-        //     "FountainCheckinNotFound"
-        // ]
     },
     "FountainFindButton": {
         "desc": "识别喷泉打卡按钮",
@@ -268,12 +268,18 @@
         ]
     },
     "FountainCheckinNotFound": {
-        "desc": "未识别到喷泉打卡标识",
-        "next": [
-            "FountainCheckinExit"
-        ],
+        "desc": "未识别到喷泉打卡标识，任务失败",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "fail_task"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
         "focus": {
-            "Node.Action.Succeeded": "❌ 未能找到喷泉打卡图标，请移动到喷泉位置再次进行该任务"
+            "Node.Action.Failed": "未能完成喷泉打卡，请检查传送、寻路或打卡界面后再次进行该任务"
         }
     },
     "FountainCheckinExit": {

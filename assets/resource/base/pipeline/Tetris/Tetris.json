@@ -261,15 +261,36 @@
         ],
         "post_delay": 1000,
         "next": [
-            "TetrisExit"
+            "TetrisExitWithError"
         ]
     },
     "TetrisExit": {
-        "desc": "泯除方块任务完成",
+        "desc": "泯除方块任务完成，结束当前任务并清空 JumpBack 栈",
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "StopTask"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
         "next": []
     },
     "TetrisExitWithError": {
-        "desc": "泯除方块异常退出",
+        "desc": "泯除方块异常退出，保留当前任务失败状态",
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "fail_task"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
         "next": []
     }
 }

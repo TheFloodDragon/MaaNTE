@@ -1,6 +1,12 @@
 {
     "RealTimeTaskMain": {
-        "desc": "实时任务主入口",
+        "desc": "实时任务主入口，每轮交回 Pipeline 调度",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "RealTimeTaskMain"
+        ],
         "action": "Custom",
         "custom_action": "RealTimeTaskAction",
         "custom_action_param": {
@@ -18,11 +24,24 @@
             "enable_skland_map": true
         }
     },
+    "__RealTimeTaskAction_Holder": {
+        "desc": "单轮实时辅助分发，未命中时进入空闲等待",
+        "recognition": "DirectHit",
+        "action": "DoNothing",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "RealTimeSleep"
+        ]
+    },
     "RealTimeSleep": {
+        "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 200
     },
     "RealTimeFakeTrue": {
+        "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0
     }

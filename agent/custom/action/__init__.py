@@ -9,6 +9,7 @@ from .rhythm.feats.repeat_decision import *
 from .rhythm.feats.select_song import *
 from .Common.click import *
 from .Common.enable_node import *
+from .Common.task_result import *
 from .Common.resize_game_window import *
 from .realtime_task import *
 from .Navi import *
@@ -48,6 +49,7 @@ __all__ = [
     "AutoSellFish",
     "ClickOverride",
     "EnableNode",
+    "FailTask",
     "ResizeGameWindow",
     "AutoTetris",
     "AutoRhythmPlay",
