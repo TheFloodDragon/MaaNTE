@@ -1,0 +1,364 @@
+{
+    "GiftEntry": {
+        "desc": "清空本轮状态并逐角色读取独立配置；不复用上次额度或发送意图",
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_reset"
+            }
+        },
+        "next": [
+            "GiftEnsureBond"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftEnsureBond": {
+        "desc": "只通过公共场景接口进入羁遇；到达后再次识别",
+        "next": [
+            "GiftBondReady",
+            "[JumpBack]SceneAnyEnterBondMenu"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftBondReady": {
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "InBondMenu"
+                ]
+            }
+        },
+        "next": [
+            "GiftChooseCharacter"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftChooseCharacter": {
+        "desc": "新截图定位角色；头像仅为候选，点击后进入独立身份验证",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_choose_character"
+            }
+        },
+        "next": [
+            "GiftWaitCharacter"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftWaitCharacter": {
+        "desc": "只观察直到完整名称与独立选中头像证据一致；绝不重放点击",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_wait_character"
+            }
+        },
+        "next": [
+            "GiftWaitCharacter"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftWaitCharacterList": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_wait_character_list"
+            }
+        },
+        "next": [
+            "GiftWaitCharacterList"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftOpenTab": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_open_tab"
+            }
+        },
+        "next": [
+            "GiftWaitGiftPage"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftWaitGiftPage": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_wait_gift_page"
+            }
+        },
+        "next": [
+            "GiftWaitGiftPage"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftCheckQuota": {
+        "desc": "以游戏n/3换算当日已送，不将每次启动视为额外配额",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_check_quota"
+            }
+        },
+        "next": [
+            "GiftFindGift"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftFindGift": {
+        "desc": "仅搜索当前优先礼物；明确库存0或完整可信扫描缺失才推进",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_find_gift"
+            }
+        },
+        "next": [
+            "GiftVerifyGift"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftScrollList": {
+        "desc": "仅在已验证列表区域内单次拖动；不以画面不动推断到底",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_scroll_list"
+            }
+        },
+        "next": [
+            "GiftWaitScroll"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftWaitScroll": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_wait_scroll"
+            }
+        },
+        "next": [
+            "GiftWaitScroll"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftVerifyGift": {
+        "desc": "完整礼物名称、图像与选中状态三者复核；不凭图标相似发送",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_verify_gift"
+            }
+        },
+        "next": [
+            "GiftSendOne"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftSendOne": {
+        "desc": "新截图通过所有安全门后先建立pending，再且仅再提交一次；失败只能进回执失败分支",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_send_one"
+            }
+        },
+        "next": [
+            "GiftWaitReceipt"
+        ],
+        "on_error": [
+            "GiftReceiptFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftWaitReceipt": {
+        "desc": "只观察，不发送；同角色同礼物额度恰好减1且库存不冲突才计为成功",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_wait_receipt"
+            }
+        },
+        "next": [
+            "GiftWaitReceipt"
+        ],
+        "on_error": [
+            "GiftReceiptFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftReceiptFailed": {
+        "desc": "回执缺失或控制器结果不明：撤销pending并锁定当前角色，绝不回放发送",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_receipt_failed"
+            }
+        },
+        "next": [
+            "GiftWarnCurrent"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftWarnCurrent": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_warn_current"
+            }
+        },
+        "next": [
+            "GiftRecoverCurrent"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftRecoverCurrent": {
+        "desc": "只识别已知页面/加载；未知弹窗不点确定、不盲按Esc，无法恢复则汇总其余警告",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_recover_current"
+            }
+        },
+        "next": [
+            "GiftNextCharacter"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftNextCharacter": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_next_character"
+            }
+        },
+        "next": [
+            "GiftChooseCharacter"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftNavigationFailed": {
+        "desc": "停止一切输入，为剩余角色记无法执行警告；预期跳过不使用StopTask",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_navigation_failed"
+            }
+        },
+        "next": [
+            "GiftSummary"
+        ],
+        "on_error": [
+            "GiftSummary"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftSummary": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_summary"
+            }
+        },
+        "next": [],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

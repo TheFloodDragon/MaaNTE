@@ -155,7 +155,8 @@
         "resource/tasks/preset/AFK.json",
         // "resource/tasks/preset/FullDaily.json",
         // "resource/tasks/preset/QuickDaily.json",
-        "resource/tasks/preset/RealtimeAssistance.json"
+        "resource/tasks/preset/RealtimeAssistance.json",
+        "resource/tasks/Gift.json"
     ],
     "option": {}
 }

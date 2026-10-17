@@ -1,0 +1,74 @@
+{
+    "__ScenePrivateAnyEnterBondMenuSuccess": {
+        "desc": "识别确认已到羁遇；不假设上一次点击成功",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": ["InBondMenu"]
+            }
+        },
+        "action": { "type": "DoNothing" },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "__ScenePrivateWorldEnterBondMenu": {
+        "desc": "仅从已确认的大世界打开Esc菜单，不处理未知弹窗",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": ["InWorld"]
+            }
+        },
+        "action": {
+            "type": "ClickKey",
+            "param": { "key": [27] }
+        },
+        "post_wait_freezes": {
+            "time": 100,
+            "target": [630, 80, 630, 610]
+        },
+        "next": ["__ScenePrivateEscEnterBondMenu"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "__ScenePrivateEscEnterBondMenu": {
+        "desc": "必须同时确认Esc和完整羁遇入口，再点击实际OCR框",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": ["InEscMenu", "__ScenePrivateBondEntryText"],
+                "box_index": 1
+            }
+        },
+        "action": {
+            "type": "Click",
+            "param": { "target": true }
+        },
+        "post_wait_freezes": {
+            "time": 100,
+            "target": [0, 0, 1120, 160]
+        },
+        "next": ["__ScenePrivateAnyEnterBondMenuSuccess"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "__ScenePrivateBondEntryText": {
+        "desc": "入口完整名称；不使用PositionMap固定点，不做通用确定/回退重试",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [0, 0, 1280, 720],
+                // @i18n-skip 需要锚定完整入口，未知游戏译名不猜测
+                "expected": ["^羁遇$", "^羈遇$"],
+                "threshold": 0.9
+            }
+        },
+        "action": { "type": "DoNothing" },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

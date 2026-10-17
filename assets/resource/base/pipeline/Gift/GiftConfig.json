@@ -1,0 +1,407 @@
+{
+    "GiftSettings": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "dry_run": false
+        }
+    },
+    "GiftConfig_char_129": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_129",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_132": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_132",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_134": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_134",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_142": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_142",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_146": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_146",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_148": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_148",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_198": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_198",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_201": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_201",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_219": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_219",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_227": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_227",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_230": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_230",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_233": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_233",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_235": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_235",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_238": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_238",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_240": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_240",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_242": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_242",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_244": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_244",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_246": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_246",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_248": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_248",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_634": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_634",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_854": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_854",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_2396": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_2396",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    },
+    "GiftConfig_char_2427": {
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "DoNothing"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "attach": {
+            "character_id": "char_2427",
+            "selected": false,
+            "gifts": "",
+            "limit": 3
+        }
+    }
+}
