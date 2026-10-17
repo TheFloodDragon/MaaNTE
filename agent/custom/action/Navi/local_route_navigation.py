@@ -132,7 +132,11 @@ class LocalRouteNavigation:
         if self._closed:
             raise RuntimeError("local route navigation is closed")
 
+        if self.context.tasker.stopping:
+            return False
         self.runner.start()
+        if self.context.tasker.stopping:
+            return False
         data, route_label = self._route_json_for_run(route_json)
         if data is None:
             raise ValueError("route json is not loaded")
@@ -153,7 +157,11 @@ class LocalRouteNavigation:
             )
             return False
 
+        if self.context.tasker.stopping:
+            return False
         current_point = self.runner.update_current_frame()
+        if self.context.tasker.stopping:
+            return False
         self.route.reset(waypoints, True, current_point)
         logger.info(
             "OnlineMapNavigation local route loaded: path=%s route=%s segment=%s "
@@ -166,7 +174,7 @@ class LocalRouteNavigation:
             self.route.payload()["currentIndex"],
         )
         status = self.runner.run_until_stopped(stop_when_route_done=True)
-        return status == "arrived"
+        return status == "arrived" and not self.context.tasker.stopping
 
     def close(self) -> None:
         if self._closed:
@@ -198,6 +206,8 @@ class LocalRouteNavigationAction(CustomAction):
     def run(
         self, context: "Context", argv: CustomAction.RunArg
     ) -> CustomAction.RunResult:
+        if context.tasker.stopping:
+            return CustomAction.RunResult(success=False)
         try:
             params = load_params(argv.custom_action_param)
             json_path = params.get("json_path")
@@ -207,10 +217,7 @@ class LocalRouteNavigationAction(CustomAction):
             route_name = str(params.get("route_name", "")).strip()
             segment_index = int(params.get("segment_index", 1))
             tolerance = float(params.get("tolerance", DEFAULT_TOLERANCE))
-            frame_interval = max(
-                0.05,
-                float(params.get("frame_interval", DEFAULT_FRAME_INTERVAL)),
-            )
+            frame_interval = float(params.get("frame_interval", DEFAULT_FRAME_INTERVAL))
             angle_backend = str(params.get("angle_backend", "auto")).strip() or "auto"
             position_backend = (
                 str(params.get("position_backend", "map")).strip() or "map"
@@ -234,7 +241,9 @@ class LocalRouteNavigationAction(CustomAction):
                     route_name=route_name,
                     segment_index=segment_index,
                 )
-            return CustomAction.RunResult(success=success)
+            return CustomAction.RunResult(
+                success=success and not context.tasker.stopping
+            )
         except Exception as exc:
             logger.error("LocalRouteNavigation failed: %s", exc)
             return CustomAction.RunResult(success=False)
@@ -245,13 +254,12 @@ class LocalRouteNavigationUnitTestAction(CustomAction):
     def run(
         self, context: "Context", argv: CustomAction.RunArg
     ) -> CustomAction.RunResult:
+        if context.tasker.stopping:
+            return CustomAction.RunResult(success=False)
         try:
             params = load_params(argv.custom_action_param)
             tolerance = float(params.get("tolerance", DEFAULT_TOLERANCE))
-            frame_interval = max(
-                0.05,
-                float(params.get("frame_interval", DEFAULT_FRAME_INTERVAL)),
-            )
+            frame_interval = float(params.get("frame_interval", DEFAULT_FRAME_INTERVAL))
             angle_backend = str(params.get("angle_backend", "auto")).strip() or "auto"
             position_backend = (
                 str(params.get("position_backend", "map")).strip() or "map"
@@ -275,7 +283,9 @@ class LocalRouteNavigationUnitTestAction(CustomAction):
                     route_name="penquan",
                     segment_index=1,
                 )
-            return CustomAction.RunResult(success=success)
+            return CustomAction.RunResult(
+                success=success and not context.tasker.stopping
+            )
         except Exception as exc:
             logger.error("LocalRouteNavigationUnitTest failed: %s", exc)
             return CustomAction.RunResult(success=False)

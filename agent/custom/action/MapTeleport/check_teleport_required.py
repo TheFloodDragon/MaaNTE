@@ -149,7 +149,9 @@ def point_xy(data: dict[str, Any]) -> tuple[float, float]:
     raise ValueError("point needs worldX/worldY, pixelX/pixelY, or x/y")
 
 
-def find_named_record(data: Any, collection_name: str, record_id: str) -> dict[str, Any]:
+def find_named_record(
+    data: Any, collection_name: str, record_id: str
+) -> dict[str, Any]:
     records = data.get(collection_name) if isinstance(data, dict) else data
     if not isinstance(records, list):
         raise ValueError(f"{collection_name} must be a list")
@@ -245,28 +247,45 @@ def locate_current_position(
     coordinate_timeout: float = DEFAULT_COORDINATE_TIMEOUT,
     coordinate_interval: float = DEFAULT_COORDINATE_INTERVAL,
     debug: bool = False,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> Any | None:
+    from utils.task_control import wait_until_cancelled
+
+    should_cancel = should_cancel or (lambda: False)
+    timeout = float(coordinate_timeout)
+    interval = float(coordinate_interval)
+    if not math.isfinite(timeout) or timeout < 0:
+        raise ValueError("coordinate_timeout must be finite and nonnegative")
+    if not math.isfinite(interval) or interval <= 0:
+        raise ValueError("coordinate_interval must be finite and positive")
+    if should_cancel():
+        return None
     backend = str(position_backend or DEFAULT_POSITION_BACKEND).strip().lower()
     CoordinatePositionProvider = load_coordinate_position_provider_class()
     provider = CoordinatePositionProvider(backend, debug=debug)
     try:
-        if provider.uses_visual_positioning():
-            locator_result = visual_locate(frame, get_frame=get_frame, debug=debug)
-            if locator_result is not None:
-                return locator_result
+        if should_cancel():
             return None
+        if provider.uses_visual_positioning():
+            result = visual_locate(frame, get_frame=get_frame, debug=debug)
+            return None if should_cancel() else result
 
-        deadline = time.monotonic() + max(float(coordinate_timeout), 0.0)
-        while True:
+        deadline = time.monotonic() + timeout
+        while not should_cancel():
             result = provider.locate(None, None)
+            if should_cancel():
+                return None
             if result.found and result.point is not None:
                 return result
-            if time.monotonic() >= deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 break
-            time.sleep(max(float(coordinate_interval), 0.05))
+            if not wait_until_cancelled(min(interval, remaining), should_cancel):
+                return None
 
-        if backend == "auto":
-            return visual_locate(frame, get_frame=get_frame, debug=debug)
+        if backend == "auto" and not should_cancel():
+            result = visual_locate(frame, get_frame=get_frame, debug=debug)
+            return None if should_cancel() else result
         return None
     finally:
         provider.close()
@@ -283,6 +302,7 @@ def check_teleport_required(
     coordinate_interval: float = DEFAULT_COORDINATE_INTERVAL,
     get_frame: Callable[[], Any | None] | None = None,
     debug: bool = False,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> TeleportDecision | None:
     frame = None
     if target is None:
@@ -297,7 +317,10 @@ def check_teleport_required(
         coordinate_timeout=coordinate_timeout,
         coordinate_interval=coordinate_interval,
         debug=debug,
+        should_cancel=should_cancel,
     )
+    if should_cancel is not None and should_cancel():
+        return None
     if result is None or not result.found or result.point is None:
         return None
 
@@ -352,7 +375,9 @@ if AgentServer is not None and CustomAction is not None:
                 target = parse_target_point(params)
                 threshold = parse_threshold(params)
                 position_backend = (
-                    str(params.get("position_backend", DEFAULT_POSITION_BACKEND)).strip()
+                    str(
+                        params.get("position_backend", DEFAULT_POSITION_BACKEND)
+                    ).strip()
                     or DEFAULT_POSITION_BACKEND
                 )
                 coordinate_type = (
@@ -378,7 +403,15 @@ if AgentServer is not None and CustomAction is not None:
                 return CustomAction.RunResult(success=False)
 
             def get_frame() -> Any | None:
-                return context.tasker.controller.post_screencap().wait().get()
+                if context.tasker.stopping:
+                    return None
+                job = context.tasker.controller.post_screencap().wait()
+                if context.tasker.stopping or not job.succeeded:
+                    return None
+                return job.get()
+
+            if context.tasker.stopping:
+                return CustomAction.RunResult(success=False)
 
             try:
                 decision = check_teleport_required(
@@ -390,9 +423,13 @@ if AgentServer is not None and CustomAction is not None:
                     coordinate_interval=coordinate_interval,
                     get_frame=get_frame,
                     debug=debug,
+                    should_cancel=lambda: context.tasker.stopping,
                 )
             except Exception as exc:
                 print(f"CheckTeleportRequired failed: {exc}")
+                return CustomAction.RunResult(success=False)
+
+            if context.tasker.stopping:
                 return CustomAction.RunResult(success=False)
 
             if decision is None:
@@ -421,5 +458,7 @@ if AgentServer is not None and CustomAction is not None:
                 except Exception as exc:
                     print(f"CheckTeleportRequired teleport failed: {exc}")
                     return CustomAction.RunResult(success=False)
-                return CustomAction.RunResult(success=success)
-            return CustomAction.RunResult(success=True)
+                return CustomAction.RunResult(
+                    success=success and not context.tasker.stopping
+                )
+            return CustomAction.RunResult(success=not context.tasker.stopping)

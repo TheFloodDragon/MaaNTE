@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +23,14 @@ except ImportError:
     CustomAction = None
     JOCR = None
     JRecognitionType = None
+
+from utils.task_control import (
+    TaskCancelledError,
+    TaskFailedError,
+    action_succeeded,
+    interruptible_wait,
+    run_task_checked,
+)
 
 from ..Common.logger import get_logger
 from ..Common.utils import match_template_in_region
@@ -109,16 +118,15 @@ def load_teleport_point(
 
 
 def _notify(context: Context | None, message: str) -> None:
-    if context is None:
-        print(message)
+    if context is None or _is_stopping(context):
         return
 
     try:
         from utils.maafocus import Print
 
         Print(context, message)
-    except Exception:
-        logger.info("%s", message)
+    except Exception as exc:
+        logger.warning("MapTeleport focus message failed: %s", exc)
 
 
 def _is_stopping(context: Context | None) -> bool:
@@ -146,25 +154,73 @@ def _normalize_frame(frame: Any) -> Any:
 
 
 def _screencap(context: Context) -> Any:
+    if _is_stopping(context):
+        return None
+    try:
+        controller = context.tasker.controller
+        if not controller.post_screencap().wait().succeeded or _is_stopping(context):
+            return None
+        frame = controller.cached_image
+        if not isinstance(frame, np.ndarray) or frame.size == 0:
+            return None
+        return _normalize_frame(frame)
+    except Exception as exc:
+        logger.error("MapTeleport screencap failed: %s", exc)
+        return None
+
+
+def _move_pointer(context: Context, x: int, y: int) -> bool:
+    if _is_stopping(context):
+        return False
+    try:
+        success = (
+            context.tasker.controller.post_touch_move(int(x), int(y)).wait().succeeded
+        )
+        return bool(success and not _is_stopping(context))
+    except Exception as exc:
+        logger.error("MapTeleport pointer move failed: pos=(%s,%s) error=%s", x, y, exc)
+        return False
+
+
+def _release_touch(controller: Any) -> bool:
+    # 即使停止或按下失败也要释放，避免原生控制器保留按下状态。
+    try:
+        return bool(controller.post_touch_up().wait().succeeded)
+    except Exception as exc:
+        logger.error("MapTeleport touch release failed: %s", exc)
+        return False
+
+
+def _click_point(context: Context, x: int, y: int, delay: float = 0.05) -> bool:
+    if not math.isfinite(delay) or delay < 0:
+        logger.error("MapTeleport invalid click delay: %s", delay)
+        return False
+    if not _move_pointer(context, x, y) or _is_stopping(context):
+        return False
     controller = context.tasker.controller
-    controller.post_screencap().wait()
-    return _normalize_frame(controller.cached_image)
+    success = False
+    try:
+        success = bool(
+            controller.post_touch_down(int(x), int(y)).wait().succeeded
+            and not _is_stopping(context)
+            and interruptible_wait(context, delay)
+        )
+    except Exception as exc:
+        logger.error("MapTeleport touch click failed: pos=(%s,%s) error=%s", x, y, exc)
+    finally:
+        released = _release_touch(controller)
+    return bool(success and released and not _is_stopping(context))
 
 
-def _click_point(controller: Any, x: int, y: int, delay: float = 0.05) -> None:
-    controller.post_touch_move(int(x), int(y)).wait()
-    controller.post_touch_down(int(x), int(y)).wait()
-    time.sleep(delay)
-    controller.post_touch_up().wait()
-
-
-def _click_rect(controller: Any, rect: list[int] | tuple[int, int, int, int]) -> None:
+def _click_rect(context: Context, rect: list[int] | tuple[int, int, int, int]) -> bool:
     x, y, w, h = rect
-    _click_point(controller, int(x + w / 2), int(y + h / 2))
+    return _click_point(context, int(x + w / 2), int(y + h / 2))
 
 
 def _press_key_action(context: Context, key: int) -> bool:
     # 通过 Pipeline 的 ClickKey 发键，避免 CustomAction 内直接调用 controller 按键时的原生层异常。
+    if _is_stopping(context):
+        return False
     node_name = "__MapTeleportPressKey"
     try:
         result = context.run_action(
@@ -188,11 +244,13 @@ def _press_key_action(context: Context, key: int) -> bool:
     except Exception as exc:
         logger.error("MapTeleport press key failed: key=%s error=%s", key, exc)
         return False
-    return result is not None
+    return bool(not _is_stopping(context) and action_succeeded(result))
 
 
 def _click_rect_action(context: Context, rect: list[int]) -> bool:
     # 关键确认点击同样交给 Pipeline Click，兼容 SeizeInput 等不同控制器实现。
+    if _is_stopping(context):
+        return False
     node_name = "__MapTeleportClick"
     try:
         result = context.run_action(
@@ -214,27 +272,39 @@ def _click_rect_action(context: Context, rect: list[int]) -> bool:
     except Exception as exc:
         logger.error("MapTeleport click failed: rect=%s error=%s", rect, exc)
         return False
-    return result is not None
+    return bool(not _is_stopping(context) and action_succeeded(result))
 
 
 def _swipe_up_in_roi(context: Context, roi: list[int], *, duration: int) -> bool:
+    if _is_stopping(context):
+        return False
+    if not math.isfinite(duration) or duration < 0:
+        logger.error("MapTeleport invalid swipe duration: %s", duration)
+        return False
     x, y, w, h = roi
     start_x = int(x + w / 2)
     start_y = int(y + h)  # 从 ROI 最底下
     end_x = start_x
     end_y = int(y)  # 拖到 ROI 最顶上
+    controller = context.tasker.controller
+    success = False
     try:
-        context.tasker.controller.post_swipe(
-            start_x,
-            start_y,
-            end_x,
-            end_y,
-            duration=duration,
-        ).wait()
+        success = bool(
+            controller.post_swipe(
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                duration=duration,
+            )
+            .wait()
+            .succeeded
+        )
     except Exception as exc:
         logger.error("MapTeleport swipe failed: roi=%s error=%s", roi, exc)
-        return False
-    return True
+    finally:
+        released = _release_touch(controller)
+    return bool(success and released and not _is_stopping(context))
 
 
 def _box_to_rect(box: Any) -> list[int] | None:
@@ -280,23 +350,33 @@ def _wait_screen_still(
     consecutive: int = DEFAULT_STILL_CONSECUTIVE,
     diff_threshold: float = DEFAULT_STILL_DIFF_THRESHOLD,
 ) -> Any | None:
-    deadline = time.monotonic() + max(max_wait, interval)
+    if (
+        not math.isfinite(max_wait)
+        or max_wait < 0
+        or not math.isfinite(interval)
+        or interval <= 0
+        or consecutive < 1
+        or not math.isfinite(diff_threshold)
+        or diff_threshold < 0
+        or _is_stopping(context)
+    ):
+        return None
+    deadline = time.monotonic() + max_wait
     previous = _screencap(context)
-    if previous is None:
+    if previous is None or _is_stopping(context):
         return None
 
-    # 连续多帧变化很小时认为画面已稳定，避免动画期间误识别或误点。
+    # 仅采样画面，不重复 UI 动作；超时不能将仍在变化的最后一帧视为稳定。
     stable_count = 0
-    last_frame = previous
-    while time.monotonic() < deadline:
-        if _is_stopping(context):
+    while not _is_stopping(context):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not interruptible_wait(context, min(interval, remaining)):
             return None
-
-        time.sleep(max(interval, 0.05))
+        if time.monotonic() >= deadline:
+            return None
         current = _screencap(context)
-        if current is None:
-            continue
-        last_frame = current
+        if current is None or _is_stopping(context):
+            return None
 
         prev_small = cv2.resize(previous, (160, 90), interpolation=cv2.INTER_AREA)
         curr_small = cv2.resize(current, (160, 90), interpolation=cv2.INTER_AREA)
@@ -311,12 +391,12 @@ def _wait_screen_still(
         if diff <= diff_threshold:
             stable_count += 1
             if stable_count >= consecutive:
-                return current
+                return current if not _is_stopping(context) else None
         else:
             stable_count = 0
         previous = current
 
-    return last_frame
+    return None
 
 
 def _match_template(
@@ -389,7 +469,7 @@ def _ocr_match(
 ) -> Any | None:
     if JOCR is None or JRecognitionType is None:
         raise RuntimeError("maa.pipeline OCR is unavailable")
-    if frame is None:
+    if frame is None or _is_stopping(context):
         return None
 
     detail = context.run_recognition_direct(
@@ -397,22 +477,33 @@ def _ocr_match(
         JOCR(expected=[text], roi=tuple(roi), threshold=threshold),
         frame,
     )
-    if detail is not None and getattr(detail, "hit", False):
+    if (
+        not _is_stopping(context)
+        and detail is not None
+        and getattr(detail, "hit", False)
+    ):
         return detail
     return None
 
 
 def _ensure_in_world(context: Context) -> bool:
-    context.run_task("SceneAnyEnterWorld")
-    frame = _wait_screen_still(context, max_wait=5.0)
-    if frame is None:
+    try:
+        if not run_task_checked(context, "SceneAnyEnterWorld"):
+            return False
+        frame = _wait_screen_still(context, max_wait=5.0)
+        if frame is None or _is_stopping(context):
+            return False
+        result = context.run_recognition("InWorld", frame)
+        return bool(not _is_stopping(context) and result and result.hit)
+    except Exception as exc:
+        logger.error("MapTeleport enter world failed: %s", exc)
         return False
-    result = context.run_recognition("InWorld", frame)
-    return bool(result and result.hit)
 
 
 def _click_map_index(context: Context, template: Any, threshold: float) -> bool:
     frame = _wait_screen_still(context)
+    if frame is None or _is_stopping(context):
+        return False
     matched, score, x, y = _match_template(
         frame,
         MAP_INDEX_ICON_ROI,
@@ -423,11 +514,7 @@ def _click_map_index(context: Context, template: Any, threshold: float) -> bool:
     if not matched:
         return False
 
-    _click_rect(
-        context.tasker.controller,
-        [x, y, template.shape[1], template.shape[0]],
-    )
-    return True
+    return _click_rect(context, [x, y, template.shape[1], template.shape[0]])
 
 
 def _wait_ocr_text(
@@ -438,15 +525,24 @@ def _wait_ocr_text(
     threshold: float,
     max_wait: float = 5.0,
 ) -> Any | None:
+    if not math.isfinite(max_wait) or max_wait < 0:
+        return None
     deadline = time.monotonic() + max_wait
-    while time.monotonic() < deadline:
+    while not _is_stopping(context):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        frame = _wait_screen_still(context, max_wait=min(2.0, remaining))
+        if frame is None or _is_stopping(context):
+            return None
+        detail = _ocr_match(context, frame, text, roi, threshold=threshold)
         if _is_stopping(context):
             return None
-        frame = _wait_screen_still(context, max_wait=2.0)
-        detail = _ocr_match(context, frame, text, roi, threshold=threshold)
         if detail is not None:
             return detail
-        time.sleep(0.2)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not interruptible_wait(context, min(0.2, remaining)):
+            return None
     return None
 
 
@@ -460,13 +556,22 @@ def _switch_to_area(
     max_switches: int,
     action_delay: float,
 ) -> bool:
+    if not math.isfinite(action_delay) or action_delay < 0 or max_switches < 1:
+        return False
     for attempt in range(max_switches):
         if _is_stopping(context):
             return False
 
         # 地区名没命中时点击右上角切换按钮，最多翻 15 次避免卡死。
         frame = _wait_screen_still(context, max_wait=3.0)
-        if _ocr_match(context, frame, area_name, AREA_NAME_ROI, threshold=ocr_threshold):
+        if frame is None or _is_stopping(context):
+            return False
+        detail = _ocr_match(
+            context, frame, area_name, AREA_NAME_ROI, threshold=ocr_threshold
+        )
+        if _is_stopping(context):
+            return False
+        if detail is not None:
             logger.info("MapTeleport area matched: %s", area_name)
             return True
 
@@ -485,11 +590,10 @@ def _switch_to_area(
         if not matched:
             return False
 
-        _click_rect(
-            context.tasker.controller,
-            [x, y, area_next_template.shape[1], area_next_template.shape[0]],
-        )
-        time.sleep(action_delay)
+        if not _click_rect(
+            context, [x, y, area_next_template.shape[1], area_next_template.shape[0]]
+        ) or not interruptible_wait(context, action_delay):
+            return False
 
     return False
 
@@ -504,6 +608,15 @@ def _get_cursor_pos() -> tuple[int, int]:
     return (pt.x, pt.y)
 
 
+def _require_still_frame(context: Context, *, max_wait: float) -> Any:
+    frame = _wait_screen_still(context, max_wait=max_wait)
+    if _is_stopping(context):
+        raise TaskCancelledError("MapTeleport screen wait")
+    if frame is None:
+        raise TaskFailedError("MapTeleport could not obtain a stable fresh frame")
+    return frame
+
+
 def _identify_new_list_nodes(
     context: Context,
     template: Any,
@@ -515,12 +628,14 @@ def _identify_new_list_nodes(
     通过系统 API 获取鼠标 Y 坐标，在子选项列表中匹配目标图标模板，
     取 Y 严格大于鼠标 Y 的第一个匹配点。
     """
-    frame = _wait_screen_still(context, max_wait=3.0)
+    frame = _require_still_frame(context, max_wait=3.0)
 
     _, mouse_y = _get_cursor_pos()
 
     matches = _find_template_matches(
-        frame, SUB_SELECTION_ROI, template,
+        frame,
+        SUB_SELECTION_ROI,
+        template,
         threshold=template_threshold,
     )
 
@@ -543,9 +658,11 @@ def _find_closest_icon_center(
     roi_h = 85
     search_roi = [1196, mouse_y - roi_h // 2, 47, roi_h]
 
-    frame = _wait_screen_still(context, max_wait=1.5)
+    frame = _require_still_frame(context, max_wait=1.5)
     matches = _find_template_matches(
-        frame, search_roi, template,
+        frame,
+        search_roi,
+        template,
         threshold=template_threshold,
     )
     if not matches:
@@ -563,8 +680,12 @@ def _drag_list_upward(
     template_threshold: float,
 ) -> bool:
     """拖住列表底部图标向上移动，露出下方新图标。"""
+    if _is_stopping(context):
+        return False
     drag_start = _find_closest_icon_center(
-        context, template, template_threshold=template_threshold,
+        context,
+        template,
+        template_threshold=template_threshold,
     )
     if drag_start is None:
         return False
@@ -575,12 +696,11 @@ def _drag_list_upward(
 
     # 重新定位鼠标到当前最近的图标中心
     anchor = _find_closest_icon_center(
-        context, template, template_threshold=template_threshold,
+        context,
+        template,
+        template_threshold=template_threshold,
     )
-    if anchor is not None:
-        context.tasker.controller.post_touch_move(anchor[0], anchor[1]).wait()
-
-    return True
+    return anchor is not None and _move_pointer(context, anchor[0], anchor[1])
 
 
 def _check_closest_icon(
@@ -595,9 +715,11 @@ def _check_closest_icon(
     search_roi = [914, mouse_y - 20, 40, 41]
     template = _load_template(icon_path)
 
-    frame = _wait_screen_still(context, max_wait=1.5)
+    frame = _require_still_frame(context, max_wait=1.5)
     matches = _find_template_matches(
-        frame, search_roi, template,
+        frame,
+        search_roi,
+        template,
         threshold=template_threshold,
         max_results=2,
     )
@@ -614,6 +736,8 @@ def _drag_zoom_control(
 ) -> bool:
     """拖动缩放调节按钮。识别按钮后向上拖拽放大地图视图。"""
     frame = _wait_screen_still(context, max_wait=3.0)
+    if frame is None or _is_stopping(context):
+        return False
     template = _load_template(ZOOM_CONTROL_BTN_TEMPLATE)
 
     matches = _find_template_matches(
@@ -638,9 +762,13 @@ def _drag_zoom_control(
 
     logger.info(
         "MapTeleport zoom control dragged: from=(%s,%s) to=(%s,%s)",
-        cx, cy, cx, end_y,
+        cx,
+        cy,
+        cx,
+        end_y,
     )
     return True
+
 
 def _click_main_selection(
     context: Context,
@@ -649,6 +777,8 @@ def _click_main_selection(
     ocr_threshold: float,
 ) -> bool:
     frame = _wait_screen_still(context, max_wait=3.0)
+    if frame is None or _is_stopping(context):
+        return False
     detail = _ocr_match(
         context,
         frame,
@@ -664,8 +794,7 @@ def _click_main_selection(
         return False
 
     rect = _detail_box(detail) or MAIN_SELECTION_ROI
-    _click_rect(context.tasker.controller, rect)
-    return True
+    return _click_rect(context, rect)
 
 
 def _click_teleport_icon(
@@ -677,58 +806,78 @@ def _click_teleport_icon(
     template_threshold: float,
 ) -> bool:
     """在列表中逐项拖动，找到第 icon_index 个目标传送图标并点击。"""
+    if icon_index < 1 or _is_stopping(context):
+        return False
 
-    # 鼠标移到屏幕顶部
-    context.tasker.controller.post_touch_move(1160, 50).wait()
-    time.sleep(0.3)
+    # 鼠标移到屏幕顶部；每个已识别条目只处理一次，滚动后重新定位。
+    if not _move_pointer(context, 1160, 50) or not interruptible_wait(context, 0.3):
+        return False
 
     count = 0
     consecutive_miss = 0
-    while count < icon_index and consecutive_miss < 4:
+    visited = set()
+    max_entries = max(40, icon_index * 20)
+    for _ in range(max_entries):
+        if _is_stopping(context) or consecutive_miss >= 4:
+            return False
         new_node = _identify_new_list_nodes(
-            context, sub_btn_template,
+            context,
+            sub_btn_template,
             template_threshold=template_threshold,
         )
+        if _is_stopping(context):
+            return False
         if new_node is not None:
             consecutive_miss = 0
             x, y, w, h, _ = new_node
+            node = (x, y, w, h)
+            if node in visited:
+                logger.error("MapTeleport list did not advance: node=%s", node)
+                return False
+            visited.add(node)
             cy = y + h // 2
-            time.sleep(0.1)
-            context.tasker.controller.post_touch_move(1160, cy).wait()
-            time.sleep(0.1)
-
-            if _check_closest_icon(
-                context, icon_path, template_threshold=template_threshold,
+            if (
+                not interruptible_wait(context, 0.1)
+                or not _move_pointer(context, 1160, cy)
+                or not interruptible_wait(context, 0.1)
             ):
+                return False
+
+            matched = _check_closest_icon(
+                context,
+                icon_path,
+                template_threshold=template_threshold,
+            )
+            if _is_stopping(context):
+                return False
+            if matched:
                 count += 1
-                logger.info(
-                    "MapTeleport teleport icon match"
-                )
+                logger.info("MapTeleport teleport icon match: count=%s", count)
                 if count == icon_index:
-                    context.tasker.controller.post_touch_down(1160, cy).wait()
-                    time.sleep(0.05)
-                    context.tasker.controller.post_touch_up().wait()
+                    if not _click_point(context, 1160, cy):
+                        return False
                     logger.info(
                         "MapTeleport teleport icon clicked: index=%s pos=(1160,%s)",
-                        icon_index, cy,
+                        icon_index,
+                        cy,
                     )
                     return True
-
         else:
             consecutive_miss += 1
-            # 没找到新选项，拖动最后识别的选项，小幅度拖两次
-            _drag_list_upward(
-                context, sub_btn_template,
-                template_threshold=template_threshold,
-            )
-            _drag_list_upward(
-                context, sub_btn_template,
-                template_threshold=template_threshold,
-            )
+            # 未见新选项时保留原有两次小幅拖动，每次都验证结果和新画面。
+            for _ in range(2):
+                if _is_stopping(context) or not _drag_list_upward(
+                    context,
+                    sub_btn_template,
+                    template_threshold=template_threshold,
+                ):
+                    return False
+            visited.clear()
 
     logger.error(
         "MapTeleport teleport icon not found: icon_index=%s count=%s",
-        icon_index, count,
+        icon_index,
+        count,
     )
     return False
 
@@ -740,6 +889,8 @@ def _click_teleport_button(
     ocr_threshold: float,
 ) -> bool:
     frame = _wait_screen_still(context, max_wait=5.0)
+    if frame is None or _is_stopping(context):
+        return False
     detail = _ocr_match(
         context,
         frame,
@@ -747,7 +898,9 @@ def _click_teleport_button(
         TELEPORT_BUTTON_ROI,
         threshold=ocr_threshold,
     )
-    if detail is None:#未识别到传送，可能是多个兴趣点叠加，进一步判断
+    if _is_stopping(context):
+        return False
+    if detail is None:  # 未识别到传送，可能是多个兴趣点叠加，进一步判断
         icon_template = _load_template(icon_path)
         matched, score, ix, iy = _match_template(
             frame,
@@ -757,18 +910,22 @@ def _click_teleport_button(
         )
         logger.info(
             "MapTeleport teleport button fallback: match=%s score=%.3f pos=(%s,%s)",
-            matched, score, ix, iy,
+            matched,
+            score,
+            ix,
+            iy,
         )
         if not matched:
             return False
 
-        _click_rect(
-            context.tasker.controller,
-            [ix, iy, icon_template.shape[1], icon_template.shape[0]],
-        )
-        time.sleep(0.5)
+        if not _click_rect(
+            context, [ix, iy, icon_template.shape[1], icon_template.shape[0]]
+        ) or not interruptible_wait(context, 0.5):
+            return False
 
         frame = _wait_screen_still(context, max_wait=3.0)
+        if frame is None or _is_stopping(context):
+            return False
         detail = _ocr_match(
             context,
             frame,
@@ -785,14 +942,20 @@ def _click_teleport_button(
 
 def _wait_teleport_loading(context: Context) -> bool:
     try:
-        result = context.run_task("SceneLoadingType1")
+        if not run_task_checked(context, "SceneLoadingType1"):
+            return False
+        # 加载任务可经 NextTrue 结束，必须用新截图确认大世界，不能仅依赖子任务成功。
+        frame = _screencap(context)
+        if frame is None or _is_stopping(context):
+            return False
+        result = context.run_recognition("InWorld", frame)
+        return bool(not _is_stopping(context) and result and result.hit)
     except Exception as exc:
         logger.error("MapTeleport wait loading failed: %s", exc)
         return False
-    return result is not None
 
 
-def run_map_teleport_flow(
+def _run_map_teleport_flow(
     context: Context | None,
     teleport_point_id: str,
     *,
@@ -815,9 +978,10 @@ def run_map_teleport_flow(
         teleport_point.point,
     )
 
-    message = (
-        "准备使用地图传送：%s（%s，第 %s 个）"
-        % (teleport_point.name, teleport_point.area_name, teleport_point.icon_index)
+    message = "准备使用地图传送：%s（%s，第 %s 个）" % (
+        teleport_point.name,
+        teleport_point.area_name,
+        teleport_point.icon_index,
     )
     _notify(context, message)
 
@@ -837,12 +1001,13 @@ def run_map_teleport_flow(
     if not _press_key_action(context, KEY_M):
         _notify(context, "地图传送失败：打开地图按键失败")
         return False
-    time.sleep(DEFAULT_POST_MAP_OPEN_DELAY)
+    if not interruptible_wait(context, DEFAULT_POST_MAP_OPEN_DELAY):
+        return False
 
     if not _drag_zoom_control(context):
         _notify(context, "地图传送失败：缩放调节失败")
         return False
-    
+
     if not _click_map_index(context, map_index_icon_template, template_threshold):
         _notify(context, "地图传送失败：未找到地图索引按钮")
         return False
@@ -879,7 +1044,8 @@ def run_map_teleport_flow(
         _notify(context, "地图传送失败：未找到主选项")
         return False
 
-    time.sleep(action_delay)
+    if not interruptible_wait(context, action_delay):
+        return False
 
     if not _click_teleport_icon(
         context,
@@ -895,11 +1061,13 @@ def run_map_teleport_flow(
         return False
 
     # 选中传送点后先退出地图指引，再点屏幕中央附近打开最终传送确认框。
-    _wait_screen_still(context, max_wait=5.0)
+    if _wait_screen_still(context, max_wait=5.0) is None or _is_stopping(context):
+        return False
     if not _press_key_action(context, KEY_ESC):
         _notify(context, "地图传送失败：退出地图按键失败")
         return False
-    time.sleep(DEFAULT_FINAL_CONFIRM_DELAY)
+    if not interruptible_wait(context, DEFAULT_FINAL_CONFIRM_DELAY):
+        return False
     if not _click_rect_action(
         context,
         [TELEPORT_CONFIRM_POINT[0] - 1, TELEPORT_CONFIRM_POINT[1] - 1, 2, 2],
@@ -907,18 +1075,64 @@ def run_map_teleport_flow(
         _notify(context, "地图传送失败：确认传送点击失败")
         return False
 
-    if not _click_teleport_button(context, teleport_point.icon_path, ocr_threshold=ocr_threshold):
+    if not _click_teleport_button(
+        context, teleport_point.icon_path, ocr_threshold=ocr_threshold
+    ):
         _notify(context, "地图传送失败：未找到传送按钮")
         return False
 
     # 点击“传送”后交给通用加载节点等待，加载图消失即返回。
-    time.sleep(action_delay)
+    if not interruptible_wait(context, action_delay):
+        return False
     if not _wait_teleport_loading(context):
         _notify(context, "地图传送失败：等待传送加载结束失败")
         return False
 
+    if _is_stopping(context):
+        return False
     _notify(context, "地图传送流程已完成：%s" % teleport_point.name)
-    return True
+    return not _is_stopping(context)
+
+
+def run_map_teleport_flow(
+    context: Context | None,
+    teleport_point_id: str,
+    *,
+    points_file: str = DEFAULT_TELEPORT_POINTS_FILE,
+    template_threshold: float = DEFAULT_TEMPLATE_THRESHOLD,
+    ocr_threshold: float = DEFAULT_OCR_THRESHOLD,
+    max_area_switches: int = DEFAULT_MAX_AREA_SWITCHES,
+    action_delay: float = DEFAULT_ACTION_DELAY,
+) -> bool:
+    if context is None or _is_stopping(context):
+        return False
+    try:
+        if (
+            not math.isfinite(action_delay)
+            or action_delay < 0
+            or not math.isfinite(template_threshold)
+            or not 0 <= template_threshold <= 1
+            or not math.isfinite(ocr_threshold)
+            or not 0 <= ocr_threshold <= 1
+            or not isinstance(max_area_switches, int)
+            or max_area_switches < 1
+        ):
+            raise ValueError("MapTeleport delays, thresholds or area limit are invalid")
+        return _run_map_teleport_flow(
+            context,
+            teleport_point_id,
+            points_file=points_file,
+            template_threshold=template_threshold,
+            ocr_threshold=ocr_threshold,
+            max_area_switches=max_area_switches,
+            action_delay=action_delay,
+        )
+    except TaskCancelledError:
+        logger.debug("MapTeleport flow cancelled")
+    except Exception as exc:
+        logger.error("MapTeleport flow failed: %s", exc)
+        _notify(context, "地图传送失败：%s" % exc)
+    return False
 
 
 if AgentServer is not None and CustomAction is not None:
@@ -949,7 +1163,8 @@ if AgentServer is not None and CustomAction is not None:
                 )
                 action_delay = float(params.get("action_delay", DEFAULT_ACTION_DELAY))
             except Exception as exc:
-                print("MapTeleportToPoint param invalid: %s" % exc)
+                logger.error("MapTeleportToPoint param invalid: %s", exc)
+                _notify(context, "地图传送参数错误：%s" % exc)
                 return CustomAction.RunResult(success=False)
 
             try:
@@ -963,6 +1178,7 @@ if AgentServer is not None and CustomAction is not None:
                     action_delay=action_delay,
                 )
             except Exception as exc:
-                print("MapTeleportToPoint failed: %s" % exc)
+                logger.error("MapTeleportToPoint failed: %s", exc)
+                _notify(context, "地图传送失败：%s" % exc)
                 return CustomAction.RunResult(success=False)
             return CustomAction.RunResult(success=success)

@@ -6,7 +6,6 @@ from typing import Any
 
 from .coordinate_position import COORDINATE_MAP_SIZE, raw_coordinate_to_map
 
-
 Waypoint = tuple[int, int]
 SourceSize = tuple[int, int]
 ONLINE_MAP_SIZE = (22528, 22528)
@@ -23,6 +22,8 @@ class RouteSession:
     current_index: int = 0
     status: str = "waiting"
     lock: threading.Lock = field(default_factory=threading.Lock)
+    revision: int = field(default=0, init=False)
+    reason: str | None = field(default=None, init=False)
 
     def payload(self) -> dict[str, Any]:
         with self.lock:
@@ -33,6 +34,8 @@ class RouteSession:
                 "active": self.active,
                 "currentIndex": self.current_index,
                 "status": self.status,
+                "revision": self.revision,
+                "reason": self.reason,
             }
 
     def reset(
@@ -42,7 +45,9 @@ class RouteSession:
         current_point: Waypoint | None,
     ) -> None:
         with self.lock:
-            self.waypoints = waypoints
+            self.revision += 1
+            self.reason = None
+            self.waypoints = list(waypoints)
             self.active = bool(start and waypoints)
             self.current_index = (
                 self.nearest_index(current_point)
@@ -53,6 +58,8 @@ class RouteSession:
 
     def start(self, current_point: Waypoint | None) -> None:
         with self.lock:
+            self.revision += 1
+            self.reason = None
             if not self.waypoints:
                 self.active = False
                 self.status = "empty"
@@ -65,12 +72,60 @@ class RouteSession:
             self.active = True
             self.status = "running"
 
-    def advance(self) -> None:
+    def add(self, waypoint: Waypoint) -> None:
         with self.lock:
-            self.current_index += 1
+            self.revision += 1
+            self.reason = None
+            self.waypoints.append(waypoint)
+            if not self.active:
+                self.status = "ready"
+
+    def target_snapshot(self) -> tuple[int, int, Waypoint] | None:
+        with self.lock:
+            if not self.active:
+                return None
             if self.current_index >= len(self.waypoints):
                 self.active = False
                 self.status = "arrived"
+                self.reason = None
+                self.revision += 1
+                return None
+            return self.revision, self.current_index, self.waypoints[self.current_index]
+
+    def matches_target(self, revision: int, index: int, target: Waypoint) -> bool:
+        with self.lock:
+            return self._matches_target(revision, index, target)
+
+    def _matches_target(self, revision: int, index: int, target: Waypoint) -> bool:
+        return (
+            self.active
+            and self.revision == revision
+            and self.current_index == index
+            and 0 <= index < len(self.waypoints)
+            and self.waypoints[index] == target
+        )
+
+    def advance(self, revision: int, index: int, target: Waypoint) -> bool:
+        with self.lock:
+            if not self._matches_target(revision, index, target):
+                return False
+            self.current_index += 1
+            self.revision += 1
+            self.reason = None
+            if self.current_index >= len(self.waypoints):
+                self.active = False
+                self.status = "arrived"
+            return True
+
+    def fail(self, revision: int, index: int, target: Waypoint, reason: str) -> bool:
+        with self.lock:
+            if not self._matches_target(revision, index, target):
+                return False
+            self.active = False
+            self.status = "failed"
+            self.reason = reason
+            self.revision += 1
+            return True
 
     def clear(self) -> None:
         with self.lock:
@@ -78,11 +133,15 @@ class RouteSession:
             self.current_index = 0
             self.active = False
             self.status = "cleared"
+            self.reason = None
+            self.revision += 1
 
     def stop(self) -> None:
         with self.lock:
             self.active = False
             self.status = "stopped"
+            self.reason = "cancelled"
+            self.revision += 1
 
     def nearest_index(self, current_point: Waypoint) -> int:
         current_x, current_y = current_point
@@ -179,6 +238,13 @@ def parse_waypoint_sequence(
     return [parse_waypoint(value, source_size, target_size) for value in values]
 
 
+def _validate_route_version(data: dict[str, Any]) -> None:
+    if "version" in data:
+        version = data["version"]
+        if type(version) is not int or version != 1:
+            raise ValueError(f"unsupported route json version: {version!r}")
+
+
 def parse_waypoints_from_json_data(
     data: Any,
     source_size: SourceSize,
@@ -189,9 +255,15 @@ def parse_waypoints_from_json_data(
     if not isinstance(data, dict):
         raise ValueError("route json must be an object or list")
 
+    _validate_route_version(data)
     route_data = data.get("route")
-    if isinstance(route_data, dict) and isinstance(route_data.get("waypoints"), list):
-        data = {**data, **route_data}
+    if isinstance(route_data, dict):
+        _validate_route_version(route_data)
+        if any(
+            isinstance(route_data.get(key), list)
+            for key in ("waypoints", "points", "path")
+        ):
+            data = {**data, **route_data}
 
     if isinstance(data.get("waypoints"), list):
         values = data["waypoints"]
@@ -273,6 +345,7 @@ def load_route_segment_from_json(
 
 
 def select_route(data: dict[str, Any], route_name: str) -> dict[str, Any]:
+    _validate_route_version(data)
     routes = data.get("routes")
     if not isinstance(routes, list):
         return data
@@ -283,6 +356,7 @@ def select_route(data: dict[str, Any], route_name: str) -> dict[str, Any]:
     if not normalized_name:
         route = routes[0]
         if isinstance(route, dict):
+            _validate_route_version(route)
             return route
         raise ValueError("route must be an object")
 
@@ -290,6 +364,7 @@ def select_route(data: dict[str, Any], route_name: str) -> dict[str, Any]:
         if not isinstance(route, dict):
             continue
         if normalized_name in {str(route.get("name", "")), str(route.get("id", ""))}:
+            _validate_route_version(route)
             return route
     raise ValueError(f"route not found: {normalized_name}")
 
@@ -318,16 +393,13 @@ def handle_route_message(
             current_point,
         )
     elif message_type in ("navi-route-add", "route-add"):
-        with route.lock:
-            route.waypoints.append(
-                parse_waypoint(
-                    message,
-                    parse_source_size(message, source_size),
-                    source_size,
-                )
+        route.add(
+            parse_waypoint(
+                message,
+                parse_source_size(message, source_size),
+                source_size,
             )
-            if not route.active:
-                route.status = "ready"
+        )
     elif message_type in ("navi-route-clear", "route-clear"):
         route.clear()
     elif message_type in ("navi-route-start", "route-start"):

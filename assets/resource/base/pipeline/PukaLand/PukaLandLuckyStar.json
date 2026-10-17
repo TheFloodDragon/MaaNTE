@@ -359,6 +359,19 @@
             "PukaLandLuckyStarRestarted"
         ]
     },
+    "PukaLandLuckyStarExit": {
+        "desc": "幸运星对局完成，结束当前任务并清空 JumpBack 栈",
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "StopTask"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": []
+    },
     "PukaLandLuckyStarRestarted": {
         "desc": "确认已离开结算界面（「再试一次」已消失），避免重复点击",
         "recognition": {

@@ -16,9 +16,7 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
-import time
 from pathlib import Path
 
 from maa.agent.agent_server import AgentServer
@@ -31,7 +29,13 @@ from custom.action.Common.CharacterAbility_CityAbility import (
     set_character_abilities,
 )
 
-logger = logging.getLogger(__name__)
+from utils.logger import logger
+from utils.task_control import (
+    TaskCancelledError,
+    TaskFailedError,
+    interruptible_wait,
+    require_task,
+)
 
 # ---------------------------------------------------------------------------
 # 子节点名称（对应 SyncCharacterAbilityCityAbility.json）
@@ -57,7 +61,7 @@ _MAX_NO_CHANGE = 3  # NextCharacter 连续无变化，认为已到列表末尾
 _MAX_ITERATIONS = 300  # 安全上限
 _TM_THRESHOLD = 0.9  # TemplateMatch 置信度阈值，≥此值直接采用
 
-# 恢复用 pipeline override — 1s 超时，忽略匹配结果
+# 初始页面导航的 pipeline override — 1s 超时，失败时终止同步
 _RECOVERY_OVERRIDE = {"timeout": 1000}
 
 
@@ -66,18 +70,34 @@ _RECOVERY_OVERRIDE = {"timeout": 1000}
 # ---------------------------------------------------------------------------
 
 
+def _check_cancelled(context: Context) -> None:
+    if context.tasker.stopping:
+        raise TaskCancelledError("SyncCityAbility")
+
+
 def _screencap(context: Context):
     """截取当前屏幕，返回 numpy 图像数组。"""
-    return context.tasker.controller.post_screencap().wait().get()
+    _check_cancelled(context)
+    job = context.tasker.controller.post_screencap().wait()
+    _check_cancelled(context)
+    if not job.succeeded:
+        raise TaskFailedError("SyncCityAbility screenshot failed")
+    image = job.get()
+    _check_cancelled(context)
+    if image is None:
+        raise TaskFailedError("SyncCityAbility screenshot is empty")
+    return image
 
 
 def _ocr_on_image(context: Context, node_name: str, image) -> str | None:
-    """对给定截图运行 OCR，返回命中的文本；失败返回 None。"""
+    """对给定截图运行 OCR，未命中返回 None；取消时抛出异常。"""
+    _check_cancelled(context)
     result = context.run_recognition(
         node_name,
         image,
         pipeline_override={node_name: _OCR_OVERRIDE},
     )
+    _check_cancelled(context)
     if result is None or not result.hit:
         return None
     best = result.best_result
@@ -201,6 +221,7 @@ def _tm_get_name(context: Context) -> str | None:
         return None
 
     for template_path in templates:
+        _check_cancelled(context)
         result = context.run_recognition_direct(
             JRecognitionType.TemplateMatch,
             JTemplateMatch(
@@ -211,6 +232,7 @@ def _tm_get_name(context: Context) -> str | None:
             ),
             img,
         )
+        _check_cancelled(context)
         if result is None or not result.hit:
             continue
         best = result.best_result
@@ -238,7 +260,8 @@ def _ocr_name_with_retry(context: Context) -> str | None:
         if name is not None:
             return name
         logger.debug("SyncCityAbility: OCR 名字第 %d 次失败", attempt)
-        time.sleep(0.2)
+        if not interruptible_wait(context, 0.2):
+            raise TaskCancelledError(_NODE_OCR_NAME)
 
     logger.info("SyncCityAbility: OCR 名字 3 次失败")
     return None
@@ -257,7 +280,7 @@ def _get_character_name(context: Context) -> str | None:
         logger.info("SyncCityAbility: OCR → %s", name)
 
     # 2. 进入技能页面
-    context.run_task(_NODE_OPEN_ABILITY)
+    require_task(context, _NODE_OPEN_ABILITY)
 
     # 3. TemplateMatch — 置信度 ≥ 0.9 则优先采用，否则回退 OCR
     tm_name = _tm_get_name(context)
@@ -304,82 +327,94 @@ class SyncCharacterAbilityCityAbilityMainAction(CustomAction):
             fresh_record,
         )
 
-        # ---- 1. 清除锚点，防止内部 run_task(NextCharacter→Character1Click) 重新触发 Main ----
-        context.set_anchor("CityAbilityAfterClick", "")
+        try:
+            _check_cancelled(context)
+            # 防止内部 NextCharacter→Character1Click 重新触发 Main。
+            context.set_anchor("CityAbilityAfterClick", "")
+            require_task(
+                context,
+                _NODE_OPEN_INFO,
+                pipeline_override={_NODE_OPEN_INFO: _RECOVERY_OVERRIDE},
+            )
 
-        # ---- 2. 尝试一次 OpenInfoPage，规范化页面状态（忽略结果） ----
-        context.run_task(
-            _NODE_OPEN_INFO,
-            pipeline_override={
-                _NODE_OPEN_INFO: _RECOVERY_OVERRIDE,
-            },
-        )
+            last_name: str | None = None
+            no_change = 0
+            all_recognized = True
+            results: dict[str, list[int]] = {}
 
-        last_name: str | None = None
-        no_change = 0
-        results: dict[str, list[int]] = {}  # 全新记录模式用
+            for iteration in range(_MAX_ITERATIONS):
+                _check_cancelled(context)
 
-        for iteration in range(_MAX_ITERATIONS):
-            if context.tasker.stopping:
-                logger.info("SyncCityAbility: 收到停止信号，退出")
-                break
-
-            # ---- 3. 识别角色名（OCR → TM 优先覆盖） ----
-            name = _get_character_name(context)
-            # 调用后停留在技能页面
-
-            if name is None:
-                logger.debug("SyncCityAbility[%d]: 识别失败，跳过", iteration)
-                no_change += 1
-            else:
-                # ---- 4. OCR 技能（已在技能页） ----
-                levels = _ocr_skills(context)
-                logger.info(
-                    "SyncCityAbility[%d]: %s 技能0=%d 技能1=%d",
-                    iteration,
-                    name,
-                    levels[0],
-                    levels[1],
-                )
-                if fresh_record:
-                    results[name] = levels
-                else:
-                    set_character_abilities(name, levels)
-
-                if name == last_name:
+                # 获取名字后停留在技能页；导航失败抛出异常，识别 miss 返回 None。
+                name = _get_character_name(context)
+                _check_cancelled(context)
+                if name is None:
+                    logger.debug("SyncCityAbility[%d]: 识别失败，跳过", iteration)
+                    all_recognized = False
                     no_change += 1
                 else:
-                    no_change = 0
-                    last_name = name
+                    levels = _ocr_skills(context)
+                    _check_cancelled(context)
+                    logger.info(
+                        "SyncCityAbility[%d]: %s 技能0=%d 技能1=%d",
+                        iteration,
+                        name,
+                        levels[0],
+                        levels[1],
+                    )
+                    if levels[0] < 0:
+                        logger.debug("SyncCityAbility: %s 技能0未识别，跳过记录", name)
+                        all_recognized = False
+                    elif fresh_record:
+                        results[name] = levels
+                    else:
+                        set_character_abilities(name, levels)
 
-            # ---- 5. 列表末尾检测：NextCharacter 无新角色 → 扫描剩余可见位置后结束 ----
-            if no_change >= _MAX_NO_CHANGE:
-                logger.info(
-                    "SyncCityAbility: %d 次角色名未变化，扫描列表剩余角色",
-                    no_change,
+                    if name == last_name:
+                        no_change += 1
+                    else:
+                        no_change = 0
+                        last_name = name
+
+                # 连续未前进时扫描剩余可见位置；只有完整扫描才能覆盖旧记录。
+                if no_change >= _MAX_NO_CHANGE:
+                    logger.info(
+                        "SyncCityAbility: %d 次未识别到新角色，扫描列表剩余角色",
+                        no_change,
+                    )
+                    require_task(context, _NODE_OPEN_INFO)
+                    tail_complete = self._scan_remaining_characters(
+                        context, results if fresh_record else None
+                    )
+                    _check_cancelled(context)
+                    if not all_recognized or not tail_complete:
+                        logger.error("SyncCityAbility: 存在未识别角色，同步未完成")
+                        return CustomAction.RunResult(success=False)
+                    break
+
+                require_task(context, _NODE_OPEN_INFO)
+                require_task(context, _NODE_NEXT)
+            else:
+                logger.error(
+                    "SyncCityAbility: 达到 %d 轮上限，同步未完成", _MAX_ITERATIONS
                 )
-                # 确保回到信息页（_get_character_name 结束时停在技能页）
-                context.run_task(_NODE_OPEN_INFO)
-                if fresh_record:
-                    self._scan_remaining_characters(context, results)
-                else:
-                    self._scan_remaining_characters(context)
-                logger.info("SyncCityAbility: 剩余角色扫描完成，遍历结束")
-                break
+                return CustomAction.RunResult(success=False)
 
-            # ---- 6. 回到信息页 → 切换下一个角色 ----
-            context.run_task(_NODE_OPEN_INFO)
-            context.run_task(_NODE_NEXT)
+            _check_cancelled(context)
+            if fresh_record and results:
+                clear_all()
+                for char_name, levels in results.items():
+                    set_character_abilities(char_name, levels)
+                logger.info("SyncCityAbility: 批量存入 %d 个角色", len(results))
 
-        # ---- 7. 全新记录模式：清空旧数据 + 批量存入 ----
-        if fresh_record and results:
-            clear_all()
-            for char_name, levels in results.items():
-                set_character_abilities(char_name, levels)
-            logger.info("SyncCityAbility: 批量存入 %d 个角色", len(results))
-
-        logger.info("SyncCityAbility: 遍历完成，共 %d 轮", iteration + 1)
-        return CustomAction.RunResult(success=True)
+            _check_cancelled(context)
+            logger.info("SyncCityAbility: 遍历完成，共 %d 轮", iteration + 1)
+            return CustomAction.RunResult(success=True)
+        except TaskCancelledError:
+            logger.debug("SyncCityAbility: 收到停止信号，同步未完成")
+        except TaskFailedError as exc:
+            logger.error("SyncCityAbility: 必需子任务失败: %s", exc)
+        return CustomAction.RunResult(success=False)
 
     # ------------------------------------------------------------------
     # 列表剩余可见角色
@@ -389,39 +424,40 @@ class SyncCharacterAbilityCityAbilityMainAction(CustomAction):
     def _scan_remaining_characters(
         context: Context,
         results: dict[str, list[int]] | None = None,
-    ) -> None:
-        """依次点击列表位置 2→3→4→5，扫描 NextCharacter 无法到达的末尾角色。
-
-        每个位置：回到信息页 → 标准角色流程（OCR → 技能页 → TM → OCRSkill）。
-        """
+    ) -> bool:
+        """扫描末尾角色；识别 miss 标记未完成，导航失败或取消抛出异常。"""
+        all_recognized = True
         for click_node in _CLICK_NODES:
-            if context.tasker.stopping:
-                return
-
+            _check_cancelled(context)
             logger.info("SyncCityAbility tail: %s", click_node)
-            context.run_task(click_node)
-            time.sleep(0.3)
+            require_task(context, click_node)
+            if not interruptible_wait(context, 0.3):
+                raise TaskCancelledError(click_node)
 
-            # 点击后已在信息页，走标准角色流程
+            # 点击后已在信息页，走标准角色流程。
             name = _get_character_name(context)
+            _check_cancelled(context)
             if name is None:
                 logger.debug("SyncCityAbility tail: %s 识别失败，跳过", click_node)
-                # _get_character_name 结束时在技能页，回到信息页以便下一个 click
-                context.run_task(_NODE_OPEN_INFO)
-                continue
-
-            # OCR 技能（已在技能页）
-            levels = _ocr_skills(context)
-            logger.info(
-                "SyncCityAbility tail: %s 技能0=%d 技能1=%d",
-                name,
-                levels[0],
-                levels[1],
-            )
-            if results is not None:
-                results[name] = levels
+                all_recognized = False
             else:
-                set_character_abilities(name, levels)
+                levels = _ocr_skills(context)
+                _check_cancelled(context)
+                logger.info(
+                    "SyncCityAbility tail: %s 技能0=%d 技能1=%d",
+                    name,
+                    levels[0],
+                    levels[1],
+                )
+                if levels[0] < 0:
+                    logger.debug("SyncCityAbility tail: %s 技能0未识别，跳过记录", name)
+                    all_recognized = False
+                elif results is not None:
+                    results[name] = levels
+                else:
+                    set_character_abilities(name, levels)
 
-            # 回到信息页，准备下一个 click
-            context.run_task(_NODE_OPEN_INFO)
+            require_task(context, _NODE_OPEN_INFO)
+
+        _check_cancelled(context)
+        return all_recognized
