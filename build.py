@@ -33,7 +33,7 @@ from pathlib import Path
 
 MAA_FRAMEWORK_VERSION = "v5.10.5"
 MFAA_VERSION = "v2.12.1"
-MXU_VERSION = "v2.1.3"
+MXU_VERSION = "v2.3.1"  # >= v2.3.0 才支持设置页「任务设置」分区（战斗配置依赖）
 PYTHON_VERSION_TARGET = "3.12.10"
 PYTHON_BUILD_STANDALONE_RELEASE_TAG = "20250409"
 
