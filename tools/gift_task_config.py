@@ -26,18 +26,15 @@ _INTERFACE_MESSAGES = {
     "zh_cn": {
         "task_gift_label": "羁遇赠礼",
         "task_gift_desc": (
-            "手动选择角色，并为每位角色填写礼物优先级。仅使用背包中已有礼物，不购买礼物，"
-            "不自动选择角色或礼物。严格按填写顺序逐件赠送并确认；当前候选耗尽后才考虑下一项，"
-            "不按喜好自动排序。角色上限是当日累计目标（1–3 件），不是每次运行额外赠送。"
-            "全部角色合计每天最多 10 件，以游戏显示的剩余次数和提示为准。"
-            "未知喜好只表示资料缺失，不代表不喜欢。未核实的外语名保留中文原名。首次使用建议先演练。"
+            "逐条添加赠礼方案，为角色选择礼物和当日目标。按首选 → 备用 → 更多备选赠送，库存耗尽后才切换。"
+            "不购买礼物；重复运行会按游戏已有次数补足当日目标。"
         ),
         "task_gift_recipients": "赠礼角色（可多选）",
         "task_gift_recipients_desc": "默认不选择任何角色。勾选角色后分别设置礼物顺序与当日累计上限；主角不可选。",
         "task_gift_priority": "礼物优先级与完整清单",
         "task_gift_priority_desc": (
             "用 `>` 分隔任意数量的礼物完整名称或 ID，例如 `溶月茶具 > 时令寿司船`；分隔符两侧可留空格。"
-            "默认留空，勾选角色后必须填写。严格按此顺序使用已有库存，耗尽才换下一候选，不购买或自动替换。"
+            "默认留空，使用完整优先序模式时必须填写。严格按此顺序使用已有库存，耗尽才换下一候选，不购买或自动替换。"
             "可复制下方完整原名、资料库中已核实的名称或 ID；不要使用猜测的外语译名。"
             "未知喜好不代表不喜欢。\n\n"
             "来源：[本地完整礼物资料库](resource/base/data/gifts.json)。每条记录的 `source` 保存 Wiki 来源与页面 ID；"
@@ -45,30 +42,44 @@ _INTERFACE_MESSAGES = {
         ),
         "task_gift_limit": "角色当日累计上限",
         "task_gift_limit_desc": (
-            "填写 1–3，默认 3。这是该角色今天累计收到的目标件数，不是本次额外赠送的件数；"
-            "已达到目标则不再赠礼。全体角色每日合计最多 10 件，实际以游戏提示为准。"
+            "选择 1–3，默认 3。这是当日累计目标，不是本次追加件数。重复运行会读取游戏已有次数，"
+            "只补足目标；已达标则不赠礼。全体角色每日合计最多 10 件，以游戏提示为准。"
         ),
         "task_gift_priority_input": "礼物完整名称或 ID（用 > 分隔）",
         "task_gift_limit_input": "当日累计件数",
         "task_gift_limit_invalid": "请输入 1、2 或 3。",
         "task_gift_dry_run": "演练模式（不提交赠礼）",
         "task_gift_dry_run_desc": "仅检查角色、候选礼物、库存和游戏次数并展示计划，不点击最终赠礼确认，不消耗礼物或次数。",
+        "task_gift_plan_count": "赠礼方案数量",
+        "task_gift_plan_count_desc": "选择要配置的方案数量，默认 1。按方案顺序赠礼；每个方案分别选择角色、礼物和当日累计目标。",
+        "task_gift_recipient_row_desc": "可搜索角色。不同方案请选择不同角色；重复选择同一角色时共用礼物与上限，只执行一次。",
+        "task_gift_recipient_none": "请选择角色",
+        "task_gift_priority_mode": "礼物设置方式",
+        "task_gift_priority_mode_desc": "列表模式选择首选与备用礼物；完整优先序模式保留已保存的文字配置。",
+        "task_gift_priority_mode_list": "从礼物列表选择",
+        "task_gift_priority_mode_manual": "输入完整优先序",
+        "task_gift_primary": "首选礼物",
+        "task_gift_primary_desc": "可搜索礼物名称。先赠送首选礼物，库存耗尽后才使用备用；默认不选择礼物。",
+        "task_gift_primary_none": "请选择首选礼物",
+        "task_gift_backup": "备用礼物",
+        "task_gift_backup_desc": "首选耗尽后的第二候选，可留空。只使用已选择的礼物，不会自动替换。",
+        "task_gift_backup_none": "不使用备用礼物",
+        "task_gift_extra": "更多备选礼物（可留空）",
+        "task_gift_extra_desc": "第 3 项起的备选，按 > 分隔完整名称或 ID，数量不限。首选、备用耗尽后严格按此顺序使用。",
+        "task_gift_extra_input": "完整名称或 ID（用 > 分隔）",
     },
     "zh_tw": {
         "task_gift_label": "羈遇贈禮",
         "task_gift_desc": (
-            "手動選擇角色，並為每位角色填寫禮物優先順序。僅使用背包中已有禮物，不購買禮物，"
-            "不自動選擇角色或禮物。嚴格依填寫順序逐件贈送並確認；目前候選耗盡後才考慮下一項，"
-            "不按喜好自動排序。角色上限是當日累計目標（1–3 件），不是每次執行額外贈送。"
-            "全部角色合計每天最多 10 件，以遊戲顯示的剩餘次數和提示為準。"
-            "未知喜好只表示資料缺失，不代表不喜歡。未核實的外語名保留中文原名。首次使用建議先演練。"
+            "逐條新增贈禮方案，為角色選擇禮物和當日目標。依首選 → 備用 → 更多備選贈送，庫存耗盡後才切換。"
+            "不購買禮物；重複執行會依遊戲已有次數補足當日目標。"
         ),
         "task_gift_recipients": "贈禮角色（可複選）",
         "task_gift_recipients_desc": "預設不選擇任何角色。勾選角色後分別設定禮物順序與當日累計上限；主角不可選。",
         "task_gift_priority": "禮物優先順序與完整清單",
         "task_gift_priority_desc": (
             "用 `>` 分隔任意數量的禮物完整名稱或 ID，例如 `溶月茶具 > 时令寿司船`；分隔符兩側可留空格。"
-            "預設留空，勾選角色後必須填寫。嚴格依此順序使用已有庫存，耗盡才換下一候選，不購買或自動替換。"
+            "預設留空，使用完整優先順序模式時必須填寫。嚴格依此順序使用已有庫存，耗盡才換下一候選，不購買或自動替換。"
             "可複製下方完整原名、資料庫中已核實的名稱或 ID；不要使用猜測的外語譯名。"
             "未知喜好不代表不喜歡。\n\n"
             "來源：[本機完整禮物資料庫](resource/base/data/gifts.json)。每筆記錄的 `source` 保存 Wiki 來源與頁面 ID；"
@@ -76,25 +87,38 @@ _INTERFACE_MESSAGES = {
         ),
         "task_gift_limit": "角色當日累計上限",
         "task_gift_limit_desc": (
-            "填寫 1–3，預設 3。這是該角色今天累計收到的目標件數，不是本次額外贈送的件數；"
-            "已達到目標則不再贈禮。全體角色每日合計最多 10 件，實際以遊戲提示為準。"
+            "選擇 1–3，預設 3。這是當日累計目標，不是本次追加件數。重複執行會讀取遊戲已有次數，"
+            "只補足目標；已達標則不贈禮。全體角色每日合計最多 10 件，以遊戲提示為準。"
         ),
         "task_gift_priority_input": "禮物完整名稱或 ID（用 > 分隔）",
         "task_gift_limit_input": "當日累計件數",
         "task_gift_limit_invalid": "請輸入 1、2 或 3。",
         "task_gift_dry_run": "演練模式（不提交贈禮）",
         "task_gift_dry_run_desc": "僅檢查角色、候選禮物、庫存和遊戲次數並展示計畫，不點擊最終贈禮確認，不消耗禮物或次數。",
+        "task_gift_plan_count": "贈禮方案數量",
+        "task_gift_plan_count_desc": "選擇要設定的方案數量，預設 1。依方案順序贈禮；每個方案分別選擇角色、禮物和當日累計目標。",
+        "task_gift_recipient_row_desc": "可搜尋角色。不同方案請選擇不同角色；重複選擇同一角色時共用禮物與上限，只執行一次。",
+        "task_gift_recipient_none": "請選擇角色",
+        "task_gift_priority_mode": "禮物設定方式",
+        "task_gift_priority_mode_desc": "清單模式選擇首選與備用禮物；完整優先順序模式保留已儲存的文字設定。",
+        "task_gift_priority_mode_list": "從禮物清單選擇",
+        "task_gift_priority_mode_manual": "輸入完整優先順序",
+        "task_gift_primary": "首選禮物",
+        "task_gift_primary_desc": "可搜尋禮物名稱。先贈送首選禮物，庫存耗盡後才使用備用；預設不選擇禮物。",
+        "task_gift_primary_none": "請選擇首選禮物",
+        "task_gift_backup": "備用禮物",
+        "task_gift_backup_desc": "首選耗盡後的第二候選，可留空。只使用已選擇的禮物，不會自動替換。",
+        "task_gift_backup_none": "不使用備用禮物",
+        "task_gift_extra": "更多備選禮物（可留空）",
+        "task_gift_extra_desc": "第 3 項起的備選，以 > 分隔完整名稱或 ID，數量不限。首選、備用耗盡後嚴格依此順序使用。",
+        "task_gift_extra_input": "完整名稱或 ID（以 > 分隔）",
     },
     "en_us": {
         "task_gift_label": "Bond gifts",
         "task_gift_desc": (
-            "Select recipients manually and enter a gift priority list for each. Uses only gifts already in your inventory; "
-            "never buys gifts or automatically chooses recipients or gifts. Gifts are sent and verified one at a time in "
-            "the exact order entered; the next candidate is used only after the current one is exhausted, without "
-            "sorting by preferences. The character limit is today's cumulative target (1–3), not additional gifts per run. "
-            "The total across all characters is at most 10 per day; the game's remaining counts and notices are authoritative. "
-            "Unknown preferences mean missing data, not dislike. Unverified localized names remain in the original Chinese. "
-            "A dry run is recommended first."
+            "Add plans and choose each character's gifts and daily target. Use primary → backup → extra gifts, "
+            "switching only when stock is exhausted. Never buys gifts; repeated runs use the game's existing count "
+            "to fill the remaining daily target."
         ),
         "task_gift_recipients": "Gift recipients (multiple selections)",
         "task_gift_recipients_desc": (
@@ -114,9 +138,8 @@ _INTERFACE_MESSAGES = {
         ),
         "task_gift_limit": "Character's cumulative daily limit",
         "task_gift_limit_desc": (
-            "Enter 1–3 (default 3). This is the target total received by this character today, not additional gifts for "
-            "this run. No gifts are sent once the target is met. The total for all characters is at most 10 per day, "
-            "subject to the game's notices."
+            "Choose 1–3 (default 3), the cumulative target for today rather than extra gifts this run. Repeated runs "
+            "read the game's existing count and only fill the shortfall. At most 10 total per day, subject to the game."
         ),
         "task_gift_priority_input": "Full gift names or IDs (separate with >)",
         "task_gift_limit_input": "Cumulative gifts today",
@@ -126,17 +149,47 @@ _INTERFACE_MESSAGES = {
             "Only checks characters, candidate gifts, inventory and in-game counts, then shows the plan. Never presses "
             "the final gift confirmation or consumes gifts or attempts."
         ),
+        "task_gift_plan_count": "Number of gift plans",
+        "task_gift_plan_count_desc": (
+            "Choose how many plans to configure (default 1). Plans run in row order; select each character, gifts "
+            "and cumulative daily target separately."
+        ),
+        "task_gift_recipient_row_desc": (
+            "Search for a character. Choose different characters for different plans. Repeated characters share "
+            "their gifts and limit and run only once."
+        ),
+        "task_gift_recipient_none": "Choose a character",
+        "task_gift_priority_mode": "Gift configuration",
+        "task_gift_priority_mode_desc": (
+            "Choose primary and backup gifts from the list, or enter a complete priority list. "
+            "Saved text values remain available in manual mode."
+        ),
+        "task_gift_priority_mode_list": "Choose from the gift list",
+        "task_gift_priority_mode_manual": "Enter a complete priority list",
+        "task_gift_primary": "Primary gift",
+        "task_gift_primary_desc": (
+            "Search by gift name. Use the primary gift until stock is exhausted before trying backups. "
+            "No gift is selected by default."
+        ),
+        "task_gift_primary_none": "Choose a primary gift",
+        "task_gift_backup": "Backup gift",
+        "task_gift_backup_desc": (
+            "Optional second choice after the primary is exhausted. Only selected gifts are used; "
+            "there are no automatic substitutions."
+        ),
+        "task_gift_backup_none": "No backup gift",
+        "task_gift_extra": "More backup gifts (optional)",
+        "task_gift_extra_desc": (
+            "Third and later choices: separate full names or IDs with >, with no length limit. "
+            "Used in this order after the primary and backup are exhausted."
+        ),
+        "task_gift_extra_input": "Full names or IDs (separate with >)",
     },
     "ja_jp": {
         "task_gift_label": "絆ギフト",
         "task_gift_desc": (
-            "キャラクターを手動で選び、それぞれにギフトの優先順を入力してください。所持品にあるギフトのみを使用し、"
-            "購入やキャラクター・ギフトの自動選択は行いません。入力順を厳守して1個ずつ贈り、結果を確認します。"
-            "現在の候補を使い切った場合のみ次の候補へ進み、好みによる自動並べ替えは行いません。"
-            "キャラクターの上限は当日の累計目標（1～3個）であり、実行ごとの追加個数ではありません。"
-            "全キャラクター合計で1日最大10個ですが、ゲーム内の残り回数と表示を優先します。"
-            "好みが不明なのは資料がないという意味で、嫌いという意味ではありません。"
-            "未確認の翻訳名は使わず中国語の原名を表示します。初回はドライランを推奨します。"
+            "プランを追加し、各キャラクターのギフトと当日の目標を選びます。第1候補 → 第2候補 → その他の候補の順に、"
+            "在庫を使い切ってから切り替えます。購入はせず、再実行時はゲーム内の贈呈済み回数に応じて当日の不足分だけ贈ります。"
         ),
         "task_gift_recipients": "贈るキャラクター（複数選択可）",
         "task_gift_recipients_desc": "初期状態では誰も選択されません。選択したキャラクターごとにギフトの順序と当日の累計上限を設定します。主人公は選択できません。",
@@ -152,25 +205,37 @@ _INTERFACE_MESSAGES = {
         ),
         "task_gift_limit": "キャラクターの当日累計上限",
         "task_gift_limit_desc": (
-            "1～3を入力します（初期値3）。このキャラクターが今日受け取る累計目標であり、今回追加する個数ではありません。"
-            "目標に達していれば贈りません。全キャラクターで1日合計最大10個ですが、実際のゲーム内表示を優先します。"
+            "1～3を選びます（初期値3）。当日の累計目標であり、今回追加する個数ではありません。再実行時はゲーム内の贈呈済み回数を読み、"
+            "不足分だけ贈ります。全キャラクターで1日合計最大10個ですが、ゲーム内表示を優先します。"
         ),
         "task_gift_priority_input": "ギフトの全名称またはID（> で区切る）",
         "task_gift_limit_input": "当日の累計個数",
         "task_gift_limit_invalid": "1、2、3のいずれかを入力してください。",
         "task_gift_dry_run": "ドライラン（ギフトを確定しない）",
         "task_gift_dry_run_desc": "キャラクター、候補ギフト、所持数、ゲーム内回数を確認して計画を表示するだけです。最後の贈呈確定は押さず、ギフトや回数を消費しません。",
+        "task_gift_plan_count": "ギフトプラン数",
+        "task_gift_plan_count_desc": "設定するプラン数を選びます（初期値1）。行の順番に贈ります。各プランでキャラクター、ギフト、当日の累計目標を設定してください。",
+        "task_gift_recipient_row_desc": "キャラクターを検索できます。各プランでは別のキャラクターを選んでください。同じキャラクターを選ぶとギフトと上限を共有し、1回だけ実行します。",
+        "task_gift_recipient_none": "キャラクターを選択してください",
+        "task_gift_priority_mode": "ギフトの設定方法",
+        "task_gift_priority_mode_desc": "一覧から第1・第2候補を選ぶか、優先順をすべて入力します。保存済みの入力内容は手動入力モードで利用できます。",
+        "task_gift_priority_mode_list": "ギフト一覧から選ぶ",
+        "task_gift_priority_mode_manual": "優先順をすべて入力する",
+        "task_gift_primary": "第1候補のギフト",
+        "task_gift_primary_desc": "ギフト名で検索できます。第1候補の在庫を使い切ってから予備を使います。初期状態では未選択です。",
+        "task_gift_primary_none": "第1候補を選択してください",
+        "task_gift_backup": "第2候補のギフト",
+        "task_gift_backup_desc": "第1候補を使い切った後の候補です。空欄でも構いません。選択したギフトのみを使い、自動で代替しません。",
+        "task_gift_backup_none": "第2候補を使わない",
+        "task_gift_extra": "その他の予備ギフト（任意）",
+        "task_gift_extra_desc": "第3候補以降の全名称またはIDを > で区切って入力します。個数制限はありません。第1・第2候補を使い切ってから入力順に使います。",
+        "task_gift_extra_input": "全名称またはID（> で区切る）",
     },
     "ko_kr": {
         "task_gift_label": "인연 선물",
         "task_gift_desc": (
-            "캐릭터를 직접 선택하고 각 캐릭터의 선물 우선순위를 입력하세요. 가방에 있는 선물만 사용하며 "
-            "구매하거나 캐릭터와 선물을 자동 선택하지 않습니다. 입력한 순서대로 하나씩 선물하고 결과를 확인하며, "
-            "현재 후보를 모두 소진한 뒤에만 다음 후보로 넘어갑니다. 취향에 따라 자동 정렬하지 않습니다. "
-            "캐릭터 한도는 당일 누적 목표(1~3개)이며 실행할 때마다 추가로 주는 수량이 아닙니다. "
-            "모든 캐릭터를 합쳐 하루 최대 10개이며, 게임의 남은 횟수와 안내가 우선합니다. "
-            "취향 미상은 자료 부족을 뜻하며 싫어한다는 뜻이 아닙니다. 확인되지 않은 번역명 대신 중국어 원명을 표시합니다. "
-            "처음에는 모의 실행을 권장합니다."
+            "계획을 추가하고 각 캐릭터의 선물과 당일 목표를 선택하세요. 첫 번째 → 두 번째 → 추가 후보 순서로 "
+            "재고를 모두 소진한 뒤에만 전환합니다. 선물을 구매하지 않으며, 반복 실행 시 게임의 기존 횟수에 따라 당일 부족분만 채웁니다."
         ),
         "task_gift_recipients": "선물할 캐릭터 (여러 명 선택 가능)",
         "task_gift_recipients_desc": "기본으로 선택된 캐릭터는 없습니다. 선택한 캐릭터마다 선물 순서와 당일 누적 한도를 따로 설정하세요. 주인공은 선택할 수 없습니다.",
@@ -186,15 +251,40 @@ _INTERFACE_MESSAGES = {
         ),
         "task_gift_limit": "캐릭터 당일 누적 한도",
         "task_gift_limit_desc": (
-            "1~3을 입력하세요(기본값 3). 이 캐릭터가 오늘 받은 선물의 누적 목표이며, 이번 실행에서 추가할 수량이 아닙니다. "
-            "목표에 도달했다면 더 주지 않습니다. 모든 캐릭터를 합쳐 하루 최대 10개이며 실제 게임 안내가 우선합니다."
+            "1~3을 선택하세요(기본값 3). 당일 누적 목표이며 이번에 추가할 수량이 아닙니다. 반복 실행 시 게임의 기존 횟수를 읽고 "
+            "부족한 수량만 채웁니다. 모든 캐릭터를 합쳐 하루 최대 10개이며 게임 안내가 우선합니다."
         ),
         "task_gift_priority_input": "선물 전체 이름 또는 ID (>로 구분)",
         "task_gift_limit_input": "당일 누적 개수",
         "task_gift_limit_invalid": "1, 2, 3 중 하나를 입력하세요.",
         "task_gift_dry_run": "모의 실행 (선물 확정 안 함)",
         "task_gift_dry_run_desc": "캐릭터, 후보 선물, 재고, 게임 내 횟수만 확인하고 계획을 표시합니다. 최종 선물 확인을 누르지 않으며 선물이나 횟수를 소모하지 않습니다.",
+        "task_gift_plan_count": "선물 계획 수",
+        "task_gift_plan_count_desc": "설정할 계획 수를 선택하세요(기본값 1). 행 순서대로 선물하며, 각 계획의 캐릭터, 선물, 당일 누적 목표를 따로 설정합니다.",
+        "task_gift_recipient_row_desc": "캐릭터를 검색할 수 있습니다. 각 계획에서 서로 다른 캐릭터를 선택하세요. 같은 캐릭터를 반복 선택하면 선물과 한도를 공유하며 한 번만 실행합니다.",
+        "task_gift_recipient_none": "캐릭터를 선택하세요",
+        "task_gift_priority_mode": "선물 설정 방식",
+        "task_gift_priority_mode_desc": "목록에서 첫 번째와 두 번째 후보를 선택하거나 전체 우선순위를 입력하세요. 저장된 텍스트는 직접 입력 모드에서 유지됩니다.",
+        "task_gift_priority_mode_list": "선물 목록에서 선택",
+        "task_gift_priority_mode_manual": "전체 우선순위 입력",
+        "task_gift_primary": "첫 번째 선물",
+        "task_gift_primary_desc": "선물 이름으로 검색하세요. 첫 번째 선물의 재고를 모두 사용한 뒤에만 다음 후보를 사용합니다. 기본으로 선택된 선물은 없습니다.",
+        "task_gift_primary_none": "첫 번째 선물을 선택하세요",
+        "task_gift_backup": "두 번째 선물",
+        "task_gift_backup_desc": "첫 번째 선물 소진 후 사용할 후보이며 비워 둘 수 있습니다. 선택한 선물만 사용하며 자동 대체하지 않습니다.",
+        "task_gift_backup_none": "두 번째 선물 사용 안 함",
+        "task_gift_extra": "추가 후보 선물 (선택 사항)",
+        "task_gift_extra_desc": "세 번째 이후 후보의 전체 이름이나 ID를 >로 구분하세요. 개수 제한 없이 입력할 수 있으며 앞선 후보가 소진된 뒤 입력 순서대로 사용합니다.",
+        "task_gift_extra_input": "전체 이름 또는 ID (>로 구분)",
     },
+}
+
+_PLAN_RECIPIENT_LABELS = {
+    "zh_cn": "方案 %d · 角色",
+    "zh_tw": "方案 %d · 角色",
+    "en_us": "Plan %d · Character",
+    "ja_jp": "プラン %d · キャラクター",
+    "ko_kr": "계획 %d · 캐릭터",
 }
 
 _CATALOG_TITLES = {
@@ -454,18 +544,31 @@ def _records(document: dict, field: str) -> list[dict]:
 
 
 def render_task(characters: dict, gifts: dict) -> dict:
-    """Render a task with independent recipient options; never mutate the catalogs."""
+    """Render searchable plan rows using MXU's recursive select case options."""
     recipients = [
         item for item in _records(characters, "characters") if item["giftable"]
     ]
-    _records(gifts, "gifts")
+    gift_records = _records(gifts, "gifts")
+    if not recipients:
+        raise ValueError("characters: expected at least one giftable character")
     options: dict[str, Any] = {
-        "GiftRecipients": {
-            "type": "checkbox",
-            "label": "$task_gift_recipients",
-            "description": "$task_gift_recipients_desc",
-            "default_case": [],
-            "cases": [],
+        "GiftPlanCount": {
+            "type": "select",
+            "label": "$task_gift_plan_count",
+            "description": "$task_gift_plan_count_desc",
+            "default_case": "1",
+            "cases": [
+                {
+                    "name": str(count),
+                    "option": ["GiftRecipient_%d" % row for row in range(1, count + 1)],
+                    "pipeline_override": {
+                        "GiftSettings": {
+                            "attach": {"recipient_mode": "rows", "plan_count": count}
+                        }
+                    },
+                }
+                for count in range(1, len(recipients) + 1)
+            ],
         },
         "GiftDryRun": {
             "type": "switch",
@@ -484,20 +587,112 @@ def render_task(characters: dict, gifts: dict) -> dict:
             ],
         },
     }
+    for row in range(1, len(recipients) + 1):
+        options["GiftRecipient_%d" % row] = {
+            "type": "select",
+            "label": "$task_gift_plan_recipient_%d" % row,
+            "description": "$task_gift_recipient_row_desc",
+            "default_case": "None",
+            "cases": [
+                {
+                    "name": "None",
+                    "label": "$task_gift_recipient_none",
+                    "pipeline_override": {
+                        "GiftSettings": {"attach": {"recipient_%d" % row: ""}}
+                    },
+                },
+                *[
+                    {
+                        "name": character["id"],
+                        "label": "$task_gift_recipient_%s" % character["id"],
+                        "icon": "resource/base/image/%s" % character["image"]["path"],
+                        "option": [
+                            "GiftPriorityMode_%s" % character["id"],
+                            "GiftLimit_%s" % character["id"],
+                        ],
+                        "pipeline_override": {
+                            "GiftConfig_%s"
+                            % character["id"]: {"attach": {"selected": True}},
+                            "GiftSettings": {
+                                "attach": {"recipient_%d" % row: character["id"]}
+                            },
+                        },
+                    }
+                    for character in recipients
+                ],
+            ],
+        }
     for character in recipients:
         identifier = character["id"]
         node = "GiftConfig_%s" % identifier
         priority = "GiftPriority_%s" % identifier
-        limit = "GiftLimit_%s" % identifier
-        options["GiftRecipients"]["cases"].append(
-            {
-                "name": identifier,
-                "label": "$task_gift_recipient_%s" % identifier,
-                "icon": "resource/base/image/%s" % character["image"]["path"],
-                "option": [priority, limit],
-                "pipeline_override": {node: {"attach": {"selected": True}}},
+        options["GiftPriorityMode_%s" % identifier] = {
+            "type": "select",
+            "label": "$task_gift_priority_mode",
+            "description": "$task_gift_priority_mode_desc",
+            "default_case": "List",
+            "cases": [
+                {
+                    "name": "List",
+                    "label": "$task_gift_priority_mode_list",
+                    "option": [
+                        "GiftPrimary_%s" % identifier,
+                        "GiftBackup_%s" % identifier,
+                        "GiftExtra_%s" % identifier,
+                    ],
+                    "pipeline_override": {node: {"attach": {"gift_mode": "choices"}}},
+                },
+                {
+                    "name": "Custom",
+                    "label": "$task_gift_priority_mode_manual",
+                    "option": [priority],
+                    "pipeline_override": {node: {"attach": {"gift_mode": "manual"}}},
+                },
+            ],
+        }
+        for option, field, label in (
+            ("GiftPrimary", "primary_gift", "primary"),
+            ("GiftBackup", "backup_gift", "backup"),
+        ):
+            options["%s_%s" % (option, identifier)] = {
+                "type": "select",
+                "label": "$task_gift_%s" % label,
+                "description": "$task_gift_%s_desc" % label,
+                "default_case": "None",
+                "cases": [
+                    {
+                        "name": "None",
+                        "label": "$task_gift_%s_none" % label,
+                        "pipeline_override": {node: {"attach": {field: ""}}},
+                    },
+                    *[
+                        {
+                            "name": gift["id"],
+                            "label": "$task_gift_item_%s" % gift["id"],
+                            "icon": "resource/base/image/%s" % gift["image"]["path"],
+                            "pipeline_override": {
+                                node: {"attach": {field: gift["id"]}}
+                            },
+                        }
+                        for gift in gift_records
+                    ],
+                ],
             }
-        )
+        options["GiftExtra_%s" % identifier] = {
+            "type": "input",
+            "label": "$task_gift_extra",
+            "description": "$task_gift_extra_desc",
+            "inputs": [
+                {
+                    "name": "extra_gifts",
+                    "label": "$task_gift_extra_input",
+                    "default": "",
+                    "pipeline_type": "string",
+                }
+            ],
+            "pipeline_override": {node: {"attach": {"extra_gifts": "{extra_gifts}"}}},
+        }
+        # Retain both the option ID and the input name for previously saved values.
         options[priority] = {
             "type": "input",
             "label": "$task_gift_priority",
@@ -512,21 +707,18 @@ def render_task(characters: dict, gifts: dict) -> dict:
             ],
             "pipeline_override": {node: {"attach": {"gifts": "{gifts}"}}},
         }
-        options[limit] = {
-            "type": "input",
+        options["GiftLimit_%s" % identifier] = {
+            "type": "select",
             "label": "$task_gift_limit",
             "description": "$task_gift_limit_desc",
-            "inputs": [
+            "default_case": "3",
+            "cases": [
                 {
-                    "name": "limit",
-                    "label": "$task_gift_limit_input",
-                    "default": "3",
-                    "pipeline_type": "int",
-                    "verify": "^[1-3]$",
-                    "pattern_msg": "$task_gift_limit_invalid",
+                    "name": str(limit),
+                    "pipeline_override": {node: {"attach": {"limit": limit}}},
                 }
+                for limit in range(1, 4)
             ],
-            "pipeline_override": {node: {"attach": {"limit": "{limit}"}}},
         }
     return {
         "task": [
@@ -536,7 +728,7 @@ def render_task(characters: dict, gifts: dict) -> dict:
                 "entry": "GiftEntry",
                 "description": "$task_gift_desc",
                 "group": ["Daily"],
-                "option": ["GiftRecipients", "GiftDryRun"],
+                "option": ["GiftPlanCount", "GiftDryRun"],
             }
         ],
         "option": options,
@@ -548,7 +740,15 @@ def render_config(characters: dict) -> dict:
     recipients = [
         item for item in _records(characters, "characters") if item["giftable"]
     ]
-    attachments = {"GiftSettings": {"dry_run": False}}
+    # MaaFramework merges attach fields shallowly; keep each row in its own field.
+    attachments = {
+        "GiftSettings": {
+            "dry_run": False,
+            "recipient_mode": "legacy",
+            "plan_count": 1,
+            **{"recipient_%d" % row: "" for row in range(1, len(recipients) + 1)},
+        }
+    }
     for character in recipients:
         identifier = character["id"]
         attachments["GiftConfig_%s" % identifier] = {
@@ -556,6 +756,10 @@ def render_config(characters: dict) -> dict:
             "selected": False,
             "gifts": "",
             "limit": 3,
+            "gift_mode": "manual",
+            "primary_gift": "",
+            "backup_gift": "",
+            "extra_gifts": "",
         }
     return {
         name: {
@@ -585,6 +789,10 @@ def render_interface_locales(
     result = {}
     for language in LANGUAGES:
         messages = dict(_INTERFACE_MESSAGES[language])
+        for row in range(1, len(recipients) + 1):
+            messages["task_gift_plan_recipient_%d" % row] = (
+                _PLAN_RECIPIENT_LABELS[language] % row
+            )
         for character in recipients:
             messages["task_gift_recipient_%s" % character["id"]] = character[
                 "names"
@@ -593,6 +801,7 @@ def render_interface_locales(
         for gift in gift_records:
             original = gift["names"]["zh_cn"]
             localized = gift["names"].get(language, original)
+            messages["task_gift_item_%s" % gift["id"]] = localized
             name = _markdown_name(original)
             if localized != original:
                 name += " / " + _markdown_name(localized)

@@ -155,6 +155,52 @@ def merge(left, right):
     return left
 
 
+def ui_config(values=None, *, overrides=None):
+    """沿客户端 select/switch 活跃分支应用真实任务选项，隐藏值不产生覆盖。"""
+    values = values or {}
+    data = copy.deepcopy(CONFIG)
+    visible = []
+
+    def apply(override):
+        if overrides is not None and override:
+            overrides.append(copy.deepcopy(override))
+        merge(data, override)
+
+    def substitute(value, variables):
+        if isinstance(value, str):
+            return variables.get(value, value)
+        if isinstance(value, dict):
+            return {key: substitute(item, variables) for key, item in value.items()}
+        if isinstance(value, list):
+            return [substitute(item, variables) for item in value]
+        return value
+
+    def visit(key):
+        option = TASK["option"][key]
+        visible.append(key)
+        if option["type"] == "input":
+            fields = values.get(key, {})
+            variables = {}
+            for field in option["inputs"]:
+                value = fields.get(field["name"], field.get("default", ""))
+                if field.get("pipeline_type") == "int":
+                    value = int(value)
+                variables["{" + field["name"] + "}"] = value
+            apply(substitute(option.get("pipeline_override", {}), variables))
+            return
+        if option["type"] not in {"select", "switch"}:
+            raise AssertionError("当前客户端不展开checkbox子项: " + key)
+        selected = values.get(key, option["default_case"])
+        case = next(case for case in option["cases"] if case["name"] == selected)
+        apply(case.get("pipeline_override", {}))
+        for child in case.get("option", []):
+            visit(child)
+
+    for key in TASK["task"][0]["option"]:
+        visit(key)
+    return data, visible
+
+
 class GiftWorld:
     """可观察的虚拟 UI；生产动作的实际输入才会切换角色、礼物和页码。"""
 
@@ -1052,20 +1098,173 @@ class GiftActionTests(unittest.TestCase):
                 self.assertEqual(run.world.sends, [])
                 self.assertIn("GiftEntry", run.failed)
 
-    def test_multiple_checkbox_case_overrides_remain_independent(self):
-        config = make_config([])
-        cases = {
-            item["name"]: item for item in TASK["option"]["GiftRecipients"]["cases"]
-        }
-        for character_id in (C1, C2):
-            merge(config, cases[character_id]["pipeline_override"])
-        config["GiftConfig_" + C1]["attach"].update(gifts=A, limit=1)
-        config["GiftConfig_" + C2]["attach"].update(gifts=B, limit=2)
-        with flow(config=config) as run:
+    def test_visible_row_options_keep_each_character_configuration_and_row_order(self):
+        data, visible = ui_config(
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": C2,
+                "GiftRecipient_2": C1,
+                "GiftPrimary_" + C2: B,
+                "GiftPrimary_" + C1: A,
+                "GiftLimit_" + C2: "1",
+                "GiftLimit_" + C1: "2",
+            }
+        )
+        for character in (C1, C2):
+            self.assertIn("GiftPrimary_" + character, visible)
+            self.assertIn("GiftBackup_" + character, visible)
+            self.assertIn("GiftExtra_" + character, visible)
+            self.assertIn("GiftLimit_" + character, visible)
+        with flow(config=data) as run:
             run.finish()
-            self.assertEqual(run.world.sends, [(C1, A), (C2, B), (C2, B)])
+            self.assertEqual(run.world.sends, [(C2, B), (C1, A), (C1, A)])
             self.assertEqual(run.states()[C1].recipient.gifts, (A,))
             self.assertEqual(run.states()[C2].recipient.gifts, (B,))
+
+    def test_ui_list_choices_follow_primary_backup_and_unbounded_extra_order(self):
+        data, _ = ui_config(
+            {
+                "GiftRecipient_1": C1,
+                "GiftPrimary_" + C1: A,
+                "GiftBackup_" + C1: B,
+                "GiftExtra_" + C1: {"extra_gifts": "%s > %s > %s" % (C, A, B)},
+            }
+        )
+        with flow(GiftWorld(stock={A: 1, B: 1, C: 5}), config=data) as run:
+            run.finish()
+            self.assertEqual(run.states()[C1].recipient.gifts, (A, B, C))
+            self.assertEqual(run.world.sends, [(C1, A), (C1, B), (C1, C)])
+
+    def test_ui_manual_mode_uses_saved_text_and_ignores_hidden_choice_values(self):
+        data, visible = ui_config(
+            {
+                "GiftRecipient_1": C1,
+                "GiftPriorityMode_" + C1: "Custom",
+                "GiftPriority_" + C1: {"gifts": B + " > " + A},
+                "GiftPrimary_" + C1: "invalid-hidden-gift",
+                "GiftLimit_" + C1: "1",
+            }
+        )
+        self.assertIn("GiftPriority_" + C1, visible)
+        self.assertNotIn("GiftPrimary_" + C1, visible)
+        with flow(config=data) as run:
+            run.finish()
+            self.assertEqual(run.world.sends, [(C1, B)])
+            self.assertEqual(run.states()[C1].recipient.gifts, (B, A))
+
+    def test_ui_empty_roles_or_missing_primary_never_choose_a_default_gift(self):
+        for values in ({}, {"GiftRecipient_1": C1}):
+            with self.subTest(values=values):
+                data, _ = ui_config(values)
+                with flow(config=data) as run:
+                    run.finish()
+                    self.assertEqual(run.world.inputs, [])
+                    self.assertEqual(run.world.sends, [])
+                    self.assertEqual(run.runtime.session.attempts, 0)
+
+    def test_ui_duplicate_role_is_processed_once_without_increasing_daily_limit(self):
+        data, _ = ui_config(
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": C1,
+                "GiftRecipient_2": C1,
+                "GiftPrimary_" + C1: A,
+                "GiftLimit_" + C1: "1",
+            }
+        )
+        with flow(config=data) as run:
+            run.finish()
+            self.assertEqual(run.world.sends, [(C1, A)])
+            self.assertEqual(len(run.runtime.session.states), 1)
+
+    def test_ui_hidden_rows_and_unselected_character_overrides_do_not_send(self):
+        data, _ = ui_config(
+            {
+                "GiftPlanCount": "1",
+                "GiftRecipient_1": C1,
+                "GiftRecipient_2": C2,
+                "GiftPrimary_" + C1: A,
+                "GiftPrimary_" + C2: B,
+                "GiftLimit_" + C1: "1",
+            }
+        )
+        # 即使外部输入意外遗留旧selected，行模式只执行当前可见方案。
+        data["GiftConfig_" + C2]["attach"].update(selected=True, gifts=B)
+        data["GiftSettings"]["attach"]["recipient_2"] = C2
+        with flow(config=data) as run:
+            run.finish()
+            self.assertEqual(run.world.sends, [(C1, A)])
+            self.assertNotIn(C2, run.states())
+
+    def test_ui_invalid_gift_choice_only_skips_its_recipient(self):
+        faults = (
+            {"primary_gift": ""},
+            {"primary_gift": None},
+            {"primary_gift": "unknown-gift"},
+            {"backup_gift": False},
+            {"backup_gift": "unknown-gift"},
+            {"extra_gifts": []},
+            {"extra_gifts": " > "},
+            {"gift_mode": "unknown"},
+        )
+        original, _ = ui_config(
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": C1,
+                "GiftRecipient_2": C2,
+                "GiftPrimary_" + C1: A,
+                "GiftPrimary_" + C2: B,
+                "GiftLimit_" + C2: "1",
+            }
+        )
+        for fault in faults:
+            data = copy.deepcopy(original)
+            data["GiftConfig_" + C1]["attach"].update(fault)
+            with self.subTest(fault=fault), flow(config=data) as run:
+                run.finish()
+                self.assertEqual(run.world.sends, [(C2, B)])
+                self.assertEqual(run.summary(), (1, 0, 0, 1, 0))
+
+    def test_ui_invalid_row_count_never_defaults_to_legacy_selected_recipients(self):
+        original, _ = ui_config({"GiftRecipient_1": C1, "GiftPrimary_" + C1: A})
+        for value in (0, True, "1", 24, None):
+            data = copy.deepcopy(original)
+            data["GiftSettings"]["attach"]["plan_count"] = value
+            with self.subTest(value=value), flow(config=data) as run:
+                run.finish()
+                self.assertEqual(run.world.inputs, [])
+                self.assertEqual(run.runtime.session.attempts, 0)
+
+    def test_ui_unknown_row_character_does_not_prevent_other_valid_rows(self):
+        data, _ = ui_config(
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": C1,
+                "GiftRecipient_2": C2,
+                "GiftPrimary_" + C1: A,
+                "GiftPrimary_" + C2: B,
+                "GiftLimit_" + C2: "1",
+            }
+        )
+        data["GiftSettings"]["attach"]["recipient_1"] = "unknown-character"
+        with flow(config=data) as run:
+            run.finish()
+            self.assertEqual(run.world.sends, [(C2, B)])
+            self.assertEqual(run.summary(), (1, 0, 0, 1, 0))
+
+    def test_ui_dry_run_cannot_submit_even_with_all_list_choices_configured(self):
+        data, _ = ui_config(
+            {
+                "GiftRecipient_1": C1,
+                "GiftPrimary_" + C1: A,
+                "GiftDryRun": "Yes",
+            }
+        )
+        with flow(config=data) as run:
+            run.finish()
+            self.assertEqual(run.world.sends, [])
+            self.assertEqual(run.runtime.session.attempts, 0)
+            self.assertEqual(run.summary(), (0, 0, 1, 0, 0))
 
     def test_reset_discards_previous_receipt_quota_and_configuration(self):
         with flow(config=make_config([(C1, (A,), 3)])) as run:

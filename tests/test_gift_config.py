@@ -124,12 +124,14 @@ def catalogs():
 
 
 def merge(base, override):
-    """Model the interface's recursive merge, retaining different node namespaces."""
-    for key, value in override.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            merge(base[key], value)
-        else:
-            base[key] = copy.deepcopy(value)
+    """Model sequential MaaFramework overrides: attach fields merge only shallowly."""
+    for name, change in override.items():
+        node = base.setdefault(name, {})
+        for field, value in change.items():
+            if field == "attach":
+                node.setdefault("attach", {}).update(copy.deepcopy(value))
+            else:
+                node[field] = copy.deepcopy(value)
 
 
 def references(value):
@@ -166,117 +168,390 @@ def schema_validator(filename):
     return cls(schema, registry=registry)
 
 
+def mxu_render(task, nodes, selections=None, input_values=None):
+    """Apply only visible controls; MXU expands child options for select/switch."""
+    selections = selections or {}
+    input_values = input_values or {}
+    visible = []
+    merged = copy.deepcopy(nodes)
+
+    def visit(name, ancestors):
+        if name in ancestors:
+            raise AssertionError("option cycle: %s" % name)
+        option = task["option"][name]
+        visible.append(name)
+        if option["type"] in ("select", "switch"):
+            selected = selections.get(name, option["default_case"])
+            case = next(case for case in option["cases"] if case["name"] == selected)
+            merge(merged, case.get("pipeline_override", {}))
+            for child in case.get("option", []):
+                visit(child, ancestors | {name})
+        elif option["type"] == "input":
+            override = copy.deepcopy(option["pipeline_override"])
+            values = input_values.get(name, {})
+            for field in option["inputs"]:
+                value = values.get(field["name"], field["default"])
+                for node in override.values():
+                    for key, placeholder in node["attach"].items():
+                        if placeholder == "{%s}" % field["name"]:
+                            node["attach"][key] = value
+            merge(merged, override)
+        # The checkbox branch in the actual OptionEditor never renders case.option.
+
+    for name in task["task"][0]["option"]:
+        visit(name, set())
+    return visible, merged
+
+
 class GiftRenderingTests(unittest.TestCase):
     def setUp(self):
         self.characters, self.gifts = catalogs()
         self.task = config.render_task(self.characters, self.gifts)
         self.nodes = config.render_config(self.characters)
 
-    def test_daily_task_has_no_automatic_selection(self):
+    def test_daily_task_starts_with_one_empty_plan_and_no_checkbox(self):
         task = self.task["task"][0]
         self.assertEqual(
             (task["name"], task["entry"], task["group"]),
             ("Gift", "GiftEntry", ["Daily"]),
         )
+        self.assertEqual(task["option"], ["GiftPlanCount", "GiftDryRun"])
         self.assertNotIn("default_check", task)
         self.assertNotIn("default_selected", task)
-        recipients = self.task["option"]["GiftRecipients"]
-        self.assertEqual(recipients["type"], "checkbox")
-        self.assertEqual(recipients["default_case"], [])
-        self.assertEqual(
-            [case["name"] for case in recipients["cases"]], ["char_1951", "char_1952"]
+        self.assertNotIn("GiftRecipients", self.task["option"])
+        self.assertTrue(
+            all(option["type"] != "checkbox" for option in self.task["option"].values())
         )
+        visible, merged = mxu_render(self.task, self.nodes)
+        self.assertEqual(visible, ["GiftPlanCount", "GiftRecipient_1", "GiftDryRun"])
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_mode"], "rows")
+        self.assertEqual(merged["GiftSettings"]["attach"]["plan_count"], 1)
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_1"], "")
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_2"], "")
+        self.assertNotIn("plans", merged["GiftSettings"]["attach"])
+        self.assertFalse(merged["GiftConfig_char_1951"]["attach"]["selected"])
         self.assertNotIn("GiftConfig_char_14", self.nodes)
 
-    def test_recipient_options_only_override_their_own_attach(self):
-        seen = set()
-        for case in self.task["option"]["GiftRecipients"]["cases"]:
-            identifier = case["name"]
-            node = "GiftConfig_%s" % identifier
-            self.assertEqual(
-                case["pipeline_override"], {node: {"attach": {"selected": True}}}
-            )
-            self.assertNotIn(node, seen)
-            seen.add(node)
+    def test_mxu_checkbox_branch_does_not_expand_child_options(self):
+        legacy = copy.deepcopy(self.task)
+        legacy["option"]["GiftPlanCount"]["type"] = "checkbox"
+        visible, merged = mxu_render(legacy, self.nodes)
+        self.assertEqual(visible, ["GiftPlanCount", "GiftDryRun"])
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_mode"], "legacy")
+
+    def test_plan_count_cases_expand_exactly_the_requested_rows(self):
+        count = self.task["option"]["GiftPlanCount"]
+        self.assertEqual((count["type"], count["default_case"]), ("select", "1"))
+        self.assertEqual([case["name"] for case in count["cases"]], ["1", "2"])
+        for number, case in enumerate(count["cases"], 1):
             self.assertEqual(
                 case["option"],
-                ["GiftPriority_%s" % identifier, "GiftLimit_%s" % identifier],
+                ["GiftRecipient_%d" % row for row in range(1, number + 1)],
             )
             self.assertEqual(
-                case["icon"], "resource/base/image/Gift/Characters/%s.png" % identifier
+                case["pipeline_override"],
+                {
+                    "GiftSettings": {
+                        "attach": {"recipient_mode": "rows", "plan_count": number}
+                    }
+                },
             )
-            for option in case["option"]:
-                override = self.task["option"][option]["pipeline_override"]
-                self.assertEqual(set(override), {node})
-                self.assertEqual(set(override[node]), {"attach"})
+            visible, merged = mxu_render(
+                self.task, self.nodes, {"GiftPlanCount": str(number)}
+            )
+            self.assertEqual(visible, ["GiftPlanCount", *case["option"], "GiftDryRun"])
+            self.assertEqual(merged["GiftSettings"]["attach"]["plan_count"], number)
 
-    def test_checkbox_merge_keeps_all_selected_characters_and_their_values(self):
+    def test_recipient_rows_override_only_the_row_and_own_character(self):
+        for row in (1, 2):
+            picker = self.task["option"]["GiftRecipient_%d" % row]
+            self.assertEqual(
+                (picker["type"], picker["default_case"]), ("select", "None")
+            )
+            self.assertEqual(
+                [case["name"] for case in picker["cases"]],
+                ["None", "char_1951", "char_1952"],
+            )
+            self.assertEqual(
+                picker["cases"][0]["pipeline_override"],
+                {"GiftSettings": {"attach": {"recipient_%d" % row: ""}}},
+            )
+            self.assertNotIn("option", picker["cases"][0])
+            for case in picker["cases"][1:]:
+                identifier = case["name"]
+                self.assertEqual(
+                    case["pipeline_override"],
+                    {
+                        "GiftConfig_%s" % identifier: {"attach": {"selected": True}},
+                        "GiftSettings": {"attach": {"recipient_%d" % row: identifier}},
+                    },
+                )
+                self.assertEqual(
+                    case["option"],
+                    ["GiftPriorityMode_%s" % identifier, "GiftLimit_%s" % identifier],
+                )
+                self.assertEqual(
+                    case["icon"],
+                    "resource/base/image/Gift/Characters/%s.png" % identifier,
+                )
+
+    def test_selecting_character_reaches_list_fields_and_limit(self):
+        visible, merged = mxu_render(
+            self.task, self.nodes, {"GiftRecipient_1": "char_1951"}
+        )
+        self.assertEqual(
+            visible,
+            [
+                "GiftPlanCount",
+                "GiftRecipient_1",
+                "GiftPriorityMode_char_1951",
+                "GiftPrimary_char_1951",
+                "GiftBackup_char_1951",
+                "GiftExtra_char_1951",
+                "GiftLimit_char_1951",
+                "GiftDryRun",
+            ],
+        )
+        self.assertTrue(merged["GiftConfig_char_1951"]["attach"]["selected"])
+        self.assertEqual(
+            merged["GiftConfig_char_1951"]["attach"]["gift_mode"], "choices"
+        )
+        self.assertEqual(merged["GiftConfig_char_1951"]["attach"]["primary_gift"], "")
+        self.assertEqual(merged["GiftConfig_char_1951"]["attach"]["backup_gift"], "")
+
+    def test_attach_merge_replaces_nested_maps_but_preserves_flat_recipient_rows(self):
+        nested = {"GiftSettings": {"attach": {"plans": {"1": "char_1952"}}}}
+        merge(nested, {"GiftSettings": {"attach": {"plans": {"2": "char_1951"}}}})
+        self.assertEqual(nested["GiftSettings"]["attach"]["plans"], {"2": "char_1951"})
         merged = copy.deepcopy(self.nodes)
-        cases = self.task["option"]["GiftRecipients"]["cases"]
-        for index, case in enumerate(cases):
+        for row, character in ((1, "char_1952"), (2, "char_1951")):
+            case = next(
+                case
+                for case in self.task["option"]["GiftRecipient_%d" % row]["cases"]
+                if case["name"] == character
+            )
+            attach = case["pipeline_override"]["GiftSettings"]["attach"]
+            self.assertEqual(attach, {"recipient_%d" % row: character})
+            self.assertTrue(
+                all(not isinstance(value, dict) for value in attach.values())
+            )
             merge(merged, case["pipeline_override"])
-            priority = self.task["option"][case["option"][0]]["pipeline_override"]
-            limit = self.task["option"][case["option"][1]]["pipeline_override"]
-            node = "GiftConfig_%s" % case["name"]
-            gift_override = copy.deepcopy(priority)
-            gift_override[node]["attach"]["gifts"] = (
-                "Food_003 > Furniture_draw_004" if index == 0 else "Food_003"
-            )
-            limit_override = copy.deepcopy(limit)
-            limit_override[node]["attach"]["limit"] = index + 1
-            merge(merged, gift_override)
-            merge(merged, limit_override)
+        settings = merged["GiftSettings"]["attach"]
         self.assertEqual(
-            merged["GiftConfig_char_1951"]["attach"],
-            {
-                "character_id": "char_1951",
-                "selected": True,
-                "gifts": "Food_003 > Furniture_draw_004",
-                "limit": 1,
-            },
+            (settings["recipient_1"], settings["recipient_2"]),
+            ("char_1952", "char_1951"),
         )
-        self.assertEqual(
-            merged["GiftConfig_char_1952"]["attach"],
-            {
-                "character_id": "char_1952",
-                "selected": True,
-                "gifts": "Food_003",
-                "limit": 2,
-            },
-        )
-        one_selected = copy.deepcopy(self.nodes)
-        merge(one_selected, cases[0]["pipeline_override"])
-        self.assertFalse(one_selected["GiftConfig_char_1952"]["attach"]["selected"])
+        self.assertNotIn("plans", settings)
 
-    def test_inputs_are_unbounded_priority_and_integer_daily_total(self):
-        for case in self.task["option"]["GiftRecipients"]["cases"]:
-            priority = self.task["option"][case["option"][0]]
-            limit = self.task["option"][case["option"][1]]
-            self.assertEqual(len(priority["inputs"]), 1)
-            self.assertEqual(priority["inputs"][0]["name"], "gifts")
-            self.assertEqual(priority["inputs"][0]["default"], "")
-            self.assertEqual(priority["inputs"][0]["pipeline_type"], "string")
-            self.assertNotIn("verify", priority["inputs"][0])
-            field = limit["inputs"][0]
-            self.assertEqual(
-                (field["name"], field["default"], field["pipeline_type"]),
-                ("limit", "3", "int"),
+    def test_two_rows_keep_character_gifts_and_limits_independent(self):
+        visible, merged = mxu_render(
+            self.task,
+            self.nodes,
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": "char_1952",
+                "GiftRecipient_2": "char_1951",
+                "GiftPrimary_char_1952": "Furniture_draw_004",
+                "GiftBackup_char_1952": "Food_003",
+                "GiftPrimary_char_1951": "Food_003",
+                "GiftLimit_char_1952": "1",
+                "GiftLimit_char_1951": "2",
+            },
+            {"GiftExtra_char_1952": {"extra_gifts": "Food_003 > Furniture_draw_004"}},
+        )
+        self.assertIn("GiftRecipient_2", visible)
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_1"], "char_1952")
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_2"], "char_1951")
+        self.assertNotIn("plans", merged["GiftSettings"]["attach"])
+        first = merged["GiftConfig_char_1952"]["attach"]
+        second = merged["GiftConfig_char_1951"]["attach"]
+        self.assertEqual(
+            (
+                first["primary_gift"],
+                first["backup_gift"],
+                first["extra_gifts"],
+                first["limit"],
+            ),
+            ("Furniture_draw_004", "Food_003", "Food_003 > Furniture_draw_004", 1),
+        )
+        self.assertEqual(
+            (
+                second["primary_gift"],
+                second["backup_gift"],
+                second["extra_gifts"],
+                second["limit"],
+            ),
+            ("Food_003", "", "", 2),
+        )
+
+    def test_none_rows_select_no_characters_and_clear_previous_row_assignment(self):
+        _, merged = mxu_render(self.task, self.nodes, {"GiftPlanCount": "2"})
+        self.assertTrue(
+            all(
+                not node["attach"]["selected"]
+                for name, node in merged.items()
+                if name.startswith("GiftConfig_")
             )
-            self.assertEqual(field["verify"], "^[1-3]$")
-            for valid in ("1", "2", "3"):
-                self.assertIsNotNone(re.fullmatch(field["verify"], valid))
-            for invalid in ("", "0", "4", "03", "-1", "1.5", "3\n"):
-                self.assertIsNone(re.fullmatch(field["verify"], invalid))
-            node = "GiftConfig_%s" % case["name"]
+        )
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_1"], "")
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_2"], "")
+        self.assertNotIn("plans", merged["GiftSettings"]["attach"])
+        picker = self.task["option"]["GiftRecipient_1"]
+        merge(merged, picker["cases"][1]["pipeline_override"])
+        merge(merged, picker["cases"][0]["pipeline_override"])
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_1"], "")
+
+    def test_duplicate_rows_reuse_one_character_configuration(self):
+        visible, merged = mxu_render(
+            self.task,
+            self.nodes,
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": "char_1951",
+                "GiftRecipient_2": "char_1951",
+                "GiftPrimary_char_1951": "Food_003",
+                "GiftLimit_char_1951": "2",
+            },
+        )
+        self.assertEqual(visible.count("GiftPriorityMode_char_1951"), 2)
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_1"], "char_1951")
+        self.assertEqual(merged["GiftSettings"]["attach"]["recipient_2"], "char_1951")
+        self.assertNotIn("plans", merged["GiftSettings"]["attach"])
+        self.assertEqual(merged["GiftConfig_char_1951"]["attach"]["limit"], 2)
+        self.assertEqual(
+            merged["GiftConfig_char_1951"]["attach"]["primary_gift"], "Food_003"
+        )
+        self.assertFalse(merged["GiftConfig_char_1952"]["attach"]["selected"])
+
+    def test_list_and_custom_modes_apply_only_active_fields_and_keep_saved_text(self):
+        selections = {
+            "GiftRecipient_1": "char_1951",
+            "GiftPrimary_char_1951": "Food_003",
+            "GiftBackup_char_1951": "Furniture_draw_004",
+        }
+        text = "Furniture_draw_004 > Food_003"
+        saved = {
+            "GiftPriority_char_1951": {"gifts": text},
+            "GiftExtra_char_1951": {"extra_gifts": "Food_003 > Furniture_draw_004"},
+        }
+        original = copy.deepcopy(saved)
+        visible, merged = mxu_render(self.task, self.nodes, selections, saved)
+        self.assertNotIn("GiftPriority_char_1951", visible)
+        attachment = merged["GiftConfig_char_1951"]["attach"]
+        self.assertEqual(
+            (attachment["gift_mode"], attachment["gifts"]), ("choices", "")
+        )
+        self.assertEqual(attachment["extra_gifts"], "Food_003 > Furniture_draw_004")
+        selections["GiftPriorityMode_char_1951"] = "Custom"
+        visible, merged = mxu_render(self.task, self.nodes, selections, saved)
+        self.assertIn("GiftPriority_char_1951", visible)
+        for field in ("GiftPrimary", "GiftBackup", "GiftExtra"):
+            self.assertNotIn(field + "_char_1951", visible)
+        attachment = merged["GiftConfig_char_1951"]["attach"]
+        self.assertEqual(
+            (attachment["gift_mode"], attachment["gifts"]), ("manual", text)
+        )
+        for field in ("primary_gift", "backup_gift", "extra_gifts"):
+            self.assertEqual(attachment[field], "")
+        self.assertEqual(saved, original)
+
+    def test_extra_and_legacy_priority_inputs_are_unbounded_and_keep_original_keys(
+        self,
+    ):
+        for identifier in ("char_1951", "char_1952"):
+            for option, field in (
+                ("GiftPriority", "gifts"),
+                ("GiftExtra", "extra_gifts"),
+            ):
+                control = self.task["option"]["%s_%s" % (option, identifier)]
+                self.assertEqual(control["type"], "input")
+                self.assertEqual(len(control["inputs"]), 1)
+                input_field = control["inputs"][0]
+                self.assertEqual(
+                    (
+                        input_field["name"],
+                        input_field["default"],
+                        input_field["pipeline_type"],
+                    ),
+                    (field, "", "string"),
+                )
+                self.assertNotIn("verify", input_field)
+                self.assertNotIn("max_length", input_field)
+                self.assertEqual(
+                    control["pipeline_override"],
+                    {"GiftConfig_%s" % identifier: {"attach": {field: "{%s}" % field}}},
+                )
+        long_priority = " > ".join(["Food_003", "Furniture_draw_004"] * 160)
+        _, merged = mxu_render(
+            self.task,
+            self.nodes,
+            {"GiftRecipient_1": "char_1951"},
+            {"GiftExtra_char_1951": {"extra_gifts": long_priority}},
+        )
+        self.assertEqual(
+            merged["GiftConfig_char_1951"]["attach"]["extra_gifts"], long_priority
+        )
+
+    def test_limits_are_visible_integer_selects_with_only_one_two_three(self):
+        for identifier in ("char_1951", "char_1952"):
+            limit = self.task["option"]["GiftLimit_%s" % identifier]
+            self.assertEqual((limit["type"], limit["default_case"]), ("select", "3"))
+            self.assertEqual([case["name"] for case in limit["cases"]], ["1", "2", "3"])
+            for count, case in enumerate(limit["cases"], 1):
+                override = case["pipeline_override"]
+                self.assertEqual(
+                    override,
+                    {"GiftConfig_%s" % identifier: {"attach": {"limit": count}}},
+                )
+                self.assertIs(
+                    type(override["GiftConfig_%s" % identifier]["attach"]["limit"]), int
+                )
+
+    def test_plan_count_adapts_to_actual_giftable_characters(self):
+        third = copy.deepcopy(self.characters["characters"][2])
+        third["id"] = "char_1953"
+        self.characters["characters"].append(third)
+        for count in (1, 2, 3):
+            characters = copy.deepcopy(self.characters)
+            for index, character in enumerate(characters["characters"]):
+                character["giftable"] = 1 <= index <= count
+            task = config.render_task(characters, self.gifts)
+            cases = task["option"]["GiftPlanCount"]["cases"]
             self.assertEqual(
-                priority["pipeline_override"], {node: {"attach": {"gifts": "{gifts}"}}}
+                [case["name"] for case in cases], [str(i) for i in range(1, count + 1)]
             )
             self.assertEqual(
-                limit["pipeline_override"], {node: {"attach": {"limit": "{limit}"}}}
+                len(
+                    [
+                        name
+                        for name in task["option"]
+                        if name.startswith("GiftRecipient_")
+                    ]
+                ),
+                count,
             )
+            settings = config.render_config(characters)["GiftSettings"]["attach"]
+            self.assertEqual(
+                {
+                    key: value
+                    for key, value in settings.items()
+                    if re.fullmatch(r"recipient_[0-9]+", key)
+                },
+                {"recipient_%d" % i: "" for i in range(1, count + 1)},
+            )
+            self.assertNotIn("plans", settings)
 
     def test_data_nodes_are_inert_and_start_with_safe_defaults(self):
-        self.assertEqual(self.nodes["GiftSettings"]["attach"], {"dry_run": False})
+        self.assertEqual(
+            self.nodes["GiftSettings"]["attach"],
+            {
+                "dry_run": False,
+                "recipient_mode": "legacy",
+                "plan_count": 1,
+                "recipient_1": "",
+                "recipient_2": "",
+            },
+        )
         for name, node in self.nodes.items():
             self.assertEqual(node["recognition"], {"type": "DirectHit"})
             self.assertEqual(node["action"], {"type": "DoNothing"})
@@ -292,6 +567,10 @@ class GiftRenderingTests(unittest.TestCase):
                         "selected": False,
                         "gifts": "",
                         "limit": 3,
+                        "gift_mode": "manual",
+                        "primary_gift": "",
+                        "backup_gift": "",
+                        "extra_gifts": "",
                     },
                 )
 
@@ -394,6 +673,44 @@ class GiftTranslationTests(unittest.TestCase):
             "测试礼物甲 / Verified test gift",
             self.locales["en_us"]["task_gift_priority_desc"],
         )
+        self.assertEqual(
+            self.locales["en_us"]["task_gift_item_Food_003"], "Verified test gift"
+        )
+        for language in config.LANGUAGES:
+            self.assertEqual(
+                self.locales[language]["task_gift_item_Furniture_draw_004"],
+                "测试礼物乙",
+            )
+        for language in ("zh_cn", "zh_tw", "ja_jp", "ko_kr"):
+            self.assertEqual(
+                self.locales[language]["task_gift_item_Food_003"], "测试礼物甲"
+            )
+
+    def test_new_help_is_short_local_and_full_catalog_only_in_manual_priority(self):
+        task = config.render_task(self.characters, self.gifts)
+        for language, messages in self.locales.items():
+            with self.subTest(language=language):
+                self.assertLess(len(messages["task_gift_desc"]), 320)
+                self.assertNotIn("resource/base/data", messages["task_gift_desc"])
+                self.assertIn("1", messages["task_gift_plan_recipient_1"])
+                self.assertIn("2", messages["task_gift_plan_recipient_2"])
+                for option in task["option"].values():
+                    if option["type"] != "select":
+                        continue
+                    description = messages[option["description"][1:]]
+                    self.assertLess(len(description), 300)
+                    self.assertNotIn("- `", description)
+                    self.assertNotIn("task_gift_priority_desc", option["description"])
+        chinese = self.locales["zh_cn"]
+        self.assertEqual(chinese["task_gift_plan_count"], "赠礼方案数量")
+        self.assertEqual(chinese["task_gift_plan_recipient_1"], "方案 1 · 角色")
+        self.assertEqual(chinese["task_gift_recipient_none"], "请选择角色")
+        self.assertEqual(chinese["task_gift_primary_none"], "请选择首选礼物")
+        self.assertEqual(chinese["task_gift_backup_none"], "不使用备用礼物")
+        for phrase in ("不同角色", "共用", "只执行一次"):
+            self.assertIn(phrase, chinese["task_gift_recipient_row_desc"])
+        for phrase in ("当日累计", "不是本次追加", "重复运行", "已有次数"):
+            self.assertIn(phrase, chinese["task_gift_limit_desc"])
 
     def test_ui_help_contains_every_gift_id_original_name_source_and_example(self):
         for language, messages in self.locales.items():
@@ -415,9 +732,9 @@ class GiftTranslationTests(unittest.TestCase):
                 for gift in self.gifts["gifts"]:
                     self.assertIn("`%s`" % gift["id"], description)
                     self.assertIn(gift["names"]["zh_cn"], description)
-                self.assertIn("10", messages["task_gift_desc"])
-        for phrase in ("累计", "不是", "不购买", "未知喜好", "不代表不喜欢"):
-            self.assertIn(phrase, self.locales["zh_cn"]["task_gift_desc"])
+                self.assertIn("10", messages["task_gift_limit_desc"])
+        for phrase in ("不购买", "未知喜好", "不代表不喜欢"):
+            self.assertIn(phrase, self.locales["zh_cn"]["task_gift_priority_desc"])
 
     def test_wiki_names_cannot_inject_markdown_or_html_into_help(self):
         self.gifts["gifts"][0]["names"][
@@ -546,6 +863,30 @@ class GiftUpdateTests(unittest.TestCase):
             self.assertNotIn("\n", text.replace("\r\n", ""))
             self.assertEqual(json.loads(text)["cloud_game.keep"], "保留用户暂存改动")
 
+    def test_legacy_locale_keys_survive_catalog_reduction(self):
+        config.update(self.root)
+        reduced = copy.deepcopy(self.characters)
+        reduced["characters"][2]["giftable"] = False
+        fewer_gifts = copy.deepcopy(self.gifts)
+        fewer_gifts["gifts"].pop()
+        config.update(self.root, reduced, fewer_gifts)
+        for language in config.LANGUAGES:
+            path = (
+                self.root / "assets/resource/locales/interface" / (language + ".json")
+            )
+            messages = json.loads(path.read_text(encoding="utf-8"))
+            for key in (
+                "task_gift_recipients",
+                "task_gift_recipients_desc",
+                "task_gift_limit_input",
+                "task_gift_limit_invalid",
+                "task_gift_plan_recipient_2",
+                "task_gift_recipient_char_1952",
+                "task_gift_item_Furniture_draw_004",
+            ):
+                self.assertIn(key, messages)
+            self.assertEqual(messages["cloud_game.keep"], "保留用户暂存改动")
+
     def test_feature_drift_is_detected_and_repaired_without_touching_other_keys(self):
         config.update(self.root)
         path = self.root / config.TASK_PATH
@@ -637,14 +978,93 @@ class GiftRepositoryTests(unittest.TestCase):
         eligible = {
             item["id"] for item in self.characters["characters"] if item["giftable"]
         }
-        cases = self.task["option"]["GiftRecipients"]["cases"]
-        self.assertEqual(len(cases), 23)
-        self.assertEqual({case["name"] for case in cases}, eligible)
-        for case in cases:
-            self.assertTrue((ROOT / "assets" / case["icon"]).is_file(), case["name"])
-            self.assertIn("GiftConfig_%s" % case["name"], self.nodes)
-            for child in case["option"]:
-                self.assertIn(child, self.task["option"])
+        self.assertEqual(len(eligible), 23)
+        counts = self.task["option"]["GiftPlanCount"]["cases"]
+        self.assertEqual(
+            [case["name"] for case in counts],
+            [str(i) for i in range(1, len(eligible) + 1)],
+        )
+        for row in range(1, len(eligible) + 1):
+            picker = self.task["option"]["GiftRecipient_%d" % row]
+            self.assertEqual(picker["type"], "select")
+            self.assertEqual(picker["cases"][0]["name"], "None")
+            self.assertEqual({case["name"] for case in picker["cases"][1:]}, eligible)
+            for case in picker["cases"][1:]:
+                self.assertTrue(
+                    (ROOT / "assets" / case["icon"]).is_file(), case["name"]
+                )
+                self.assertIn("GiftConfig_%s" % case["name"], self.nodes)
+                for child in case["option"]:
+                    self.assertIn(child, self.task["option"])
+        for name, option in self.task["option"].items():
+            if option["type"] in ("select", "switch"):
+                case_names = [case["name"] for case in option["cases"]]
+                self.assertEqual(len(case_names), len(set(case_names)), name)
+                self.assertIn(option["default_case"], case_names, name)
+                for case in option["cases"]:
+                    self.assertFalse(
+                        set(case.get("option", [])) - set(self.task["option"])
+                    )
+                    self.assertFalse(
+                        set(case.get("pipeline_override", {})) - set(self.nodes)
+                    )
+
+    def test_every_real_gift_is_selectable_in_both_dropdowns_and_has_existing_icon(
+        self,
+    ):
+        eligible = [
+            item["id"] for item in self.characters["characters"] if item["giftable"]
+        ]
+        gift_ids = [gift["id"] for gift in self.gifts["gifts"]]
+        icons = {
+            gift["id"]: "resource/base/image/" + gift["image"]["path"]
+            for gift in self.gifts["gifts"]
+        }
+        for gift_id, icon in icons.items():
+            self.assertTrue((ROOT / "assets" / icon).is_file(), gift_id)
+            self.assertIn("Gift/Gifts/", icon)
+        for character in eligible:
+            for option, field in (
+                ("GiftPrimary", "primary_gift"),
+                ("GiftBackup", "backup_gift"),
+            ):
+                picker = self.task["option"]["%s_%s" % (option, character)]
+                self.assertEqual(
+                    (picker["type"], picker["default_case"]), ("select", "None")
+                )
+                self.assertEqual(
+                    [case["name"] for case in picker["cases"]], ["None", *gift_ids]
+                )
+                self.assertEqual(
+                    picker["cases"][0]["pipeline_override"],
+                    {"GiftConfig_%s" % character: {"attach": {field: ""}}},
+                )
+                for case in picker["cases"][1:]:
+                    self.assertEqual(case["label"], "$task_gift_item_%s" % case["name"])
+                    self.assertEqual(case["icon"], icons[case["name"]])
+                    self.assertEqual(
+                        case["pipeline_override"],
+                        {
+                            "GiftConfig_%s"
+                            % character: {"attach": {field: case["name"]}}
+                        },
+                    )
+        character = eligible[0]
+        for gift_id in gift_ids:
+            _, merged = mxu_render(
+                self.task,
+                self.nodes,
+                {
+                    "GiftRecipient_1": character,
+                    "GiftPrimary_%s" % character: gift_id,
+                    "GiftBackup_%s" % character: gift_id,
+                },
+            )
+            attachment = merged["GiftConfig_%s" % character]["attach"]
+            self.assertEqual(
+                (attachment["primary_gift"], attachment["backup_gift"]),
+                (gift_id, gift_id),
+            )
 
     def test_real_interface_locales_cover_every_reference_and_all_214_gifts(self):
         required = set(references(self.task))
@@ -666,10 +1086,16 @@ class GiftRepositoryTests(unittest.TestCase):
                 ),
                 214,
             )
+            item_keys = {key for key in messages if key.startswith("task_gift_item_")}
+            self.assertEqual(len(item_keys), 214)
             for gift in self.gifts["gifts"]:
                 self.assertIn("`%s`" % gift["id"], description)
                 self.assertIn(
                     config._markdown_name(gift["names"]["zh_cn"]), description
+                )
+                self.assertEqual(
+                    messages["task_gift_item_%s" % gift["id"]],
+                    gift["names"].get(language, gift["names"]["zh_cn"]),
                 )
 
     def test_real_agent_locales_have_identical_gift_keys_and_formatting(self):

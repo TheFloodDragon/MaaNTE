@@ -25,6 +25,7 @@ from test_gift_actions import (
     C1,
     C2,
     ACTIONS,
+    CONFIG,
     PIPELINE,
     ROOT,
     GiftWorld,
@@ -32,6 +33,7 @@ from test_gift_actions import (
     actions,
     make_config,
     patched_actions,
+    ui_config,
 )
 
 
@@ -119,7 +121,9 @@ class NativeGiftFlowTests(unittest.TestCase):
         Tasker.set_save_on_error(False)
         Tasker.set_debug_mode(False)
 
-    def run_flow(self, world=None, config=None, *, before_node=None, stop_at=None):
+    def run_flow(
+        self, world=None, config=None, *, before_node=None, stop_at=None, overrides=None
+    ):
         world = world or GiftWorld()
         data = copy.deepcopy(PIPELINE)
         data.update(make_config() if config is None else config)
@@ -184,7 +188,7 @@ class NativeGiftFlowTests(unittest.TestCase):
                 self.assertTrue(tasker.bind(resource, controller))
                 with patched_actions(world) as messages:
                     try:
-                        job = tasker.post_task("GiftEntry")
+                        job = tasker.post_task("GiftEntry", overrides or {})
                         if stop_at is not None:
                             self.assertTrue(
                                 reached.wait(5), "未到达停止边界: " + str(trace)
@@ -252,6 +256,50 @@ class NativeGiftFlowTests(unittest.TestCase):
                 self.assertIn("GiftSummary", result.nodes)
                 self.assertFalse(any(not ok for _, ok in result.results))
                 self.assertEqual(self.summary(result)[0], remaining)
+
+    def test_visible_ui_rows_preserve_order_and_gift_choices_in_native_task(self):
+        config, visible = ui_config(
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": C2,
+                "GiftRecipient_2": C1,
+                "GiftPrimary_" + C2: B,
+                "GiftPrimary_" + C1: A,
+                "GiftLimit_" + C2: "1",
+                "GiftLimit_" + C1: "2",
+            }
+        )
+        for character in (C1, C2):
+            self.assertIn("GiftPrimary_" + character, visible)
+            self.assertIn("GiftLimit_" + character, visible)
+        result = self.run_flow(config=config)
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.world.sends, [(C2, B), (C1, A), (C1, A)])
+        self.assertIsNone(result.pending)
+        self.assertEqual(result.attempts, 3)
+        self.assertEqual([state.character_id for state in result.states], [C2, C1])
+
+    def test_native_override_array_merges_row_plans_and_choice_fields(self):
+        pieces = []
+        ui_config(
+            {
+                "GiftPlanCount": "2",
+                "GiftRecipient_1": C2,
+                "GiftRecipient_2": C1,
+                "GiftPrimary_" + C2: B,
+                "GiftPrimary_" + C1: A,
+                "GiftBackup_" + C1: C,
+                "GiftLimit_" + C2: "1",
+                "GiftLimit_" + C1: "2",
+            },
+            overrides=pieces,
+        )
+        result = self.run_flow(config=copy.deepcopy(CONFIG), overrides=pieces)
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.world.sends, [(C2, B), (C1, A), (C1, A)])
+        self.assertEqual([state.character_id for state in result.states], [C2, C1])
+        self.assertEqual(result.states[1].recipient.gifts, (A, C))
+        self.assertIsNone(result.pending)
 
     def test_public_scene_navigation_returns_to_real_bond_ready_guard(self):
         result = self.run_flow(GiftWorld(page="world"), make_config([(C1, (A,), 1)]))

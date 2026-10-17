@@ -334,27 +334,92 @@ def _waiting(kind: str, error: str) -> None:
         raise _FlowError(error)
 
 
+def _gift_priority(catalog: Catalog, config: dict) -> tuple[str, ...]:
+    mode = config.get("gift_mode", "manual")
+    if mode == "manual":
+        return catalog.parse_priority(config.get("gifts"))
+    if mode != "choices":
+        raise _FlowError("invalid_config")
+    primary = config.get("primary_gift")
+    backup = config.get("backup_gift", "")
+    extra = config.get("extra_gifts", "")
+    if (
+        not isinstance(primary, str)
+        or not primary.strip()
+        or not isinstance(backup, str)
+        or not isinstance(extra, str)
+    ):
+        raise _FlowError("invalid_config")
+    parts = [primary]
+    if backup.strip():
+        parts.append(backup)
+    if extra.strip():
+        parts.append(extra)
+    # UI 下拉与自由输入共用严格目录解析；跨字段重复项保序去重。
+    return catalog.parse_priority(" > ".join(parts))
+
+
+def _recipient_order(context: Context, catalog: Catalog, settings: dict):
+    mode = settings.get("recipient_mode", "legacy")
+    if mode == "legacy":
+        return list(catalog.characters), []
+    if mode != "rows":
+        raise _FlowError("invalid_config")
+    count = settings.get("plan_count")
+    maximum = sum(record["giftable"] for record in catalog.characters.values())
+    if type(count) is not int or not 1 <= count <= maximum:
+        raise _FlowError("invalid_config")
+    order, invalid = [], []
+    for index in range(1, count + 1):
+        _stop(context)
+        # attach 的字典合并仅保留平级字段，不能将各行放进会被替换的嵌套对象。
+        character_id = settings.get("recipient_%d" % index)
+        if character_id == "":
+            continue
+        if not isinstance(character_id, str):
+            invalid.append(("plan_%d" % index, "invalid_config"))
+        elif (
+            character_id not in catalog.characters
+            or not catalog.characters[character_id]["giftable"]
+        ):
+            invalid.append((character_id, "unknown_character"))
+        elif character_id not in order:
+            order.append(character_id)
+        else:
+            # 同一角色的多个编辑入口共用配置，仅按首次出现的位置执行一次。
+            logger.debug(
+                "赠礼方案重复角色已去重 | row=%d character=%s", index, character_id
+            )
+    return order, invalid
+
+
 def _config(
     context: Context, catalog: Catalog
 ) -> tuple[list[Recipient], list[tuple[str, str]], bool]:
-    settings = context.get_node_data("GiftSettings") or {}
-    dry_run = settings.get("attach", {}).get("dry_run")
-    if type(dry_run) is not bool:
+    node = context.get_node_data("GiftSettings") or {}
+    settings = node.get("attach", {})
+    if not isinstance(settings, dict) or type(settings.get("dry_run")) is not bool:
         raise _FlowError("invalid_config")
-    recipients, invalid = [], []
-    for character_id, record in catalog.characters.items():
+    dry_run = settings["dry_run"]
+    order, invalid = _recipient_order(context, catalog, settings)
+    rows = settings.get("recipient_mode", "legacy") == "rows"
+    recipients = []
+    for character_id in order:
         _stop(context)
+        record = catalog.characters[character_id]
         node = context.get_node_data("GiftConfig_" + character_id) or {}
         config = node.get("attach", {})
-        if config.get("selected") is False or not config:
+        if not rows and (
+            not config or isinstance(config, dict) and config.get("selected") is False
+        ):
             continue
-        if config.get("selected") is not True:
+        if not isinstance(config, dict) or config.get("selected") is not True:
             invalid.append((character_id, "invalid_config"))
             continue
         try:
             if not record.get("giftable") or config.get("character_id") != character_id:
                 raise _FlowError("unknown_character")
-            gifts = catalog.parse_priority(config.get("gifts"))
+            gifts = _gift_priority(catalog, config)
             recipients.append(Recipient(character_id, gifts, config.get("limit")))
         except (CatalogError, GiftSafetyError, _FlowError, TypeError) as exc:
             logger.warning("赠礼配置无效 | character=%s error=%s", character_id, exc)
