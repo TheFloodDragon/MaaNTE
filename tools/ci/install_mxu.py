@@ -101,6 +101,15 @@ def install_agent():
 
     interface["agent"]["child_args"] = ["-u", r"./agent/main.py"]
 
+    # PI v2.7 pretask：发行包使用内置 Python；Windows 用 pythonw 避免弹出控制台窗口。
+    for pretask in interface.get("pretask", []):
+        if pretask.get("name") == "CloudGameWebLaunch":
+            if sys.platform.startswith("win"):
+                pretask["exec"] = r"./python/pythonw.exe"
+            else:
+                pretask["exec"] = interface["agent"]["child_exec"]
+            pretask["args"] = [r"./agent/cloud_web_start.py"]
+
     with open(install_path / "interface.json", "w", encoding="utf-8") as f:
         json.dump(interface, f, ensure_ascii=False, indent=4)
 

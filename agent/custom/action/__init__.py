@@ -10,6 +10,8 @@ from .rhythm.feats.select_song import *
 from .Common.click import *
 from .Common.enable_node import *
 from .Common.resize_game_window import *
+from .cloud_game import *
+from .cloud_game_web import *
 from .realtime_task import *
 from .Navi import *
 from .MapTeleport import *
@@ -50,6 +52,24 @@ __all__ = [
     "ClickOverride",
     "EnableNode",
     "ResizeGameWindow",
+    "CloudGameReset",
+    "CloudGameWaitLogin",
+    "CloudGameQueueWait",
+    "CloudGameClick",
+    "CloudGameConfirmReady",
+    "CloudGameHandoff",
+    "CloudGameFail",
+    "CloudGameOwnedDialog",
+    "CloudGameFinish",
+    "cleanup_cloud_session",
+    "CloudWebReset",
+    "CloudWebLogin",
+    "CloudWebLobby",
+    "CloudWebQueue",
+    "CloudWebWorld",
+    "CloudWebFinish",
+    "CloudWebFail",
+    "cleanup_cloud_web_session",
     "AutoTetris",
     "AutoRhythmPlay",
     "AutoRhythmRepeatDecision",
