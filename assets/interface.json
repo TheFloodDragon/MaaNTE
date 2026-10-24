@@ -116,9 +116,15 @@
             "default_expand": true
         }
     ],
-    // 全局选项：对所有任务生效（MXU >= v2.3.0 在「设置 → 任务设置」中编辑）
+    // 全局选项：对所有任务生效（MXU >= v2.3.0 在「设置 → 任务设置」中编辑）。
+    // 只有列在这里的选项会在运行时合并，setting 只负责显示；子选项随父选项的 case 合并
     "global_option": [
-        "CombatScheme"
+        "CombatScheme",
+        "CombatTeamSize",
+        "CombatDisabledActions",
+        "CombatLockTarget",
+        "CombatSearchTurn",
+        "CombatClearConfirm"
     ],
     "setting": [
         {
@@ -126,7 +132,20 @@
             "label": "$setting_combat_label",
             "description": "$setting_combat_desc",
             "option": [
-                "CombatScheme"
+                "CombatScheme",
+                "CombatTeamSize"
+            ],
+            "default_expand": true
+        },
+        {
+            "name": "CombatStrategy",
+            "label": "$setting_combat_strategy_label",
+            "description": "$setting_combat_strategy_desc",
+            "option": [
+                "CombatDisabledActions",
+                "CombatLockTarget",
+                "CombatSearchTurn",
+                "CombatClearConfirm"
             ],
             "default_expand": true
         }

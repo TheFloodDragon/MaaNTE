@@ -3,8 +3,10 @@
 其他 CustomAction 直接调用即可复用整套战斗（读取全局战斗配置，可按调用方覆盖）：
 
     from custom.action.Combat import run_combat
-    result = run_combat(context, overrides={"max_duration": 120})
+    result = run_combat(context, overrides={"max_duration": 120, "use_ultimate": False})
     if not result.success: ...
+
+可覆盖的参数见 settings.CombatOptions。
 """
 
 from __future__ import annotations
@@ -23,7 +25,8 @@ from .scheme import CombatScheme, SchemeError
 from .settings import CombatOptions, collect_layers, merge_options
 
 ENEMY_NODE = "CombatEnemyVisible"
-_announced: set[tuple[str, str]] = set()
+_announced: set[tuple] = set()
+_DEFAULTS = CombatOptions()
 
 
 def _t(key: str, *args) -> str:
@@ -93,13 +96,34 @@ class PrintReporter(Reporter):
     def scheme_error(self, exc: SchemeError) -> None:
         self._print("combat.scheme_error", describe_scheme_error(exc))
 
+    def strategy_hint(self, changes) -> None:
+        parts = []
+        for kind, *args in changes:
+            if kind == "disabled":
+                args = ["/".join(_t("combat.action.%s" % action) for action in args[0])]
+            parts.append(_t("combat.strategy.%s" % kind, *args))
+        self._print("combat.strategy_hint", " | ".join(parts))
 
-def _announce_team(reporter, scheme: CombatScheme) -> None:
-    """同一方案每个进程只提示一次配队要求（持续模式下不刷屏）。"""
-    key = (scheme.source, scheme.name)
-    if scheme.team and key not in _announced and hasattr(reporter, "team_hint"):
+
+def strategy_changes(options: CombatOptions) -> tuple[tuple, ...]:
+    """与默认值不同的战斗策略，开战前提示一次，免得用户忘了自己关过什么。"""
+    changes: list[tuple] = []
+    if options.team_size != _DEFAULTS.team_size:
+        changes.append(("team_size", options.team_size))
+    if options.disabled_actions:
+        changes.append(("disabled", options.disabled_actions))
+    if not options.lock_target:
+        changes.append(("lock_off",))
+    if options.search_turn:
+        changes.append(("search_turn",))
+    return tuple(changes)
+
+
+def _announce_once(key: tuple, action) -> None:
+    """同一提示每个进程只输出一次（持续模式下不刷屏）。"""
+    if key not in _announced:
         _announced.add(key)
-        reporter.team_hint(scheme)
+        action()
 
 
 def build_engine(context, scheme: CombatScheme, options: CombatOptions, reporter: Reporter) -> CombatEngine:
@@ -134,6 +158,10 @@ def build_engine(context, scheme: CombatScheme, options: CombatOptions, reporter
         max_duration=options.max_duration,
         clear_confirm=options.clear_confirm,
         hud_lost_timeout=options.hud_lost_timeout,
+        team_size=options.team_size,
+        lock_target=options.lock_target,
+        search_turn=options.search_turn,
+        disabled=frozenset(options.disabled_actions),
     )
     return CombatEngine(runtime, driver, scheme, config, reporter)
 
@@ -154,11 +182,14 @@ def run_combat(
         scheme = load_scheme(options.scheme, options.custom_scheme)
     except SchemeError as exc:
         logger.warning("combat scheme load failed: %s", exc)
-        if hasattr(reporter, "scheme_error"):
-            reporter.scheme_error(exc)
+        reporter.scheme_error(exc)
         return CombatResult.of(EndReason.SCHEME_ERROR)
     for warning in scheme.warnings:
         logger.warning("combat scheme %s: %s", scheme.source, warning)
-    _announce_team(reporter, scheme)
+    if scheme.team:
+        _announce_once(("team", scheme.source, scheme.name), lambda: reporter.team_hint(scheme))
+    changes = strategy_changes(options)
+    if changes:
+        _announce_once(("strategy",) + changes, lambda: reporter.strategy_hint(changes))
     logger.debug("combat start: scheme=%s options=%s", scheme.source, options)
     return build_engine(context, scheme, options, reporter).run()

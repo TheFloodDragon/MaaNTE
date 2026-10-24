@@ -20,6 +20,9 @@ class EndReason:
 # 视为"正常结束"的原因：把画面交还调用方的 next 继续识别
 SUCCESS_REASONS = frozenset({EndReason.CLEARED, EndReason.TIMEOUT, EndReason.HUD_LOST})
 
+# 战斗策略里可以禁用的动作。名称同时用作选项 use_<name> 与 agent i18n key combat.action.<name> 的后缀
+TOGGLE_ACTIONS = ("ultimate", "skill", "arc", "dodge", "jump", "switch")
+
 
 @dataclass(frozen=True)
 class CombatResult:

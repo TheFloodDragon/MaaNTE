@@ -1,0 +1,20 @@
+// 快速切人：每位角色只放 R → Q → E，不额外普攻，在场约 1 秒就切下一位。
+// 技能循环最快，适合靠频繁切人打出环合反应、技能冷却短的队伍。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.quick_swap",
+    "description": "每位角色 R → Q → E 后立刻切下一位（在场不足 1 秒用普攻补足）",
+    "combos": {
+        "default": "arc, ultimate, skill"
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            1,
+            2,
+            3,
+            4
+        ],
+        "min_field_time": 1.0
+    }
+}

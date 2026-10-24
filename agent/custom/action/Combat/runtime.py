@@ -75,6 +75,8 @@ class Runtime:
         self._snap: Snapshot = INVALID_SNAPSHOT
         self._snap_at = float("-inf")
         self.monitor: Monitor | None = None
+        self.targeting = None  # targeting.Targeting，战斗期间由引擎挂上
+        self._maintaining = False
 
     # ---- 停止与结束 ----
     def check(self) -> None:
@@ -85,11 +87,13 @@ class Runtime:
             if reason is not None:
                 raise CombatEnded(reason)
 
-    def arm(self, monitor: Monitor) -> None:
+    def arm(self, monitor: Monitor, targeting=None) -> None:
         self.monitor = monitor
+        self.targeting = targeting
 
     def disarm(self) -> None:
         self.monitor = None
+        self.targeting = None
 
     # ---- 感知 ----
     def snapshot(self, max_age: float = SNAPSHOT_INTERVAL) -> Snapshot:
@@ -107,6 +111,8 @@ class Runtime:
             self._snap_at = now
             if self.monitor is not None:
                 self.monitor.update(self._snap)
+            if self.targeting is not None:
+                self.targeting.observe(self._snap)
         return self._snap
 
     def fresh(self) -> Snapshot:
@@ -127,14 +133,29 @@ class Runtime:
             self._sleeper(min(SLEEP_SLICE, remaining))
 
     def wait_ready(self, limit: float = 15.0) -> Snapshot:
-        """等到可以接收战斗输入（HUD 可见且非黑屏）。截图失败视为可输入，避免卡死。"""
+        """等到可以接收战斗输入（HUD 可见且非黑屏）。截图失败视为可输入，避免卡死。
+
+        HUD 可见时顺带执行锁敌维护（重锁 / 转视角），所以维护动作总落在两条输入之间。
+        """
         deadline = self.now() + limit
         while True:
             self.check()
             snap = self.snapshot()
-            if not snap.valid or snap.ready or self.now() >= deadline:
+            if snap.ready:
+                self._maintain()
+                return snap
+            if not snap.valid or self.now() >= deadline:
                 return snap
             self.sleep(SLEEP_SLICE)
+
+    def _maintain(self) -> None:
+        if self.targeting is None or self._maintaining:
+            return
+        self._maintaining = True  # 维护动作自身的等待不会再次触发维护
+        try:
+            self.targeting.maintain()
+        finally:
+            self._maintaining = False
 
     def wait_for_enemy(self, timeout: float) -> bool:
         """等待进入战斗（连续 ENTER_HITS 帧见到敌人血条）。timeout<=0 表示一直等。"""

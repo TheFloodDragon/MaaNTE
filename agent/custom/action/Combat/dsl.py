@@ -2,7 +2,7 @@
 
     l_click(0.5), jump          # 逗号顺序执行，# 后为注释
     ultimate, skill, l_click(1.5)
-    walk(w, 0.3), dodge
+    walk(w, 0.3), dodge(s), sprint(0.8), walk(wa, 0.2), lock, turn(-90)
 
 用 ast 解析后只接受白名单节点，参数只走 literal_eval（裸标识符当作字符串），
 不存在任何回退到对象属性/方法的路径。条件分支、循环、赋值等暂不支持，编译期报错。
@@ -13,10 +13,11 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
-from .keys import ALLOWED_KEYS, DIRECTIONS, MOUSE_CONTACT
+from .keys import ALLOWED_KEYS, DIRECTIONS, MOUSE_CONTACT, OPPOSITE_DIRECTIONS
 
 MAX_COMMANDS = 200
 MAX_SECONDS = 10.0
+MAX_DEGREES = 360
 _REQUIRED = object()
 _PUNCT = str.maketrans({"，": ",", "（": "(", "）": ")", "：": ":"})
 
@@ -39,7 +40,8 @@ class ComboError(ValueError):
         super().__init__("%s%s %s" % (where, code, " ".join(map(str, params))))
 
 
-# 参数：(名称, 类型, 默认值)。类型 sec=秒(>=0) pos=秒(>0) key/button/dir/slot
+# 参数：(名称, 类型, 默认值)。类型 sec=秒(>=0) pos=秒(>0) deg=度(±360)
+# dir=1~2 个方向键(wa) key/button/slot
 _SPECS: dict[str, tuple[tuple[str, str, object], ...]] = {
     "skill": (("seconds", "sec", 0.0),),
     "ultimate": (),
@@ -50,8 +52,11 @@ _SPECS: dict[str, tuple[tuple[str, str, object], ...]] = {
     "r_hold": (("seconds", "pos", 0.3),),
     "wait": (("seconds", "pos", _REQUIRED),),
     "jump": (),
-    "dodge": (),
+    "dodge": (("direction", "dir", ""),),
+    "sprint": (("seconds", "pos", 1.0),),
     "walk": (("direction", "dir", _REQUIRED), ("seconds", "pos", _REQUIRED)),
+    "lock": (),
+    "turn": (("degrees", "deg", _REQUIRED),),
     "switch": (("slot", "slot", _REQUIRED),),
     "keydown": (("key", "key", _REQUIRED),),
     "keyup": (("key", "key", _REQUIRED),),
@@ -81,9 +86,13 @@ def _coerce(kind: str, value, cmd: str, param: str, node):
     def bad():
         return ComboError("bad_value", *_pos(node), cmd, param, value)
 
-    if kind in ("sec", "pos"):
+    if kind in ("sec", "pos", "deg"):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise bad()
+        if kind == "deg":
+            if not -MAX_DEGREES <= value <= MAX_DEGREES:
+                raise ComboError("degrees_out_of_range", *_pos(node), cmd, param, value, MAX_DEGREES)
+            return float(value)
         if value < 0 or value > MAX_SECONDS or (kind == "pos" and value <= 0):
             raise ComboError("out_of_range", *_pos(node), cmd, param, value, MAX_SECONDS)
         return float(value)
@@ -98,10 +107,25 @@ def _coerce(kind: str, value, cmd: str, param: str, node):
     if not isinstance(value, str):
         raise bad()
     value = value.strip().lower()
-    allowed = {"key": ALLOWED_KEYS, "button": MOUSE_CONTACT, "dir": DIRECTIONS}[kind]
+    if kind == "dir":
+        if not _valid_direction(value):
+            raise bad()
+        return value
+    allowed = {"key": ALLOWED_KEYS, "button": MOUSE_CONTACT}[kind]
     if value not in allowed:
         raise bad()
     return value
+
+
+def _valid_direction(value: str) -> bool:
+    """1~2 个不重复、不相反的方向键：w、a、wa、sd……（ws、ad 不行）。"""
+    keys = set(value)
+    return (
+        1 <= len(value) <= 2
+        and len(keys) == len(value)
+        and keys <= DIRECTIONS
+        and not any(pair <= keys for pair in OPPOSITE_DIRECTIONS)
+    )
 
 
 def _command(node, source: str) -> Command:

@@ -98,8 +98,9 @@ class RunCombatTests(unittest.TestCase):
         result = combat.run_combat(ctx, overrides={"scheme": "basic_attack", "max_duration": 30})
         self.assertEqual(result.reason, "stopped")
         clicks = [args for name, args in ctx.tasker.controller.args if name == "post_click"]
-        self.assertTrue(clicks)
-        self.assertTrue(all(args == (640, 360, 0) for args in clicks), clicks[:3])  # 截图坐标系中心、左键
+        self.assertTrue(all(args[:2] == (640, 360) for args in clicks), clicks[:3])  # 截图坐标系中心
+        self.assertEqual(clicks[0][2], 2)  # 默认开启锁敌：开战先按中键
+        self.assertTrue(len(clicks) > 1 and all(args[2] == 0 for args in clicks[1:]), clicks[:3])  # 之后都是左键普攻
         self.assertEqual(PRINTED[0], "combat.waiting|combat.scheme_name.basic_attack")
         self.assertEqual(PRINTED[1], "combat.started|combat.scheme_name.basic_attack")
         self.assertTrue(PRINTED[-1].startswith("combat.ended|combat.reason.stopped|"))
@@ -111,6 +112,29 @@ class RunCombatTests(unittest.TestCase):
         hints = [line for line in PRINTED if line.startswith("combat.team_hint|")]
         self.assertEqual(len(hints), 1)
         self.assertIn("combat.team.slot|1|combat.team.any (combat.team.main_dps)", hints[0])
+
+    def test_strategy_hint_printed_once_for_non_default_strategy(self):
+        overrides = {"wait_timeout": 0.3, "team_size": 3, "use_ultimate": False}
+        for _ in range(2):
+            combat.run_combat(FakeContext(np.zeros((720, 1280, 3), dtype=np.uint8)), overrides=overrides)
+        hints = [line for line in PRINTED if line.startswith("combat.strategy_hint|")]
+        self.assertEqual(
+            hints,
+            ["combat.strategy_hint|combat.strategy.team_size|3 | combat.strategy.disabled|combat.action.ultimate"],
+        )
+
+    def test_default_strategy_prints_no_hint(self):
+        combat.run_combat(FakeContext(np.zeros((720, 1280, 3), dtype=np.uint8)), overrides={"wait_timeout": 0.3})
+        self.assertFalse([line for line in PRINTED if line.startswith("combat.strategy_hint|")])
+
+    def test_strategy_options_reach_engine(self):
+        options, _ = combat.merge_options([{"team_size": 2, "lock_target": False, "search_turn": True, "use_switch": False}])
+        scheme = combat.load_scheme("main_dps")
+        engine = api.build_engine(FakeContext(hud_frame()), scheme, options, combat.Reporter())
+        self.assertEqual(engine.order, [1, 2])
+        self.assertFalse(engine.switch_allowed)
+        self.assertEqual((engine.targeting.lock, engine.targeting.search), (False, True))
+        self.assertEqual(engine.config.disabled, frozenset({"switch"}))
 
     def test_describe_combo_error_and_display(self):
         err = combat.SchemeError("combo", "2", combo_error=combat.ComboError("unknown_command", 3, 5, "perform"))

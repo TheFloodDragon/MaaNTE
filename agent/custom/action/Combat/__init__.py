@@ -5,6 +5,9 @@
     load_scheme(scheme, custom_scheme="") -> CombatScheme
     compile_combo(text) -> list[Command]
 
+overrides 的键见 CombatOptions（如 team_size、lock_target、use_ultimate；
+可禁用的动作名见 TOGGLE_ACTIONS，对应选项 use_<动作>）。
+
 MaaFramework 注册（combat_run / combat_in_hud）在 actions.py，由 custom/action/__init__.py 导入。
 """
 
@@ -12,11 +15,12 @@ from .api import run_combat
 from .dsl import Command, ComboError, compile_combo
 from .engine import CombatEngine, EngineConfig, Reporter
 from .locate import load_scheme
-from .model import CombatResult, EndReason
+from .model import TOGGLE_ACTIONS, CombatResult, EndReason
 from .scheme import CombatScheme, SchemeError, parse_scheme
 from .settings import CombatOptions, merge_options
 
 __all__ = [
+    "TOGGLE_ACTIONS",
     "run_combat",
     "load_scheme",
     "compile_combo",

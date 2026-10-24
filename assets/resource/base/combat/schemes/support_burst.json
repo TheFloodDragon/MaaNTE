@@ -1,0 +1,41 @@
+// 辅助先手：2~4 号位依次上场放 R/Q/E 挂上增益，最后切到 1 号位主C长段爆发，然后重新挂一轮增益。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.support_burst",
+    "description": "2→3→4 号位依次 R → Q → E 挂增益，1 号位主C最后上场长段输出",
+    "team": [
+        {
+            "slot": 1,
+            "note": "$combat.team.main_dps"
+        },
+        {
+            "slot": 2,
+            "note": "$combat.team.support"
+        },
+        {
+            "slot": 3,
+            "note": "$combat.team.support"
+        },
+        {
+            "slot": 4,
+            "note": "$combat.team.support"
+        }
+    ],
+    "combos": {
+        "1": [
+            "arc, ultimate, skill, l_click(2)",
+            "skill, l_click(2), heavy(0.8), skill, l_click(1.5)"
+        ],
+        "default": "arc, ultimate, skill, l_click(0.3)"
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            2,
+            3,
+            4,
+            1
+        ],
+        "min_field_time": 1.0
+    }
+}

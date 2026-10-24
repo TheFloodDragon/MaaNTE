@@ -1,0 +1,22 @@
+// 闪避游击：放完技能后，普攻之间穿插闪避，减少站桩受击。适合敌人攻击密集、队伍较脆的场合。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.evasive",
+    "description": "每位角色 R → Q → E 后「普攻 0.6 秒 → 闪避」重复三次，然后切下一位",
+    "combos": {
+        "default": [
+            "arc, ultimate, skill",
+            "l_click(0.6), dodge, l_click(0.6), dodge, l_click(0.6), dodge"
+        ]
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            1,
+            2,
+            3,
+            4
+        ],
+        "min_field_time": 1.0
+    }
+}

@@ -13,6 +13,64 @@
             "custom_scheme": ""
         }
     },
+    "CombatSetting_TeamSize": {
+        "desc": "全局战斗配置载体：队伍人数（超出人数的槽位不参与切人）",
+        "enabled": false,
+        "attach": {
+            "team_size": 4
+        }
+    },
+    "CombatSetting_DisableUltimate": {
+        "desc": "全局战斗策略载体：「不使用的动作」勾选终结技时写入 use_ultimate=false；未勾选保持空（启用）",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableSkill": {
+        "desc": "全局战斗策略载体：「不使用的动作」勾选技能时写入 use_skill=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableArc": {
+        "desc": "全局战斗策略载体：「不使用的动作」勾选弧盘时写入 use_arc=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableDodge": {
+        "desc": "全局战斗策略载体：「不使用的动作」勾选闪避时写入 use_dodge=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableJump": {
+        "desc": "全局战斗策略载体：「不使用的动作」勾选跳跃时写入 use_jump=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableSwitch": {
+        "desc": "全局战斗策略载体：「不使用的动作」勾选切人时写入 use_switch=false（只用当前角色）",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_LockTarget": {
+        "desc": "全局战斗策略载体：开战中键锁敌、敌人丢失时重新锁定",
+        "enabled": false,
+        "attach": {
+            "lock_target": true
+        }
+    },
+    "CombatSetting_SearchTurn": {
+        "desc": "全局战斗策略载体：敌人丢失时转动视角寻找（仅前台 Seize 鼠标）",
+        "enabled": false,
+        "attach": {
+            "search_turn": false
+        }
+    },
+    "CombatSetting_ClearConfirm": {
+        "desc": "全局战斗策略载体：敌人血条持续消失多少秒判定脱战",
+        "enabled": false,
+        "attach": {
+            "clear_confirm": 3
+        }
+    },
     "CombatInHud": {
         "desc": "公开识别：处于可操作的战斗/大世界界面（底部血条可见且非黑屏）",
         "recognition": {

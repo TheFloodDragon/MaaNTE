@@ -106,6 +106,21 @@ class BuiltinTests(unittest.TestCase):
             locate.load_scheme("nope")
         self.assertEqual(ctx.exception.code, "unknown_builtin")
 
+    def test_builtin_list_matches_files(self):
+        files = {p.stem for p in (RESOURCE_BASE / "combat" / "schemes").glob("*.json")}
+        self.assertEqual(files, set(scheme.BUILTIN_SCHEMES))
+
+    def test_builtin_orders_survive_small_teams(self):
+        effective_order = submodule("engine").effective_order
+        for name in scheme.BUILTIN_SCHEMES:
+            s = locate.load_builtin(name)
+            for size in range(1, 5):
+                order = effective_order(s.order, {slot for slot in range(1, 5) if slot > size})
+                self.assertTrue(order, (name, size))
+                self.assertTrue(set(order) <= set(range(1, size + 1)), (name, size, order))
+                # 同一角色不会连续两轮（含首尾循环）
+                self.assertTrue(len(order) == 1 or all(a != b for a, b in zip(order, order[1:] + order[:1])), (name, size, order))
+
 
 class CustomLookupTests(unittest.TestCase):
     def setUp(self):

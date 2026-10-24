@@ -9,7 +9,6 @@
                 {
                     "name": "team_rotation",
                     "label": "$setting_combat_scheme_team_rotation",
-                    "description": "$setting_combat_scheme_team_rotation_desc",
                     "pipeline_override": {
                         "CombatSetting_Scheme": {
                             "attach": {
@@ -19,9 +18,19 @@
                     }
                 },
                 {
+                    "name": "quick_swap",
+                    "label": "$setting_combat_scheme_quick_swap",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "quick_swap"
+                            }
+                        }
+                    }
+                },
+                {
                     "name": "main_dps",
                     "label": "$setting_combat_scheme_main_dps",
-                    "description": "$setting_combat_scheme_main_dps_desc",
                     "pipeline_override": {
                         "CombatSetting_Scheme": {
                             "attach": {
@@ -31,9 +40,52 @@
                     }
                 },
                 {
+                    "name": "support_burst",
+                    "label": "$setting_combat_scheme_support_burst",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "support_burst"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "dual_dps",
+                    "label": "$setting_combat_scheme_dual_dps",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "dual_dps"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "heavy_attack",
+                    "label": "$setting_combat_scheme_heavy_attack",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "heavy_attack"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "evasive",
+                    "label": "$setting_combat_scheme_evasive",
+                    "pipeline_override": {
+                        "CombatSetting_Scheme": {
+                            "attach": {
+                                "scheme": "evasive"
+                            }
+                        }
+                    }
+                },
+                {
                     "name": "solo_skill",
                     "label": "$setting_combat_scheme_solo_skill",
-                    "description": "$setting_combat_scheme_solo_skill_desc",
                     "pipeline_override": {
                         "CombatSetting_Scheme": {
                             "attach": {
@@ -45,7 +97,6 @@
                 {
                     "name": "basic_attack",
                     "label": "$setting_combat_scheme_basic_attack",
-                    "description": "$setting_combat_scheme_basic_attack_desc",
                     "pipeline_override": {
                         "CombatSetting_Scheme": {
                             "attach": {
@@ -57,7 +108,6 @@
                 {
                     "name": "custom",
                     "label": "$setting_combat_scheme_custom",
-                    "description": "$setting_combat_scheme_custom_desc",
                     "pipeline_override": {
                         "CombatSetting_Scheme": {
                             "attach": {
@@ -88,6 +138,214 @@
                 "CombatSetting_CustomScheme": {
                     "attach": {
                         "custom_scheme": "{custom_scheme}"
+                    }
+                }
+            }
+        },
+        "CombatTeamSize": {
+            "type": "select",
+            "label": "$setting_combat_team_size",
+            "description": "$setting_combat_team_size_desc",
+            "default_case": "4",
+            "cases": [
+                {
+                    "name": "4",
+                    "label": "$setting_combat_team_size_4",
+                    "pipeline_override": {
+                        "CombatSetting_TeamSize": {
+                            "attach": {
+                                "team_size": 4
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "3",
+                    "label": "$setting_combat_team_size_3",
+                    "pipeline_override": {
+                        "CombatSetting_TeamSize": {
+                            "attach": {
+                                "team_size": 3
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "2",
+                    "label": "$setting_combat_team_size_2",
+                    "pipeline_override": {
+                        "CombatSetting_TeamSize": {
+                            "attach": {
+                                "team_size": 2
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "1",
+                    "label": "$setting_combat_team_size_1",
+                    "pipeline_override": {
+                        "CombatSetting_TeamSize": {
+                            "attach": {
+                                "team_size": 1
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CombatDisabledActions": {
+            "type": "checkbox",
+            "label": "$setting_combat_disabled_actions",
+            "description": "$setting_combat_disabled_actions_desc",
+            "default_case": [],
+            "cases": [
+                {
+                    "name": "ultimate",
+                    "label": "$setting_combat_action_ultimate",
+                    "pipeline_override": {
+                        "CombatSetting_DisableUltimate": {
+                            "attach": {
+                                "use_ultimate": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "skill",
+                    "label": "$setting_combat_action_skill",
+                    "pipeline_override": {
+                        "CombatSetting_DisableSkill": {
+                            "attach": {
+                                "use_skill": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "arc",
+                    "label": "$setting_combat_action_arc",
+                    "pipeline_override": {
+                        "CombatSetting_DisableArc": {
+                            "attach": {
+                                "use_arc": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "dodge",
+                    "label": "$setting_combat_action_dodge",
+                    "pipeline_override": {
+                        "CombatSetting_DisableDodge": {
+                            "attach": {
+                                "use_dodge": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "jump",
+                    "label": "$setting_combat_action_jump",
+                    "pipeline_override": {
+                        "CombatSetting_DisableJump": {
+                            "attach": {
+                                "use_jump": false
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "switch",
+                    "label": "$setting_combat_action_switch",
+                    "pipeline_override": {
+                        "CombatSetting_DisableSwitch": {
+                            "attach": {
+                                "use_switch": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CombatLockTarget": {
+            "type": "switch",
+            "label": "$setting_combat_lock_target",
+            "description": "$setting_combat_lock_target_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CombatSetting_LockTarget": {
+                            "attach": {
+                                "lock_target": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CombatSetting_LockTarget": {
+                            "attach": {
+                                "lock_target": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CombatSearchTurn": {
+            "type": "switch",
+            "label": "$setting_combat_search_turn",
+            "description": "$setting_combat_search_turn_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CombatSetting_SearchTurn": {
+                            "attach": {
+                                "search_turn": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CombatSetting_SearchTurn": {
+                            "attach": {
+                                "search_turn": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CombatClearConfirm": {
+            "type": "input",
+            "label": "$setting_combat_clear_confirm",
+            "description": "$setting_combat_clear_confirm_desc",
+            "inputs": [
+                {
+                    "name": "clear_confirm",
+                    "label": "$setting_combat_clear_confirm_input",
+                    "default": "3",
+                    "pipeline_type": "int",
+                    "verify": "^([1-9]|[1-5][0-9]|60)$",
+                    "pattern_msg": "$setting_combat_clear_confirm_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_ClearConfirm": {
+                    "attach": {
+                        "clear_confirm": "{clear_confirm}"
                     }
                 }
             }

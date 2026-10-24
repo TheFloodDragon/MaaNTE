@@ -94,6 +94,10 @@ class FakeWorld:
         self.events.append((self.clock.t, "tup", contact))
         return _Job()
 
+    def post_relative_move(self, dx, dy):
+        self.events.append((self.clock.t, "move", dx))
+        return _Job()
+
     # ---- 感知 ----
     def hud_visible(self, t: float) -> bool:
         if self.hud_lost_at is not None and t >= self.hud_lost_at:
@@ -131,6 +135,9 @@ class FakeWorld:
     def count(self, kind: str, value=None) -> int:
         return sum(1 for (_, k, v) in self.events if k == kind and (value is None or v == value))
 
+    def times(self, kind: str, value=None) -> list[float]:
+        return [t for (t, k, v) in self.events if k == kind and (value is None or v == value)]
+
 
 class RecordingReporter:
     def __init__(self):
@@ -151,9 +158,24 @@ class RecordingReporter:
     def degraded(self):
         self.calls.append(("degraded",))
 
+    def team_hint(self, scheme):
+        self.calls.append(("team_hint",))
+
+    def scheme_error(self, exc):
+        self.calls.append(("scheme_error", exc.code))
+
+    def strategy_hint(self, changes):
+        self.calls.append(("strategy_hint", changes))
+
 
 def make_engine(scheme: dict, config: dict | None = None, **world_kwargs):
-    """返回 (engine, world, clock, reporter)。scheme 为方案 dict。"""
+    """返回 (engine, world, clock, reporter)。scheme 为方案 dict，config 为 EngineConfig 字段。
+
+    锁敌默认关闭，避免中键点击干扰与锁敌无关的用例；锁敌相关用例显式传 lock_target=True。
+    """
+    config = {"lock_target": False, **(config or {})}
+    if "disabled" in config:
+        config["disabled"] = frozenset(config["disabled"])
     runtime = submodule("runtime")
     inputs = submodule("inputs")
     engine_mod = submodule("engine")

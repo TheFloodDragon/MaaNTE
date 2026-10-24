@@ -1,0 +1,22 @@
+// 重击流：每位角色 R → Q → E 后，用「轻击接 1 秒蓄力重击」交替输出，然后切下一位。适合重击收益高的角色。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.heavy_attack",
+    "description": "每位角色 R → Q → E 后轻击 0.4 秒接重击 1 秒，重复两次后切下一位",
+    "combos": {
+        "default": [
+            "arc, ultimate, skill",
+            "l_click(0.4), heavy(1.0), l_click(0.4), heavy(1.0)"
+        ]
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            1,
+            2,
+            3,
+            4
+        ],
+        "min_field_time": 1.0
+    }
+}

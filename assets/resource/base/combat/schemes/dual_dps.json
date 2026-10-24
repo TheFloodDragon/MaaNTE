@@ -1,0 +1,45 @@
+// 双主C：1、2 号位是两位输出，各自长段站场；3、4 号位辅助在两位主C之间上场挂增益。
+{
+    "version": 1,
+    "name": "$combat.scheme_name.dual_dps",
+    "description": "3 号辅助 → 1 号主C → 4 号辅助 → 2 号主C 循环，主C长段输出、辅助短段",
+    "team": [
+        {
+            "slot": 1,
+            "note": "$combat.team.main_dps"
+        },
+        {
+            "slot": 2,
+            "note": "$combat.team.main_dps"
+        },
+        {
+            "slot": 3,
+            "note": "$combat.team.support"
+        },
+        {
+            "slot": 4,
+            "note": "$combat.team.support"
+        }
+    ],
+    "combos": {
+        "1": [
+            "arc, ultimate, skill",
+            "l_click(2.5), skill, l_click(1.5)"
+        ],
+        "2": [
+            "arc, ultimate, skill",
+            "l_click(2.5), skill, l_click(1.5)"
+        ],
+        "default": "arc, ultimate, skill, l_click(0.5)"
+    },
+    "rotation": {
+        "mode": "cycle",
+        "order": [
+            3,
+            1,
+            4,
+            2
+        ],
+        "min_field_time": 1.0
+    }
+}

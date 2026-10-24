@@ -16,7 +16,18 @@ SCHEME_VERSION = 1
 MAX_FILE_BYTES = 64 * 1024
 MAX_ORDER = 16
 MAX_FIELD_TIME = 10.0
-BUILTIN_SCHEMES = ("team_rotation", "main_dps", "solo_skill", "basic_attack")
+# 内置方案（顺序即设置页下拉顺序），文件在 resource/base/combat/schemes/<name>.json
+BUILTIN_SCHEMES = (
+    "team_rotation",
+    "quick_swap",
+    "main_dps",
+    "support_burst",
+    "dual_dps",
+    "heavy_attack",
+    "evasive",
+    "solo_skill",
+    "basic_attack",
+)
 DEFAULT_SCHEME = "team_rotation"
 COMBO_KEYS = ("1", "2", "3", "4", "default")
 _TOP_KEYS = {"version", "name", "description", "team", "combos", "rotation"}

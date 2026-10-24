@@ -3,7 +3,7 @@
 {
     "version": 1,
     "name": "自定义方案示例",
-    "description": "演示位移、跳跃、闪避、切人与按住类指令",
+    "description": "演示冲刺、带方向闪避、斜向移动、锁敌、转视角、切人与按住类指令",
     // team 只用于开战前提示：请自行按此编队，脚本不会检查
     "team": [
         {
@@ -17,19 +17,19 @@
         }
     ],
     "combos": {
-        // 1 号位：先 Q，再前冲接普攻，最后重击
+        // 1 号位：先锁敌、放 Q，冲刺贴近后跳起普攻，再斜向走位接 E 和重击
         "1": [
-            "ultimate",
-            "walk(w, 0.3), jump, l_click(1)",
-            "skill, heavy(0.8)"
+            "lock, ultimate",
+            "sprint(0.6), jump, l_click(1)",
+            "walk(wa, 0.3), skill, heavy(0.8)"
         ],
-        // 2 号位：放 E 后闪避躲开，再普攻，并在出招表里直接切回 1 号位
+        // 2 号位：放 E 后向后闪避，普攻一会儿，把视角向右转 45 度，再在出招表里直接切回 1 号位
         "2": [
-            "skill(0.3), dodge",
-            "l_click(0.5), switch(1)"
+            "skill(0.3), dodge(s)",
+            "l_click(0.5), turn(45), switch(1)"
         ],
         // 其余槽位通用
-        "default": "ultimate, skill, l_click(1)"
+        "default": "arc, ultimate, skill, l_click(1)"
     },
     "rotation": {
         "mode": "cycle",

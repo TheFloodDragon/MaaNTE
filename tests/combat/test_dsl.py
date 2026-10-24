@@ -41,6 +41,24 @@ class CompileTests(unittest.TestCase):
     def test_command_text_kept_for_logs(self):
         self.assertEqual(dsl.compile_combo("walk(w, 0.3)")[0].text, "walk(w, 0.3)")
 
+    def test_movement_and_camera_commands(self):
+        cmds = dsl.compile_combo("dodge, dodge(s), dodge(direction=WA), sprint, sprint(0.5), walk(wd, 0.3), lock, turn(-90), turn(+45), turn(0)")
+        self.assertEqual(
+            [(c.name, c.args) for c in cmds],
+            [
+                ("dodge", ("",)),
+                ("dodge", ("s",)),
+                ("dodge", ("wa",)),
+                ("sprint", (1.0,)),
+                ("sprint", (0.5,)),
+                ("walk", ("wd", 0.3)),
+                ("lock", ()),
+                ("turn", (-90.0,)),
+                ("turn", (45.0,)),
+                ("turn", (0.0,)),
+            ],
+        )
+
 
 class ErrorTests(unittest.TestCase):
     def assertCode(self, source, code, line=None):
@@ -93,6 +111,16 @@ class ErrorTests(unittest.TestCase):
         self.assertCode("click(side)", "bad_value")
         self.assertCode("switch(5)", "bad_value")
         self.assertCode("switch(0)", "bad_value")
+
+    def test_movement_and_camera_errors(self):
+        for source in ("walk(ws, 1)", "walk(ad, 1)", "walk(ww, 1)", "walk(wad, 1)", "dodge(x)", "dodge('sa d')", "turn(w)", "turn(True)"):
+            self.assertCode(source, "bad_value")
+        err = self.assertCode("turn(400)", "degrees_out_of_range")
+        self.assertEqual(err.params, ("turn", "degrees", 400, dsl.MAX_DEGREES))
+        self.assertCode("turn(-361)", "degrees_out_of_range")
+        self.assertCode("turn", "missing_arg")
+        self.assertCode("sprint(0)", "out_of_range")
+        self.assertCode("lock(1)", "too_many_args")
 
     def test_empty_too_long_and_not_text(self):
         self.assertCode("", "empty")
