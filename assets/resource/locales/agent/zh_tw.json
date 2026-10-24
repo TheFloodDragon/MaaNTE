@@ -164,5 +164,20 @@
     "combat.dsl.out_of_range": "%s 的參數 %s=%s 超出範圍（應大於等於 0 且不超過 %s 秒）",
     "combat.dsl.too_many_commands": "出招表最多 %s 條指令",
     "combat.dsl.empty": "出招表為空",
-    "combat.dsl.not_text": "出招表必須是字串或字串陣列"
+    "combat.dsl.not_text": "出招表必須是字串或字串陣列",
+    "dungeon.config_error": "[刷本] 設定無效：請檢查刷取次數（0-999）與副本選擇",
+    "dungeon.start": "[刷本] 開始刷取「%s」：%s，單次普通領取消耗 %d",
+    "dungeon.target_runs": "領取 %d 次",
+    "dungeon.target_exhaust": "刷到餘額不足為止",
+    "dungeon.balance": "[刷本] 目前餘額 %d，單次消耗 %d，繼續領取",
+    "dungeon.unknown_balance": "[刷本] 無法確認餘額，為避免誤消耗已停止（已領取 %d 次）",
+    "dungeon.claim_repeat": "[刷本] 上一次領取尚未確認，拒絕重複點擊",
+    "dungeon.settlement_unexpected": "[刷本] 出現非本任務發起的結算介面，不計入次數並停止",
+    "dungeon.claimed": "[刷本] 已確認領取第 %d 次",
+    "dungeon.finished.done": "[刷本] 已完成指定次數，共領取 %d 次",
+    "dungeon.finished.exhausted": "[刷本] 餘額不足一次領取，正常結束，共領取 %d 次",
+    "dungeon.failed": "[刷本] 任務失敗，已確認領取 %d 次（詳見日誌）",
+    "dungeon.walk_timeout": "[刷本] 前進逾時，未到達目標：%s",
+    "dungeon.round_timeout": "[刷本] 本輪超過時限，停止",
+    "dungeon.stage.clock_trick": "鐘錶把戲"
 }

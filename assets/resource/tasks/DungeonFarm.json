@@ -1,0 +1,63 @@
+{
+    "task": [
+        {
+            "name": "DungeonFarm",
+            "label": "$task_dungeon_farm_label",
+            "entry": "DungeonFarmMain",
+            "description": "$task_dungeon_farm_desc",
+            "option": [
+                "DungeonFarmStage",
+                "DungeonFarmRuns"
+            ],
+            "controller": [
+                "Win32-Front"
+            ],
+            "group": [
+                "Daily"
+            ]
+        }
+    ],
+    "option": {
+        "DungeonFarmStage": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_stage",
+            "description": "$task_dungeon_farm_option_stage_desc",
+            "default_case": "ClockTrick",
+            "cases": [
+                {
+                    "name": "ClockTrick",
+                    "label": "$task_dungeon_farm_option_stage_clock_trick",
+                    "pipeline_override": {
+                        "DungeonFarm_StageOption": {
+                            "attach": {
+                                "name": "clock_trick",
+                                "cost": 40
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "DungeonFarmRuns": {
+            "type": "input",
+            "label": "$task_dungeon_farm_option_runs",
+            "description": "$task_dungeon_farm_option_runs_desc",
+            "inputs": [
+                {
+                    "name": "runs",
+                    "default": "0",
+                    "pipeline_type": "string",
+                    "verify": "^(0|[1-9]\\d{0,2})$",
+                    "pattern_msg": "$task_dungeon_farm_option_runs_invalid"
+                }
+            ],
+            "pipeline_override": {
+                "DungeonFarm_RunsOption": {
+                    "attach": {
+                        "runs": "{runs}"
+                    }
+                }
+            }
+        }
+    }
+}

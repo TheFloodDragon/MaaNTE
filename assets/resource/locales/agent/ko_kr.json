@@ -164,5 +164,20 @@
     "combat.dsl.out_of_range": "%s의 매개변수 %s=%s이(가) 범위를 벗어났습니다(0~%s초)",
     "combat.dsl.too_many_commands": "콤보 표의 명령은 최대 %s개입니다",
     "combat.dsl.empty": "콤보 표가 비어 있습니다",
-    "combat.dsl.not_text": "콤보 표는 문자열 또는 문자열 배열이어야 합니다"
+    "combat.dsl.not_text": "콤보 표는 문자열 또는 문자열 배열이어야 합니다",
+    "dungeon.config_error": "[던전] 설정이 올바르지 않습니다: 반복 횟수(0-999)와 스테이지 선택을 확인하세요",
+    "dungeon.start": "[던전] 「%s」 반복 시작: %s, 일반 수령 1회 소모 %d",
+    "dungeon.target_runs": "%d회 수령",
+    "dungeon.target_exhaust": "잔액이 부족해질 때까지",
+    "dungeon.balance": "[던전] 잔액 %d, 1회 소모 %d, 계속 진행합니다",
+    "dungeon.unknown_balance": "[던전] 잔액을 확인할 수 없어 잘못된 소모를 막기 위해 중지했습니다(수령 %d회)",
+    "dungeon.claim_repeat": "[던전] 이전 수령이 아직 확인되지 않아 중복 클릭을 거부했습니다",
+    "dungeon.settlement_unexpected": "[던전] 이 작업이 시작하지 않은 결산 화면이 나타나 횟수에 포함하지 않고 중지합니다",
+    "dungeon.claimed": "[던전] %d번째 수령을 확인했습니다",
+    "dungeon.finished.done": "[던전] 지정 횟수를 완료했습니다(총 %d회)",
+    "dungeon.finished.exhausted": "[던전] 잔액이 1회분보다 적어 정상 종료했습니다(총 %d회)",
+    "dungeon.failed": "[던전] 작업 실패, 확인된 수령 %d회(로그 참고)",
+    "dungeon.walk_timeout": "[던전] 전진 시간 초과, 목표에 도달하지 못했습니다: %s",
+    "dungeon.round_timeout": "[던전] 이번 라운드가 제한 시간을 초과해 중지합니다",
+    "dungeon.stage.clock_trick": "시계 트릭"
 }

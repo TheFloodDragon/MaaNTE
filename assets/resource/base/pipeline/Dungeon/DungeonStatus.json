@@ -1,0 +1,258 @@
+{
+    // 刷本（异象界域）状态识别节点：只识别、不动作，供 DungeonFarm.json 组合使用。
+    // 注意：ROI 沿用历史 rabbit_hole.json 按玩家截图标定的数值，尚未在实机上核对，
+    // 首次使用需实机截图校准；识别不到时流程会停在当前状态并报错，不会盲点。
+    "DungeonEntrancePrompt": {
+        "desc": "大世界中兔子洞入口的 F 交互提示",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    744,
+                    352,
+                    456,
+                    184
+                ],
+                "expected": [
+                    "兔子洞"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonStageListTitle": {
+        "desc": "异象界域副本选择界面标题（左上）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    4,
+                    2,
+                    232,
+                    56
+                ],
+                "expected": [
+                    "异象界域"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonStageEntry": {
+        "desc": "左侧副本列表中的目标副本（当前仅开放钟表把戏）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    8,
+                    6,
+                    196,
+                    646
+                ],
+                "expected": [
+                    "钟表把戏"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonStageDetail": {
+        "desc": "右侧详情区显示目标副本名，用于选择后复核身份（ROI 为列表右侧整片区域，待实机收窄）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    240,
+                    0,
+                    1040,
+                    640
+                ],
+                "expected": [
+                    "钟表把戏"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonEnterButton": {
+        "desc": "副本选择界面右下角「进入」按钮",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    896,
+                    644,
+                    368,
+                    72
+                ],
+                "expected": [
+                    "进入"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonEnemyCounter": {
+        "desc": "副本内左上角「剩余敌人数」计数，作为已进入副本的证据",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    0,
+                    156,
+                    240,
+                    88
+                ],
+                "expected": [
+                    "剩余敌人数"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonRewardPrompt": {
+        "desc": "通关后奖励交互的 F 提示（位置按入口提示推定，文本与位置均待实机核对）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    744,
+                    352,
+                    456,
+                    184
+                ],
+                "expected": [
+                    "领取奖励"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonRewardPopup": {
+        "desc": "「领取奖励」弹窗标题",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    392,
+                    264,
+                    496,
+                    84
+                ],
+                "expected": [
+                    "领取奖励"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonClaimButton": {
+        "desc": "领奖弹窗左侧普通「领取」。ROI 只覆盖弹窗左半，刻意不碰右侧「双倍领取」",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    508,
+                    260,
+                    84
+                ],
+                "expected": [
+                    "领取"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonBalance": {
+        "desc": "领奖弹窗内的余额「当前/上限」。读不到即视为余额未知，领取前停止（位置待实机核对）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    264,
+                    512,
+                    328
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^\\d+\\s*/\\s*\\d+$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonSettlement": {
+        "desc": "领取成功后的结算界面「获得道具」，作为本轮领取成功的证据",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    472,
+                    76,
+                    336,
+                    88
+                ],
+                "expected": [
+                    "获得道具"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonChallengeAgain": {
+        "desc": "结算界面「再次挑战」",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    672,
+                    592,
+                    272,
+                    76
+                ],
+                "expected": [
+                    "再次挑战"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

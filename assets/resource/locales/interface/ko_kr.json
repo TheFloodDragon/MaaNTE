@@ -321,5 +321,13 @@
     "task_auto_combat_option_wait_timeout": "전투 대기 시간(초)",
     "task_auto_combat_option_wait_timeout_desc": "이 시간 안에 적이 보이지 않으면 작업을 종료합니다. 0이면 계속 기다립니다.",
     "task_auto_combat_option_max_duration": "1회 전투 최대 시간(초)",
-    "task_auto_combat_option_max_duration_desc": "한 번의 전투가 이 시간을 넘으면 종료합니다. 0이면 제한이 없습니다."
+    "task_auto_combat_option_max_duration_desc": "한 번의 전투가 이 시간을 넘으면 종료합니다. 0이면 제한이 없습니다.",
+    "task_dungeon_farm_label": "던전 반복(이상 영역)",
+    "task_dungeon_farm_desc": "토끼굴로 순간이동해 선택한 스테이지에 들어가 「설정 → 작업 설정 → 전투 설정」의 방식으로 전투하고 일반 보상을 수령합니다(2배 수령·보충 없음). 수령할 때마다 잔액을 확인하며 마지막 회차는 「다시 도전」을 누르지 않고 나갑니다. <span style='color:red'>\"데스크톱 - 포그라운드\"</span> 컨트롤러가 필요합니다. <span style='color:red'>인식 위치는 아직 실기기에서 보정하지 않았습니다. 처음에는 횟수를 1로 두고 지켜봐 주세요.</span>",
+    "task_dungeon_farm_option_stage": "스테이지",
+    "task_dungeon_farm_option_stage_desc": "흐름이 설정된 스테이지만 표시합니다. 난이도는 게임 내 현재 선택을 따릅니다.",
+    "task_dungeon_farm_option_stage_clock_trick": "시계 트릭",
+    "task_dungeon_farm_option_runs": "반복 횟수",
+    "task_dungeon_farm_option_runs_desc": "0은 일반 수령 1회분 잔액이 없을 때까지 반복합니다. 1 이상은 최대 그 횟수만큼 수령하며, 잔액이 먼저 부족해져도 정상 종료합니다.",
+    "task_dungeon_farm_option_runs_invalid": "0~999 사이의 정수를 입력하세요"
 }

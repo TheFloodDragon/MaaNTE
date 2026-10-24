@@ -321,5 +321,13 @@
     "task_auto_combat_option_wait_timeout": "戦闘待機時間（秒）",
     "task_auto_combat_option_wait_timeout_desc": "この時間内に敵が見つからなければタスクを終了します。0 で無制限に待機します。",
     "task_auto_combat_option_max_duration": "1 戦の最大時間（秒）",
-    "task_auto_combat_option_max_duration_desc": "1 戦がこの時間を超えたら終了します。0 で無制限です。"
+    "task_auto_combat_option_max_duration_desc": "1 戦がこの時間を超えたら終了します。0 で無制限です。",
+    "task_dungeon_farm_label": "周回（異象界域）",
+    "task_dungeon_farm_desc": "兎の穴へテレポートし、選択したステージに入り、「設定 → タスク設定 → 戦闘設定」のスキームで戦闘して通常報酬を受け取ります（2 倍受取や回復はしません）。受取のたびに残高を確認し、最後の周回は「再挑戦」を押さずに退出します。<span style='color:red'>「デスクトップ - フォアグラウンド」</span>コントローラーが必要です。<span style='color:red'>認識位置はまだ実機で調整していません。初回は回数を 1 にして様子を見てください。</span>",
+    "task_dungeon_farm_option_stage": "ステージ",
+    "task_dungeon_farm_option_stage_desc": "フローが設定済みのステージのみ表示します。難易度はゲーム内の現在の選択を使います。",
+    "task_dungeon_farm_option_stage_clock_trick": "時計のトリック",
+    "task_dungeon_farm_option_runs": "周回回数",
+    "task_dungeon_farm_option_runs_desc": "0 は通常受取 1 回分の残高がなくなるまで周回します。1 以上は最大その回数まで受け取り、先に残高が尽きた場合も正常終了します。",
+    "task_dungeon_farm_option_runs_invalid": "0〜999 の整数を入力してください"
 }

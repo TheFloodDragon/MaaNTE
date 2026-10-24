@@ -39,6 +39,7 @@ from .BidKing.place_bid import PlaceBid
 from .auto_volleyball_weekly import *
 from .lucky_star_round import *
 from .Combat.actions import *
+from .Dungeon.actions import *
 
 __all__ = [
     "AutoMakeCoffee",
@@ -99,4 +100,12 @@ __all__ = [
     "LuckyStarRetryOrFinish",
     "CombatRunAction",
     "CombatInHudRecognition",
+    "DungeonResetAction",
+    "DungeonGateAction",
+    "DungeonClaimAction",
+    "DungeonConfirmAction",
+    "DungeonWalkUntilAction",
+    "DungeonFightAction",
+    "DungeonFinishAction",
+    "DungeonFailAction",
 ]

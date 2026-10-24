@@ -162,5 +162,20 @@
     "combat.dsl.out_of_range": "%s 的参数 %s=%s 超出范围（应大于等于 0 且不超过 %s 秒）",
     "combat.dsl.too_many_commands": "出招表最多 %s 条指令",
     "combat.dsl.empty": "出招表为空",
-    "combat.dsl.not_text": "出招表必须是字符串或字符串数组"
+    "combat.dsl.not_text": "出招表必须是字符串或字符串数组",
+    "dungeon.config_error": "[刷本] 配置无效：请检查刷取次数（0-999）与副本选择",
+    "dungeon.start": "[刷本] 开始刷取「%s」：%s，单次普通领取消耗 %d",
+    "dungeon.target_runs": "领取 %d 次",
+    "dungeon.target_exhaust": "刷到余额不足为止",
+    "dungeon.balance": "[刷本] 当前余额 %d，单次消耗 %d，继续领取",
+    "dungeon.unknown_balance": "[刷本] 无法确认余额，为避免误消费已停止（已领取 %d 次）",
+    "dungeon.claim_repeat": "[刷本] 上一次领取尚未确认，拒绝重复点击",
+    "dungeon.settlement_unexpected": "[刷本] 出现非本任务发起的结算界面，不计入次数并停止",
+    "dungeon.claimed": "[刷本] 已确认领取第 %d 次",
+    "dungeon.finished.done": "[刷本] 已完成指定次数，共领取 %d 次",
+    "dungeon.finished.exhausted": "[刷本] 余额不足一次领取，正常结束，共领取 %d 次",
+    "dungeon.failed": "[刷本] 任务失败，已确认领取 %d 次（详见日志）",
+    "dungeon.walk_timeout": "[刷本] 前进超时，未到达目标：%s",
+    "dungeon.round_timeout": "[刷本] 本轮超过时限，停止",
+    "dungeon.stage.clock_trick": "钟表把戏"
 }

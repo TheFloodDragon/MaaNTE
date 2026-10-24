@@ -164,5 +164,20 @@
     "combat.dsl.out_of_range": "%s parameter %s=%s is out of range (0 to %s seconds)",
     "combat.dsl.too_many_commands": "a combo can have at most %s commands",
     "combat.dsl.empty": "the combo is empty",
-    "combat.dsl.not_text": "a combo must be a string or an array of strings"
+    "combat.dsl.not_text": "a combo must be a string or an array of strings",
+    "dungeon.config_error": "[Dungeon] Invalid settings: check the run count (0-999) and the selected stage",
+    "dungeon.start": "[Dungeon] Farming \"%s\": %s, each normal claim costs %d",
+    "dungeon.target_runs": "claim %d time(s)",
+    "dungeon.target_exhaust": "until the balance runs out",
+    "dungeon.balance": "[Dungeon] Balance %d, cost per claim %d, continuing",
+    "dungeon.unknown_balance": "[Dungeon] Could not read the balance; stopped to avoid spending by mistake (%d claim(s) done)",
+    "dungeon.claim_repeat": "[Dungeon] The previous claim is not confirmed yet; refusing to click again",
+    "dungeon.settlement_unexpected": "[Dungeon] A settlement screen not started by this task appeared; not counted, stopping",
+    "dungeon.claimed": "[Dungeon] Claim #%d confirmed",
+    "dungeon.finished.done": "[Dungeon] Target reached, %d claim(s) in total",
+    "dungeon.finished.exhausted": "[Dungeon] Balance is below one claim; finished with %d claim(s)",
+    "dungeon.failed": "[Dungeon] Task failed after %d confirmed claim(s), see log",
+    "dungeon.walk_timeout": "[Dungeon] Timed out walking toward: %s",
+    "dungeon.round_timeout": "[Dungeon] This round exceeded its time limit; stopping",
+    "dungeon.stage.clock_trick": "Clockwork Trick"
 }

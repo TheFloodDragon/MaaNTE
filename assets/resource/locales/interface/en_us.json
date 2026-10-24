@@ -321,5 +321,13 @@
     "task_auto_combat_option_wait_timeout": "Wait for combat (seconds)",
     "task_auto_combat_option_wait_timeout_desc": "End the task if no enemy is seen within this time. 0 waits forever.",
     "task_auto_combat_option_max_duration": "Max fight duration (seconds)",
-    "task_auto_combat_option_max_duration_desc": "End a fight after this long. 0 means no limit."
+    "task_auto_combat_option_max_duration_desc": "End a fight after this long. 0 means no limit.",
+    "task_dungeon_farm_label": "Dungeon Farm (Anomaly Domain)",
+    "task_dungeon_farm_desc": "Teleports to the Rabbit Hole, enters the selected stage, fights with the scheme from Settings → Task Settings → Combat, and claims the normal reward (never the double claim, never refills). The balance is checked before every claim, and the last round exits instead of pressing Challenge Again. Requires the <span style='color:red'>\"Win32 - Front\"</span> controller. <span style='color:red'>Recognition areas are not calibrated in-game yet; set the run count to 1 and watch the first run.</span>",
+    "task_dungeon_farm_option_stage": "Stage",
+    "task_dungeon_farm_option_stage_desc": "Only stages with a configured flow are listed. Difficulty follows the current in-game selection.",
+    "task_dungeon_farm_option_stage_clock_trick": "Clockwork Trick",
+    "task_dungeon_farm_option_runs": "Run count",
+    "task_dungeon_farm_option_runs_desc": "0 farms until the balance is below one normal claim. A positive number claims at most that many times and still ends normally if the balance runs out first.",
+    "task_dungeon_farm_option_runs_invalid": "Enter an integer from 0 to 999"
 }

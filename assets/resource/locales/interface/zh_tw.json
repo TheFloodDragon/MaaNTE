@@ -321,5 +321,13 @@
     "task_auto_combat_option_wait_timeout": "等待進戰時間（秒）",
     "task_auto_combat_option_wait_timeout_desc": "超過該時間仍未看到敵人就結束任務，0 為一直等待。",
     "task_auto_combat_option_max_duration": "單場最長時長（秒）",
-    "task_auto_combat_option_max_duration_desc": "單場戰鬥超過該時長後結束，0 為不限制。"
+    "task_auto_combat_option_max_duration_desc": "單場戰鬥超過該時長後結束，0 為不限制。",
+    "task_dungeon_farm_label": "刷本（異象界域）",
+    "task_dungeon_farm_desc": "傳送到兔子洞，進入所選副本，用「設定 → 任務設定 → 戰鬥設定」中的方案戰鬥，領取普通獎勵（不會雙倍領取、不會補充體力）。每次領取前都會核對餘額，最後一輪不點「再次挑戰」直接退出。需要<span style='color:red'>「桌面端-前台」</span>控制器。<span style='color:red'>識別位置尚未實機校準，首次使用請把次數設為 1 並在旁觀察。</span>",
+    "task_dungeon_farm_option_stage": "副本",
+    "task_dungeon_farm_option_stage_desc": "只列出流程已設定的副本，難度沿用遊戲內目前選擇。",
+    "task_dungeon_farm_option_stage_clock_trick": "鐘錶把戲",
+    "task_dungeon_farm_option_runs": "刷取次數",
+    "task_dungeon_farm_option_runs_desc": "0 表示刷到餘額不足一次普通領取為止；大於 0 表示最多領取這麼多次，餘額先不足時也會正常結束。",
+    "task_dungeon_farm_option_runs_invalid": "請輸入 0-999 的整數"
 }

@@ -164,5 +164,20 @@
     "combat.dsl.out_of_range": "%s のパラメーター %s=%s が範囲外です（0~%s 秒）",
     "combat.dsl.too_many_commands": "コンボ表のコマンドは最大 %s 個です",
     "combat.dsl.empty": "コンボ表が空です",
-    "combat.dsl.not_text": "コンボ表は文字列または文字列の配列である必要があります"
+    "combat.dsl.not_text": "コンボ表は文字列または文字列の配列である必要があります",
+    "dungeon.config_error": "[周回] 設定が無効です：周回回数（0-999）とステージ選択を確認してください",
+    "dungeon.start": "[周回] 「%s」の周回を開始：%s、通常受取 1 回の消費 %d",
+    "dungeon.target_runs": "%d 回受け取る",
+    "dungeon.target_exhaust": "残高が足りなくなるまで",
+    "dungeon.balance": "[周回] 残高 %d、1 回の消費 %d、続行します",
+    "dungeon.unknown_balance": "[周回] 残高を確認できないため、誤消費を避けて停止しました（受取済み %d 回）",
+    "dungeon.claim_repeat": "[周回] 前回の受取が未確認のため、再クリックを拒否しました",
+    "dungeon.settlement_unexpected": "[周回] このタスク以外で開始された結果画面が表示されたため、回数に含めず停止します",
+    "dungeon.claimed": "[周回] %d 回目の受取を確認しました",
+    "dungeon.finished.done": "[周回] 指定回数を完了しました（計 %d 回）",
+    "dungeon.finished.exhausted": "[周回] 残高が 1 回分に足りないため正常終了しました（計 %d 回）",
+    "dungeon.failed": "[周回] タスク失敗、受取確認済み %d 回（ログを参照）",
+    "dungeon.walk_timeout": "[周回] 前進がタイムアウトし、目標に到達できませんでした：%s",
+    "dungeon.round_timeout": "[周回] このラウンドが制限時間を超えたため停止します",
+    "dungeon.stage.clock_trick": "時計のトリック"
 }
