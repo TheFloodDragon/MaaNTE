@@ -52,7 +52,9 @@ class CombatOptions:
 
 
 OPTION_KEYS = frozenset(f.name for f in fields(CombatOptions))
-_BOOL_KEYS = frozenset({"lock_target", "search_turn"} | {"use_" + a for a in TOGGLE_ACTIONS})
+_BOOL_KEYS = frozenset(
+    {"lock_target", "search_turn"} | {"use_" + a for a in TOGGLE_ACTIONS}
+)
 _INT_BOUNDS = {"team_size": (1, 4)}
 # 数值选项范围：(下限, 上限)
 _BOUNDS = {
@@ -114,7 +116,9 @@ def _parse(key: str, value):
     return _number(key, value)
 
 
-def merge_options(layers: Iterable[Mapping], base: CombatOptions | None = None) -> tuple[CombatOptions, list[str]]:
+def merge_options(
+    layers: Iterable[Mapping], base: CombatOptions | None = None
+) -> tuple[CombatOptions, list[str]]:
     """依次合并多层选项，返回 (结果, 警告)。非法值保留上一层的值并记警告，不中断战斗。"""
     options = base or CombatOptions()
     warnings: list[str] = []
@@ -146,7 +150,9 @@ def node_attach(get_node_data, name: str) -> dict:
     return dict(attach) if isinstance(attach, dict) else {}
 
 
-def collect_layers(get_node_data, overrides: Mapping | None = None, option_nodes: Iterable[str] = ()) -> list[dict]:
+def collect_layers(
+    get_node_data, overrides: Mapping | None = None, option_nodes: Iterable[str] = ()
+) -> list[dict]:
     layers = [node_attach(get_node_data, name) for name in GLOBAL_SETTING_NODES]
     layers.append({k: v for k, v in (overrides or {}).items() if k != "option_nodes"})
     layers.extend(node_attach(get_node_data, name) for name in option_nodes)

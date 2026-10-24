@@ -29,7 +29,13 @@ SEARCH_EXTRA_CONFIRM = 2.0
 
 
 class Targeting:
-    def __init__(self, driver, clock: Callable[[], float], lock: bool = True, search: bool = False):
+    def __init__(
+        self,
+        driver,
+        clock: Callable[[], float],
+        lock: bool = True,
+        search: bool = False,
+    ):
         self.driver = driver
         self.clock = clock
         self.lock = lock
@@ -81,7 +87,11 @@ class Targeting:
             self._last_turn = now
             self.turns += 1
             self.driver.turn(SEARCH_DEGREES)
-        if self.lock and lost >= RELOCK_AFTER and self.clock() - self._last_lock >= RELOCK_INTERVAL:
+        if (
+            self.lock
+            and lost >= RELOCK_AFTER
+            and self.clock() - self._last_lock >= RELOCK_INTERVAL
+        ):
             self._press_lock()
 
     def _press_lock(self) -> None:

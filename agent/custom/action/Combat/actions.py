@@ -38,12 +38,16 @@ class CombatRunAction(CustomAction):
                           "custom_scheme": "...", "option_nodes": ["MyTask_CombatOption"]}
     """
 
-    def run(self, context: Context, argv: CustomAction.RunArg) -> CustomAction.RunResult:
+    def run(
+        self, context: Context, argv: CustomAction.RunArg
+    ) -> CustomAction.RunResult:
         params = _parse_param(argv.custom_action_param)
         option_nodes = params.get("option_nodes") or []
         if not isinstance(option_nodes, list):
             option_nodes = []
-        result = run_combat(context, overrides=params, option_nodes=[str(n) for n in option_nodes])
+        result = run_combat(
+            context, overrides=params, option_nodes=[str(n) for n in option_nodes]
+        )
         logger.debug("combat_run finished: %s", result)
         return CustomAction.RunResult(success=result.success)
 
@@ -52,9 +56,13 @@ class CombatRunAction(CustomAction):
 class CombatInHudRecognition(CustomRecognition):
     """命中 = 处于可操作的战斗/大世界界面（底部血条可见且非黑屏）。detail.slot 为当前槽位（0 未知）。"""
 
-    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg) -> CustomRecognition.AnalyzeResult:
+    def analyze(
+        self, context: Context, argv: CustomRecognition.AnalyzeArg
+    ) -> CustomRecognition.AnalyzeResult:
         image = as_bgr(argv.image)
         if image is None or is_black(image) or not in_hud(image):
             return CustomRecognition.AnalyzeResult(box=None, detail={})
         box = list(scale_roi(HUD_ROI, image.shape))
-        return CustomRecognition.AnalyzeResult(box=box, detail={"slot": current_slot(image)})
+        return CustomRecognition.AnalyzeResult(
+            box=box, detail={"slot": current_slot(image)}
+        )

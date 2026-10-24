@@ -72,7 +72,9 @@ class FakeWorld:
             target = SLOT_VK[vk]
             if target in self.alive and target != self.slot:
                 self.pending = (target, self.clock.t + self.switch_delay)
-        elif vk == VK_Q and self.ult_hide > 0:  # 终结技动画：0.1s 后 HUD 消失 ult_hide 秒
+        elif (
+            vk == VK_Q and self.ult_hide > 0
+        ):  # 终结技动画：0.1s 后 HUD 消失 ult_hide 秒
             self.hidden.append((self.clock.t + 0.1, self.clock.t + 0.1 + self.ult_hide))
         return _Job()
 
@@ -133,10 +135,18 @@ class FakeWorld:
         return [SLOT_VK[v] for (_, v) in self.downs() if v in SLOT_VK]
 
     def count(self, kind: str, value=None) -> int:
-        return sum(1 for (_, k, v) in self.events if k == kind and (value is None or v == value))
+        return sum(
+            1
+            for (_, k, v) in self.events
+            if k == kind and (value is None or v == value)
+        )
 
     def times(self, kind: str, value=None) -> list[float]:
-        return [t for (t, k, v) in self.events if k == kind and (value is None or v == value)]
+        return [
+            t
+            for (t, k, v) in self.events
+            if k == kind and (value is None or v == value)
+        ]
 
 
 class RecordingReporter:
@@ -182,9 +192,15 @@ def make_engine(scheme: dict, config: dict | None = None, **world_kwargs):
     scheme_mod = submodule("scheme")
     clock = FakeClock()
     world = FakeWorld(clock, **world_kwargs)
-    rt = runtime.Runtime(world.observe, world.is_stopping, clock=clock.now, sleeper=clock.sleep)
+    rt = runtime.Runtime(
+        world.observe, world.is_stopping, clock=clock.now, sleeper=clock.sleep
+    )
     driver = inputs.InputDriver(world, rt.sleep)
-    cfg = engine_mod.EngineConfig(**{"wait_timeout": 5.0, "max_duration": 20.0, **(config or {})})
+    cfg = engine_mod.EngineConfig(
+        **{"wait_timeout": 5.0, "max_duration": 20.0, **(config or {})}
+    )
     reporter = RecordingReporter()
-    engine = engine_mod.CombatEngine(rt, driver, scheme_mod.parse_scheme(scheme), cfg, reporter)
+    engine = engine_mod.CombatEngine(
+        rt, driver, scheme_mod.parse_scheme(scheme), cfg, reporter
+    )
     return engine, world, clock, reporter

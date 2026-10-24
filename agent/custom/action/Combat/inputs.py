@@ -145,7 +145,9 @@ class InputDriver:
 
     def _turn_unsupported(self, reason) -> bool:
         self._turn_supported = False
-        logger.warning("combat view turn disabled (needs foreground Seize mouse): %s", reason)
+        logger.warning(
+            "combat view turn disabled (needs foreground Seize mouse): %s", reason
+        )
         return False
 
     # ---- 清理 ----

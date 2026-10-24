@@ -91,10 +91,14 @@ def _coerce(kind: str, value, cmd: str, param: str, node):
             raise bad()
         if kind == "deg":
             if not -MAX_DEGREES <= value <= MAX_DEGREES:
-                raise ComboError("degrees_out_of_range", *_pos(node), cmd, param, value, MAX_DEGREES)
+                raise ComboError(
+                    "degrees_out_of_range", *_pos(node), cmd, param, value, MAX_DEGREES
+                )
             return float(value)
         if value < 0 or value > MAX_SECONDS or (kind == "pos" and value <= 0):
-            raise ComboError("out_of_range", *_pos(node), cmd, param, value, MAX_SECONDS)
+            raise ComboError(
+                "out_of_range", *_pos(node), cmd, param, value, MAX_SECONDS
+            )
         return float(value)
     if kind == "slot":
         if isinstance(value, str) and value.isdigit():

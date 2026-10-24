@@ -26,8 +26,13 @@ def locale(kind, lang):
 
 PIPELINE = {}
 for _name in ("Combat.json", "AutoCombat.json"):
-    PIPELINE.update(load_json(ASSETS / "resource" / "base" / "pipeline" / "Combat" / _name))
-TASKS = {name: load_json(ASSETS / "resource" / "tasks" / name) for name in ("AutoCombat.json", "CombatSetting.json")}
+    PIPELINE.update(
+        load_json(ASSETS / "resource" / "base" / "pipeline" / "Combat" / _name)
+    )
+TASKS = {
+    name: load_json(ASSETS / "resource" / "tasks" / name)
+    for name in ("AutoCombat.json", "CombatSetting.json")
+}
 INTERFACE = load_json(ASSETS / "interface.json")
 OPTIONS = {k: v for t in TASKS.values() for k, v in t.get("option", {}).items()}
 
@@ -35,7 +40,11 @@ OPTIONS = {k: v for t in TASKS.values() for k, v in t.get("option", {}).items()}
 def iter_labels(obj):
     if isinstance(obj, dict):
         for key, value in obj.items():
-            if key in ("label", "description", "pattern_msg") and isinstance(value, str) and value.startswith("$"):
+            if (
+                key in ("label", "description", "pattern_msg")
+                and isinstance(value, str)
+                and value.startswith("$")
+            ):
                 yield value[1:]
             else:
                 yield from iter_labels(value)
@@ -113,13 +122,27 @@ class WiringTests(unittest.TestCase):
         self.assertIn("resource/tasks/CombatSetting.json", imports)
         sections = {s["name"]: s for s in INTERFACE["setting"]}
         self.assertTrue({"Combat", "CombatStrategy"} <= set(sections))
-        shown = [key for name in ("Combat", "CombatStrategy") for key in sections[name]["option"]]
+        shown = [
+            key
+            for name in ("Combat", "CombatStrategy")
+            for key in sections[name]["option"]
+        ]
         combat_options = set(TASKS["CombatSetting.json"]["option"])
         # MXU 只在运行时合并 global_option 里的选项：设置页显示的每个顶层战斗选项都必须登记
-        self.assertEqual(sorted(shown), sorted(k for k in INTERFACE["global_option"] if k in combat_options))
-        nested = {n for key in shown for c in OPTIONS[key].get("cases", []) for n in c.get("option", [])}
+        self.assertEqual(
+            sorted(shown),
+            sorted(k for k in INTERFACE["global_option"] if k in combat_options),
+        )
+        nested = {
+            n
+            for key in shown
+            for c in OPTIONS[key].get("cases", [])
+            for n in c.get("option", [])
+        }
         self.assertEqual(set(shown) | nested, combat_options)
-        self.assertFalse(set(shown) & nested)  # 子选项随父选项的 case 合并，不能重复登记
+        self.assertFalse(
+            set(shown) & nested
+        )  # 子选项随父选项的 case 合并，不能重复登记
 
     def test_task_entry_options_and_override_targets_exist(self):
         task = TASKS["AutoCombat.json"]["task"][0]
@@ -136,12 +159,19 @@ class WiringTests(unittest.TestCase):
     def test_scheme_cases_match_code(self):
         option = OPTIONS["CombatScheme"]
         names = [c["name"] for c in option["cases"]]
-        self.assertEqual(names, list(scheme.BUILTIN_SCHEMES) + ["custom"])  # 下拉顺序与代码一致
+        self.assertEqual(
+            names, list(scheme.BUILTIN_SCHEMES) + ["custom"]
+        )  # 下拉顺序与代码一致
         self.assertEqual(set(names), set(settings.SCHEME_CHOICES))
         self.assertEqual(option["default_case"], scheme.DEFAULT_SCHEME)
-        self.assertEqual(PIPELINE["CombatSetting_Scheme"]["attach"]["scheme"], scheme.DEFAULT_SCHEME)
+        self.assertEqual(
+            PIPELINE["CombatSetting_Scheme"]["attach"]["scheme"], scheme.DEFAULT_SCHEME
+        )
         for case in option["cases"]:
-            self.assertEqual(case["pipeline_override"]["CombatSetting_Scheme"]["attach"], {"scheme": case["name"]})
+            self.assertEqual(
+                case["pipeline_override"]["CombatSetting_Scheme"]["attach"],
+                {"scheme": case["name"]},
+            )
         for name in settings.GLOBAL_SETTING_NODES:
             self.assertIn(name, PIPELINE, name)
             self.assertFalse(PIPELINE[name]["enabled"], name)
@@ -150,12 +180,23 @@ class WiringTests(unittest.TestCase):
         actions = OPTIONS["CombatDisabledActions"]
         self.assertEqual(actions["type"], "checkbox")
         self.assertEqual(actions["default_case"], [])
-        self.assertEqual([c["name"] for c in actions["cases"]], list(submodule("model").TOGGLE_ACTIONS))
+        self.assertEqual(
+            [c["name"] for c in actions["cases"]],
+            list(submodule("model").TOGGLE_ACTIONS),
+        )
         for case in actions["cases"]:
             node = "CombatSetting_Disable%s" % case["name"].capitalize()
-            self.assertEqual(case["pipeline_override"], {node: {"attach": {"use_" + case["name"]: False}}})
+            self.assertEqual(
+                case["pipeline_override"],
+                {node: {"attach": {"use_" + case["name"]: False}}},
+            )
             self.assertEqual(PIPELINE[node]["attach"], {})  # 未勾选 = 启用
-        sizes = {c["name"]: c["pipeline_override"]["CombatSetting_TeamSize"]["attach"]["team_size"] for c in OPTIONS["CombatTeamSize"]["cases"]}
+        sizes = {
+            c["name"]: c["pipeline_override"]["CombatSetting_TeamSize"]["attach"][
+                "team_size"
+            ]
+            for c in OPTIONS["CombatTeamSize"]["cases"]
+        }
         self.assertEqual(sizes, {"1": 1, "2": 2, "3": 3, "4": 4})
         for key in ("CombatLockTarget", "CombatSearchTurn"):
             self.assertEqual(OPTIONS[key]["type"], "switch")
@@ -175,7 +216,9 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(options, settings.CombatOptions())
 
     def test_checked_actions_disable_only_those(self):
-        options, warnings = settings.merge_options(default_layers(checked=("ultimate", "switch")))
+        options, warnings = settings.merge_options(
+            default_layers(checked=("ultimate", "switch"))
+        )
         self.assertEqual(warnings, [])
         self.assertEqual(options.disabled_actions, ("ultimate", "switch"))
         self.assertEqual((options.team_size, options.lock_target), (4, True))
@@ -188,7 +231,9 @@ class WiringTests(unittest.TestCase):
             action = node.get("action", {})
             if isinstance(action, dict) and action.get("type") == "Custom":
                 self.assertIn(action["param"]["custom_action"], actions, name)
-                for carrier in action["param"]["custom_action_param"].get("option_nodes", []):
+                for carrier in action["param"]["custom_action_param"].get(
+                    "option_nodes", []
+                ):
                     self.assertIn(carrier, PIPELINE)
                     self.assertFalse(PIPELINE[carrier]["enabled"])
             reco = node.get("recognition", {})
@@ -203,7 +248,9 @@ class WiringTests(unittest.TestCase):
             self.assertIn('"%s"' % cls, registry)
 
     def test_enemy_node_matches_pinkpaw_calibration(self):
-        pinkpaw = load_json(ASSETS / "resource" / "base" / "pipeline" / "PinkPawHeist" / "tools.json")
+        pinkpaw = load_json(
+            ASSETS / "resource" / "base" / "pipeline" / "PinkPawHeist" / "tools.json"
+        )
         self.assertEqual(
             PIPELINE["CombatEnemyVisible"]["recognition"]["param"],
             pinkpaw["PinkPawHeist_CheckMonsterOnce"]["recognition"]["param"],
@@ -220,9 +267,15 @@ class LocaleTests(unittest.TestCase):
             self.assertFalse(missing, "%s missing %s" % (lang, sorted(missing)))
 
     def test_no_stale_setting_keys(self):
-        used = {k for k in set(iter_labels(TASKS)) | set(iter_labels(INTERFACE["setting"])) if k.startswith("setting_combat")}
+        used = {
+            k
+            for k in set(iter_labels(TASKS)) | set(iter_labels(INTERFACE["setting"]))
+            if k.startswith("setting_combat")
+        }
         for lang in LANGS:
-            present = {k for k in locale("interface", lang) if k.startswith("setting_combat")}
+            present = {
+                k for k in locale("interface", lang) if k.startswith("setting_combat")
+            }
             self.assertEqual(present - used, set(), lang)
 
     def test_agent_combat_keys_identical_across_languages(self):
@@ -230,16 +283,22 @@ class LocaleTests(unittest.TestCase):
         self.assertGreater(len(reference), 50)
         for lang in LANGS:
             data = locale("agent", lang)
-            self.assertEqual({k for k in data if k.startswith("combat.")}, reference, lang)
+            self.assertEqual(
+                {k for k in data if k.startswith("combat.")}, reference, lang
+            )
             for key in reference:
                 self.assertEqual(
-                    len(PLACEHOLDER.findall(data[key])), len(PLACEHOLDER.findall(locale("agent", "zh_cn")[key])), (lang, key)
+                    len(PLACEHOLDER.findall(data[key])),
+                    len(PLACEHOLDER.findall(locale("agent", "zh_cn")[key])),
+                    (lang, key),
                 )
 
     def test_builtin_scheme_names_translated(self):
         for name in scheme.BUILTIN_SCHEMES:
             s = locate.load_builtin(name)
-            for text in [s.name] + [t.note for t in s.team] + [t.character for t in s.team]:
+            for text in (
+                [s.name] + [t.note for t in s.team] + [t.character for t in s.team]
+            ):
                 if text.startswith("$"):
                     for lang in LANGS:
                         self.assertIn(text[1:], locale("agent", lang), (lang, text))
@@ -247,49 +306,107 @@ class LocaleTests(unittest.TestCase):
     def test_every_error_code_formats_in_every_language(self):
         errors = []
         for source in [
-            "skill,\nl_click(", "x = 1", "self.click()", "perform", "jump(1)", "wait", "skill(speed=1)",
-            "skill(0.1, seconds=0.2)", "wait(0.5*2)", "skill(fast)", "wait(11)", "turn(400)", ", ".join(["jump"] * 201), "", 1,
+            "skill,\nl_click(",
+            "x = 1",
+            "self.click()",
+            "perform",
+            "jump(1)",
+            "wait",
+            "skill(speed=1)",
+            "skill(0.1, seconds=0.2)",
+            "wait(0.5*2)",
+            "skill(fast)",
+            "wait(11)",
+            "turn(400)",
+            ", ".join(["jump"] * 201),
+            "",
+            1,
         ]:
             try:
                 dsl.compile_combo(source)
             except dsl.ComboError as exc:
                 errors.append(("combat.dsl.%s" % exc.code, exc.params))
         scheme_cases = [
-            [], {"combos": {}}, {"version": 1}, {"version": 1, "combos": {"9": "skill"}},
-            {"version": 1, "combos": {"1": "x = 1"}}, {"version": 1, "combos": {"1": "skill"}, "rotation": {"order": [1, 2]}},
+            [],
+            {"combos": {}},
+            {"version": 1},
+            {"version": 1, "combos": {"9": "skill"}},
+            {"version": 1, "combos": {"1": "x = 1"}},
+            {"version": 1, "combos": {"1": "skill"}, "rotation": {"order": [1, 2]}},
             {"version": 1, "combos": {"default": "skill"}, "rotation": []},
             {"version": 1, "combos": {"default": "skill"}, "rotation": {"mode": "x"}},
             {"version": 1, "combos": {"default": "skill"}, "rotation": {"order": [9]}},
-            {"version": 1, "combos": {"default": "skill"}, "rotation": {"min_field_time": 99}},
+            {
+                "version": 1,
+                "combos": {"default": "skill"},
+                "rotation": {"min_field_time": 99},
+            },
             {"version": 1, "combos": {"default": "skill"}, "team": 1},
-            {"version": 1, "combos": {"default": "skill"}, "team": [{"slot": 1}, {"slot": 1}]},
+            {
+                "version": 1,
+                "combos": {"default": "skill"},
+                "team": [{"slot": 1}, {"slot": 1}],
+            },
         ]
         for data in scheme_cases:
             with self.assertRaises(scheme.SchemeError) as ctx:
                 scheme.parse_scheme(data)
-            exc = ctx.exception  # combo 错误的模板末尾追加 DSL 详情（见 api.describe_scheme_error）
-            errors.append(("combat.scheme.%s" % exc.code, exc.params + (("detail",) if exc.combo_error else ())))
+            exc = (
+                ctx.exception
+            )  # combo 错误的模板末尾追加 DSL 详情（见 api.describe_scheme_error）
+            errors.append(
+                (
+                    "combat.scheme.%s" % exc.code,
+                    exc.params + (("detail",) if exc.combo_error else ()),
+                )
+            )
         for code, params in [
-            ("bad_json", (3, 7)), ("too_large", (64,)), ("read_failed", ("a.json", "denied")), ("not_utf8", ("a.json",)),
-            ("unknown_builtin", ("x",)), ("builtin_missing", ("x",)), ("custom_empty", ()),
-            ("custom_not_found", ("x", "dirs")), ("custom_not_json", ("x.txt",)),
+            ("bad_json", (3, 7)),
+            ("too_large", (64,)),
+            ("read_failed", ("a.json", "denied")),
+            ("not_utf8", ("a.json",)),
+            ("unknown_builtin", ("x",)),
+            ("builtin_missing", ("x",)),
+            ("custom_empty", ()),
+            ("custom_not_found", ("x", "dirs")),
+            ("custom_not_json", ("x.txt",)),
         ]:
             errors.append(("combat.scheme.%s" % code, params))
         errors += [
-            ("combat.dsl.at", (1, 2)), ("combat.waiting", ("name",)), ("combat.started", ("name",)),
-            ("combat.ended", ("reason", 12.3)), ("combat.ended_no_fight", ()), ("combat.scheme_error", ("detail",)),
-            ("combat.slot_unavailable", (3,)), ("combat.degraded", ()), ("combat.team_hint", ("name", "slots")),
-            ("combat.team.slot", (1, "label")), ("combat.strategy_hint", ("parts",)),
-            ("combat.strategy.team_size", (3,)), ("combat.strategy.disabled", ("a/b",)),
-            ("combat.strategy.lock_off", ()), ("combat.strategy.search_turn", ()),
+            ("combat.dsl.at", (1, 2)),
+            ("combat.waiting", ("name",)),
+            ("combat.started", ("name",)),
+            ("combat.ended", ("reason", 12.3)),
+            ("combat.ended_no_fight", ()),
+            ("combat.scheme_error", ("detail",)),
+            ("combat.slot_unavailable", (3,)),
+            ("combat.degraded", ()),
+            ("combat.team_hint", ("name", "slots")),
+            ("combat.team.slot", (1, "label")),
+            ("combat.strategy_hint", ("parts",)),
+            ("combat.strategy.team_size", (3,)),
+            ("combat.strategy.disabled", ("a/b",)),
+            ("combat.strategy.lock_off", ()),
+            ("combat.strategy.search_turn", ()),
         ]
-        reasons = [v for k, v in vars(submodule("model").EndReason).items() if not k.startswith("_")]
+        reasons = [
+            v
+            for k, v in vars(submodule("model").EndReason).items()
+            if not k.startswith("_")
+        ]
         self.assertEqual(len(reasons), 7)
         errors += [("combat.reason.%s" % r, ()) for r in reasons]
-        errors += [("combat.action.%s" % a, ()) for a in submodule("model").TOGGLE_ACTIONS]
+        errors += [
+            ("combat.action.%s" % a, ()) for a in submodule("model").TOGGLE_ACTIONS
+        ]
         codes = {code for code, _ in errors}
         self.assertTrue(
-            {"combat.dsl.not_text", "combat.dsl.too_many_commands", "combat.dsl.degrees_out_of_range", "combat.scheme.missing_combo"}
+            {
+                "combat.dsl.not_text",
+                "combat.dsl.too_many_commands",
+                "combat.dsl.degrees_out_of_range",
+                "combat.scheme.missing_combo",
+            }
             <= codes
         )
         for lang in LANGS:
@@ -297,7 +414,11 @@ class LocaleTests(unittest.TestCase):
             for code, params in errors:
                 self.assertIn(code, data, (lang, code))
                 try:
-                    data[code] % params if params or PLACEHOLDER.search(data[code]) else data[code]
+                    (
+                        data[code] % params
+                        if params or PLACEHOLDER.search(data[code])
+                        else data[code]
+                    )
                 except (TypeError, ValueError) as exc:
                     self.fail("%s %s %r: %s" % (lang, code, params, exc))
 

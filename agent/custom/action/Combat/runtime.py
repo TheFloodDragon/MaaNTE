@@ -25,7 +25,13 @@ MAX_ACCUM_STEP = 1.0  # 单次累计上限，防止长时间无快照后一次�
 class Monitor:
     """一场战斗内的结束判定。HUD 不可见（Q 动画、切人、加载）期间不累计脱战时间。"""
 
-    def __init__(self, start: float, max_duration: float, clear_confirm: float, hud_lost_timeout: float):
+    def __init__(
+        self,
+        start: float,
+        max_duration: float,
+        clear_confirm: float,
+        hud_lost_timeout: float,
+    ):
         self.start = start
         self.max_duration = max_duration
         self.clear_confirm = clear_confirm
@@ -37,7 +43,11 @@ class Monitor:
     def update(self, snap: Snapshot) -> None:
         if self._last_at is not None and snap.at <= self._last_at:
             return  # 同一帧不重复累计
-        dt = 0.0 if self._last_at is None else min(snap.at - self._last_at, MAX_ACCUM_STEP)
+        dt = (
+            0.0
+            if self._last_at is None
+            else min(snap.at - self._last_at, MAX_ACCUM_STEP)
+        )
         self._last_at = snap.at
         if not snap.valid:
             return

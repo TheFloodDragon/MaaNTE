@@ -30,7 +30,14 @@ class RecordingDriver:
 
 
 def snap(at, enemy, ready=True):
-    return model.Snapshot(at=at, valid=True, in_hud=ready, black=False, slot=1, enemy=enemy if ready else None)
+    return model.Snapshot(
+        at=at,
+        valid=True,
+        in_hud=ready,
+        black=False,
+        slot=1,
+        enemy=enemy if ready else None,
+    )
 
 
 def make(lock=True, search=False):
@@ -90,7 +97,10 @@ class TargetingTests(unittest.TestCase):
         for i in range(40):
             clock.t = 1.0 + i * 0.7
             t.maintain()
-        self.assertEqual(driver.calls, [("turn", targeting.SEARCH_DEGREES)] * targeting.SEARCH_MAX_TURNS)
+        self.assertEqual(
+            driver.calls,
+            [("turn", targeting.SEARCH_DEGREES)] * targeting.SEARCH_MAX_TURNS,
+        )
         t.observe(snap(clock.t, True))
         t.observe(snap(clock.t + 0.1, False))
         clock.t += 1.2
@@ -104,7 +114,9 @@ class TargetingTests(unittest.TestCase):
         t.observe(snap(0.0, False))
         clock.t = 1.0
         t.maintain()
-        self.assertEqual(driver.calls, [("turn", targeting.SEARCH_DEGREES), ("click", "middle")])
+        self.assertEqual(
+            driver.calls, [("turn", targeting.SEARCH_DEGREES), ("click", "middle")]
+        )
 
     def test_hold_ultimate_after_enemy_lost(self):
         t, _, clock = make(lock=False)

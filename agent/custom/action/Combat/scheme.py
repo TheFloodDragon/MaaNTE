@@ -113,12 +113,22 @@ def _parse_team(raw) -> list[TeamSlot]:
         raise SchemeError("bad_team")
     team, seen = [], set()
     for item in raw:
-        if not isinstance(item, dict) or not _is_int(item.get("slot")) or not 1 <= item["slot"] <= 4:
+        if (
+            not isinstance(item, dict)
+            or not _is_int(item.get("slot"))
+            or not 1 <= item["slot"] <= 4
+        ):
             raise SchemeError("bad_team")
         if item["slot"] in seen:
             raise SchemeError("duplicate_team_slot", item["slot"])
         seen.add(item["slot"])
-        team.append(TeamSlot(item["slot"], str(item.get("character") or ""), str(item.get("note") or "")))
+        team.append(
+            TeamSlot(
+                item["slot"],
+                str(item.get("character") or ""),
+                str(item.get("note") or ""),
+            )
+        )
     return sorted(team, key=lambda t: t.slot)
 
 
@@ -138,7 +148,11 @@ def _parse_rotation(raw) -> tuple[str, list[int], float]:
     ):
         raise SchemeError("bad_order")
     min_field = raw.get("min_field_time", 1.0)
-    if isinstance(min_field, bool) or not isinstance(min_field, (int, float)) or not 0 <= min_field <= MAX_FIELD_TIME:
+    if (
+        isinstance(min_field, bool)
+        or not isinstance(min_field, (int, float))
+        or not 0 <= min_field <= MAX_FIELD_TIME
+    ):
         raise SchemeError("bad_field_time", MAX_FIELD_TIME)
     return mode, list(order), float(min_field)
 
@@ -169,9 +183,15 @@ def parse_scheme(data, source: str = "") -> CombatScheme:
     warnings = ["unknown field: %s" % k for k in data if k not in _TOP_KEYS]
     for item in data.get("team") or []:
         if isinstance(item, dict):
-            warnings += ["unknown team field: %s" % k for k in item if k not in _TEAM_KEYS]
+            warnings += [
+                "unknown team field: %s" % k for k in item if k not in _TEAM_KEYS
+            ]
     if isinstance(data.get("rotation"), dict):
-        warnings += ["unknown rotation field: %s" % k for k in data["rotation"] if k not in _ROTATION_KEYS]
+        warnings += [
+            "unknown rotation field: %s" % k
+            for k in data["rotation"]
+            if k not in _ROTATION_KEYS
+        ]
     name = data.get("name")
     return CombatScheme(
         name=str(name) if name else (Path(source).stem if source else "unnamed"),

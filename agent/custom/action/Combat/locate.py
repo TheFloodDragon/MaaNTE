@@ -10,7 +10,9 @@ from pathlib import Path
 
 from .scheme import BUILTIN_SCHEMES, CombatScheme, SchemeError, read_scheme_file
 
-_AGENT_ROOT = Path(__file__).resolve().parents[4]  # .../agent/custom/action/Combat → 项目根
+_AGENT_ROOT = (
+    Path(__file__).resolve().parents[4]
+)  # .../agent/custom/action/Combat → 项目根
 
 
 def _unique(paths) -> list[Path]:
@@ -46,7 +48,9 @@ def example_dirs() -> list[Path]:
 def user_dirs() -> list[Path]:
     """用户方案目录：安装目录下的 config/combat/。"""
     # 发布包：cwd 即安装根目录；开发模式：cwd 为 assets/，项目根由 agent 位置推出
-    return _unique([Path.cwd() / "config" / "combat", _AGENT_ROOT / "config" / "combat"])
+    return _unique(
+        [Path.cwd() / "config" / "combat", _AGENT_ROOT / "config" / "combat"]
+    )
 
 
 def load_builtin(name: str) -> CombatScheme:
@@ -83,7 +87,9 @@ def load_custom(value: str) -> CombatScheme:
         raise SchemeError("custom_empty")
     path, searched = resolve_user_file(name)
     if path is None:
-        raise SchemeError("custom_not_found", name, " | ".join(str(d) for d in searched))
+        raise SchemeError(
+            "custom_not_found", name, " | ".join(str(d) for d in searched)
+        )
     if path.suffix.lower() != ".json":
         raise SchemeError("custom_not_json", path.name)
     return read_scheme_file(path)

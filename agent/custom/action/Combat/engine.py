@@ -65,7 +65,9 @@ class EngineConfig:
     team_size: int = 4
     lock_target: bool = True
     search_turn: bool = False
-    disabled: frozenset = field(default_factory=frozenset)  # 禁用的动作名（model.TOGGLE_ACTIONS）
+    disabled: frozenset = field(
+        default_factory=frozenset
+    )  # 禁用的动作名（model.TOGGLE_ACTIONS）
 
 
 def effective_order(order, excluded) -> list[int]:
@@ -90,17 +92,29 @@ def effective_order(order, excluded) -> list[int]:
         kept.pop()
     return kept
 
+
 class CombatEngine:
-    def __init__(self, runtime: Runtime, driver: InputDriver, scheme: CombatScheme, config: EngineConfig, reporter: Reporter | None = None):
+    def __init__(
+        self,
+        runtime: Runtime,
+        driver: InputDriver,
+        scheme: CombatScheme,
+        config: EngineConfig,
+        reporter: Reporter | None = None,
+    ):
         self.rt = runtime
         self.driver = driver
         self.scheme = scheme
         self.config = config
         self.reporter = reporter or Reporter()
-        self.excluded = frozenset(s for s in SLOT_KEYS if s > config.team_size)  # 超出队伍人数，不参与切人
+        self.excluded = frozenset(
+            s for s in SLOT_KEYS if s > config.team_size
+        )  # 超出队伍人数，不参与切人
         self.order = effective_order(scheme.order, self.excluded)
         self.switch_allowed = "switch" not in config.disabled
-        self.targeting = Targeting(driver, runtime.now, lock=config.lock_target, search=config.search_turn)
+        self.targeting = Targeting(
+            driver, runtime.now, lock=config.lock_target, search=config.search_turn
+        )
         self.executor = ComboExecutor(
             runtime,
             driver,
@@ -125,8 +139,13 @@ class CombatEngine:
             else:
                 began = self.rt.now()
                 cfg = self.config
-                confirm = cfg.clear_confirm + (SEARCH_EXTRA_CONFIRM if cfg.search_turn else 0.0)
-                self.rt.arm(Monitor(began, cfg.max_duration, confirm, cfg.hud_lost_timeout), self.targeting)
+                confirm = cfg.clear_confirm + (
+                    SEARCH_EXTRA_CONFIRM if cfg.search_turn else 0.0
+                )
+                self.rt.arm(
+                    Monitor(began, cfg.max_duration, confirm, cfg.hud_lost_timeout),
+                    self.targeting,
+                )
                 self.reporter.started(self.scheme)
                 self.targeting.engage()
                 self._fight()
@@ -140,12 +159,18 @@ class CombatEngine:
         finally:
             self.rt.disarm()
             self.driver.release_all()
-        result = CombatResult.of(reason, 0.0 if began is None else self.rt.now() - began)
+        result = CombatResult.of(
+            reason, 0.0 if began is None else self.rt.now() - began
+        )
         self.reporter.ended(result)
         return result
 
     def _fight(self) -> None:
-        rotate = self.scheme.mode == "cycle" and self.switch_allowed and len(set(self.order)) > 1
+        rotate = (
+            self.scheme.mode == "cycle"
+            and self.switch_allowed
+            and len(set(self.order)) > 1
+        )
         if rotate:
             pos = self._enter_rotation()
             while pos is not None and not self.degraded:
@@ -246,7 +271,9 @@ class CombatEngine:
             snap = self.rt.snapshot()
             if not snap.slot or snap.slot == slot:
                 return True
-            self.current = snap.slot  # 记录过期（例如阵亡后游戏自动换人），按实际情况重新切
+            self.current = (
+                snap.slot
+            )  # 记录过期（例如阵亡后游戏自动换人），按实际情况重新切
         if slot in self.unavailable or slot in self.excluded:
             return False
         key = SLOT_KEYS[slot]
@@ -261,7 +288,9 @@ class CombatEngine:
                 return True
             now = self.rt.now()
             if snap.valid and snap.black:
-                deadline = max(deadline, now + 0.5)  # 黑屏/加载：顺延，长时间不恢复由监视器判 hud_lost
+                deadline = max(
+                    deadline, now + 0.5
+                )  # 黑屏/加载：顺延，长时间不恢复由监视器判 hud_lost
             if now >= deadline:
                 if snap.slot:
                     self.current = snap.slot

@@ -113,11 +113,17 @@ def _roi_score(image: np.ndarray, roi, index: int) -> int:
 
 
 def slot_scores(image: np.ndarray) -> list[int]:
-    return [_roi_score(image, _slot_roi(SLOT_ROI, i), i) + SLOT_SCORE_BONUS[i] for i in range(4)]
+    return [
+        _roi_score(image, _slot_roi(SLOT_ROI, i), i) + SLOT_SCORE_BONUS[i]
+        for i in range(4)
+    ]
 
 
 def core_scores(image: np.ndarray) -> list[int]:
-    return [_roi_score(image, _slot_roi(SLOT_CORE_ROI, i), i) * SLOT_CORE_WEIGHT for i in range(4)]
+    return [
+        _roi_score(image, _slot_roi(SLOT_CORE_ROI, i), i) * SLOT_CORE_WEIGHT
+        for i in range(4)
+    ]
 
 
 def _accepted(scores, index: int, min_score, min_margin) -> bool:

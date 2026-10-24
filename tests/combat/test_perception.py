@@ -41,7 +41,9 @@ class PerceptionTests(unittest.TestCase):
 
     def test_ambiguous_or_empty_returns_zero(self):
         self.assertEqual(p.current_slot(frame(60)), 0)
-        img = paint(paint(frame(60), slot_roi(0), (255, 255, 255)), slot_roi(2), (255, 255, 255))
+        img = paint(
+            paint(frame(60), slot_roi(0), (255, 255, 255)), slot_roi(2), (255, 255, 255)
+        )
         self.assertEqual(p.current_slot(img), 0)
 
     def test_scaled_frame(self):
@@ -67,7 +69,11 @@ class PerceptionTests(unittest.TestCase):
         self.assertFalse(hidden.in_hud)
         self.assertIsNone(hidden.enemy)
         self.assertEqual(calls, [])
-        img = paint(paint(frame(60), (640, 670, 6, 6), (230, 230, 230)), slot_roi(1), (255, 255, 255))
+        img = paint(
+            paint(frame(60), (640, 670, 6, 6), (230, 230, 230)),
+            slot_roi(1),
+            (255, 255, 255),
+        )
         snap = p.observe_frame(img, detect)
         self.assertTrue(snap.ready)
         self.assertEqual((snap.slot, snap.enemy), (2, True))

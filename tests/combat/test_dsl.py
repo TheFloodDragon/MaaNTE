@@ -13,28 +13,41 @@ def names(text):
 
 class CompileTests(unittest.TestCase):
     def test_ok_nte_example_compiles(self):
-        cmds = dsl.compile_combo("l_click(0.5), jump\nskill(0.5), l_click(2), wait(0.1)\narc, wait(0.2)")
+        cmds = dsl.compile_combo(
+            "l_click(0.5), jump\nskill(0.5), l_click(2), wait(0.1)\narc, wait(0.2)"
+        )
         self.assertEqual(
-            [c.name for c in cmds], ["l_click", "jump", "skill", "l_click", "wait", "arc", "wait"]
+            [c.name for c in cmds],
+            ["l_click", "jump", "skill", "l_click", "wait", "arc", "wait"],
         )
         self.assertEqual(cmds[0].args, (0.5,))
         self.assertEqual((cmds[2].line, cmds[2].col), (2, 1))
 
     def test_defaults_aliases_and_keywords(self):
-        cmds = dsl.compile_combo("skill, l_hold, r_hold, attack, heavy(1), walk(direction=d, seconds=0.2)")
-        self.assertEqual([c.args for c in cmds], [(0.0,), (0.6,), (0.3,), (0.0,), (1.0,), ("d", 0.2)])
+        cmds = dsl.compile_combo(
+            "skill, l_hold, r_hold, attack, heavy(1), walk(direction=d, seconds=0.2)"
+        )
+        self.assertEqual(
+            [c.args for c in cmds], [(0.0,), (0.6,), (0.3,), (0.0,), (1.0,), ("d", 0.2)]
+        )
         self.assertEqual(cmds[3].name, "l_click")
         self.assertEqual(cmds[4].name, "l_hold")
 
     def test_bare_identifiers_and_case(self):
-        cmds = dsl.compile_combo("walk(W, 0.3), keydown(LShift), keyup('lshift'), click(Middle), keypress(1)")
-        self.assertEqual([c.args[0] for c in cmds], ["w", "lshift", "lshift", "middle", "1"])
+        cmds = dsl.compile_combo(
+            "walk(W, 0.3), keydown(LShift), keyup('lshift'), click(Middle), keypress(1)"
+        )
+        self.assertEqual(
+            [c.args[0] for c in cmds], ["w", "lshift", "lshift", "middle", "1"]
+        )
 
     def test_switch_slot(self):
         self.assertEqual(dsl.compile_combo("switch(2), switch('4')")[1].args, (4,))
 
     def test_lines_list_comments_indent_and_fullwidth(self):
-        cmds = dsl.compile_combo(["  ultimate  # 先放大招", "", "# 注释行", "    skill（0.2），jump"])
+        cmds = dsl.compile_combo(
+            ["  ultimate  # 先放大招", "", "# 注释行", "    skill（0.2），jump"]
+        )
         self.assertEqual([c.name for c in cmds], ["ultimate", "skill", "jump"])
         self.assertEqual(cmds[1].args, (0.2,))
 
@@ -42,7 +55,9 @@ class CompileTests(unittest.TestCase):
         self.assertEqual(dsl.compile_combo("walk(w, 0.3)")[0].text, "walk(w, 0.3)")
 
     def test_movement_and_camera_commands(self):
-        cmds = dsl.compile_combo("dodge, dodge(s), dodge(direction=WA), sprint, sprint(0.5), walk(wd, 0.3), lock, turn(-90), turn(+45), turn(0)")
+        cmds = dsl.compile_combo(
+            "dodge, dodge(s), dodge(direction=WA), sprint, sprint(0.5), walk(wd, 0.3), lock, turn(-90), turn(+45), turn(0)"
+        )
         self.assertEqual(
             [(c.name, c.args) for c in cmds],
             [
@@ -88,7 +103,9 @@ class ErrorTests(unittest.TestCase):
         self.assertCode("self.click()", "unsupported_syntax")
         self.assertCode("skill + 1", "unsupported_syntax")
         self.assertCode("skill, (jump, dodge)", "unsupported_syntax")  # 嵌套序列
-        self.assertEqual(names("(skill, jump)"), ["skill", "jump"])  # 整行加括号等价于逗号序列
+        self.assertEqual(
+            names("(skill, jump)"), ["skill", "jump"]
+        )  # 整行加括号等价于逗号序列
 
     def test_argument_errors(self):
         self.assertCode("jump(1)", "too_many_args")
@@ -113,7 +130,16 @@ class ErrorTests(unittest.TestCase):
         self.assertCode("switch(0)", "bad_value")
 
     def test_movement_and_camera_errors(self):
-        for source in ("walk(ws, 1)", "walk(ad, 1)", "walk(ww, 1)", "walk(wad, 1)", "dodge(x)", "dodge('sa d')", "turn(w)", "turn(True)"):
+        for source in (
+            "walk(ws, 1)",
+            "walk(ad, 1)",
+            "walk(ww, 1)",
+            "walk(wad, 1)",
+            "dodge(x)",
+            "dodge('sa d')",
+            "turn(w)",
+            "turn(True)",
+        ):
             self.assertCode(source, "bad_value")
         err = self.assertCode("turn(400)", "degrees_out_of_range")
         self.assertEqual(err.params, ("turn", "degrees", 400, dsl.MAX_DEGREES))
@@ -125,7 +151,9 @@ class ErrorTests(unittest.TestCase):
     def test_empty_too_long_and_not_text(self):
         self.assertCode("", "empty")
         self.assertCode("# 只有注释", "empty")
-        self.assertCode(", ".join(["jump"] * (dsl.MAX_COMMANDS + 1)), "too_many_commands")
+        self.assertCode(
+            ", ".join(["jump"] * (dsl.MAX_COMMANDS + 1)), "too_many_commands"
+        )
         self.assertCode(123, "not_text")
         self.assertCode(["skill", 1], "not_text")
 

@@ -31,7 +31,9 @@ class ParseTests(unittest.TestCase):
     def test_minimal_defaults(self):
         s = scheme.parse_scheme(base(), "dir/my_scheme.json")
         self.assertEqual(s.name, "my_scheme")
-        self.assertEqual((s.mode, s.order, s.min_field_time), ("cycle", [1, 2, 3, 4], 1.0))
+        self.assertEqual(
+            (s.mode, s.order, s.min_field_time), ("cycle", [1, 2, 3, 4], 1.0)
+        )
         self.assertEqual(s.combo_for(3)[0].name, "skill")
         self.assertEqual(s.warnings, [])
 
@@ -65,13 +67,21 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(err.combo_error.line, 2)
 
     def test_missing_combo_coverage(self):
-        err = self.assertCode({"version": 1, "combos": {"1": "skill"}, "rotation": {"order": [1, 3]}}, "missing_combo")
+        err = self.assertCode(
+            {"version": 1, "combos": {"1": "skill"}, "rotation": {"order": [1, 3]}},
+            "missing_combo",
+        )
         self.assertEqual(err.params, ("3",))
         # stay 模式当前角色可能在任意槽位，需要 default 或 1~4 全部
-        self.assertCode({"version": 1, "combos": {"1": "skill"}, "rotation": {"mode": "stay"}}, "missing_combo")
+        self.assertCode(
+            {"version": 1, "combos": {"1": "skill"}, "rotation": {"mode": "stay"}},
+            "missing_combo",
+        )
 
     def test_unknown_fields_only_warn(self):
-        s = scheme.parse_scheme(base(extra=1, team=[{"slot": 2, "role": "x"}], rotation={"speed": 1}))
+        s = scheme.parse_scheme(
+            base(extra=1, team=[{"slot": 2, "role": "x"}], rotation={"speed": 1})
+        )
         self.assertEqual(len(s.warnings), 3)
         self.assertEqual(s.team[0].slot, 2)
 
@@ -93,7 +103,9 @@ class BuiltinTests(unittest.TestCase):
             s = locate.load_builtin(name)
             self.assertTrue(s.name.startswith("$combat.scheme_name."), name)
             self.assertEqual(s.warnings, [], name)
-        example = scheme.read_scheme_file(RESOURCE_BASE / "combat" / "examples" / "custom_example.json")
+        example = scheme.read_scheme_file(
+            RESOURCE_BASE / "combat" / "examples" / "custom_example.json"
+        )
         self.assertEqual(example.warnings, [])
         self.assertEqual(example.order, [1, 2])
 
@@ -115,18 +127,28 @@ class BuiltinTests(unittest.TestCase):
         for name in scheme.BUILTIN_SCHEMES:
             s = locate.load_builtin(name)
             for size in range(1, 5):
-                order = effective_order(s.order, {slot for slot in range(1, 5) if slot > size})
+                order = effective_order(
+                    s.order, {slot for slot in range(1, 5) if slot > size}
+                )
                 self.assertTrue(order, (name, size))
-                self.assertTrue(set(order) <= set(range(1, size + 1)), (name, size, order))
+                self.assertTrue(
+                    set(order) <= set(range(1, size + 1)), (name, size, order)
+                )
                 # 同一角色不会连续两轮（含首尾循环）
-                self.assertTrue(len(order) == 1 or all(a != b for a, b in zip(order, order[1:] + order[:1])), (name, size, order))
+                self.assertTrue(
+                    len(order) == 1
+                    or all(a != b for a, b in zip(order, order[1:] + order[:1])),
+                    (name, size, order),
+                )
 
 
 class CustomLookupTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
-        self.patch = mock.patch.object(locate, "user_dirs", lambda: [self.dir / "config" / "combat"])
+        self.patch = mock.patch.object(
+            locate, "user_dirs", lambda: [self.dir / "config" / "combat"]
+        )
         self.patch.start()
         (self.dir / "config" / "combat").mkdir(parents=True)
 
@@ -136,7 +158,11 @@ class CustomLookupTests(unittest.TestCase):
 
     def write(self, name, data, raw=None):
         path = self.dir / "config" / "combat" / name
-        path.write_bytes(raw if raw is not None else json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        path.write_bytes(
+            raw
+            if raw is not None
+            else json.dumps(data, ensure_ascii=False).encode("utf-8")
+        )
         return path
 
     def assertCode(self, value, code):
@@ -166,7 +192,7 @@ class CustomLookupTests(unittest.TestCase):
         self.assertCode("mine.txt", "custom_not_json")
         self.write("big.json", None, raw=b" " * (scheme.MAX_FILE_BYTES + 1))
         self.assertCode("big", "too_large")
-        self.write("gbk.json", None, raw="{\"name\": \"中文\"}".encode("gbk"))
+        self.write("gbk.json", None, raw='{"name": "中文"}'.encode("gbk"))
         self.assertCode("gbk", "not_utf8")
         self.write("broken.json", None, raw=b"{")
         self.assertCode("broken", "bad_json")

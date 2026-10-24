@@ -15,7 +15,14 @@ from utils.logger import logger
 
 from .dsl import Command
 from .inputs import InputDriver
-from .keys import ARC_KEY, CLICK_INTERVAL, JUMP_KEY, SKILL_KEY, TAP_SECONDS, ULTIMATE_KEY
+from .keys import (
+    ARC_KEY,
+    CLICK_INTERVAL,
+    JUMP_KEY,
+    SKILL_KEY,
+    TAP_SECONDS,
+    ULTIMATE_KEY,
+)
 from .model import SwitchFailed
 from .runtime import SLEEP_SLICE, Runtime
 
@@ -36,7 +43,9 @@ ACTION_COMMANDS: dict[str, frozenset[str]] = {
 
 def disabled_commands(actions) -> frozenset[str]:
     """把禁用的动作名展开成出招表指令名集合，未知动作忽略。"""
-    return frozenset().union(*(ACTION_COMMANDS[a] for a in actions if a in ACTION_COMMANDS))
+    return frozenset().union(
+        *(ACTION_COMMANDS[a] for a in actions if a in ACTION_COMMANDS)
+    )
 
 
 class ComboExecutor:
@@ -79,7 +88,12 @@ class ComboExecutor:
         """普攻 seconds 秒（只在 HUD 可见时点击）。"""
         self.repeat_active(seconds, lambda: self.driver.click("left"))
 
-    def repeat_active(self, seconds: float, action: Callable[[], object], interval: float = CLICK_INTERVAL) -> None:
+    def repeat_active(
+        self,
+        seconds: float,
+        action: Callable[[], object],
+        interval: float = CLICK_INTERVAL,
+    ) -> None:
         """在 seconds 秒的「HUD 可见时间」内以固定间隔重复 action；每次之前等 HUD，等待时间顺延。"""
         deadline = self.rt.now() + seconds
         while True:

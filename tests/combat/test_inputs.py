@@ -19,21 +19,36 @@ def make_driver(**world_kwargs):
 
 
 def key_events(world):
-    return [(round(t, 6), kind, vk) for t, kind, vk in world.events if kind in ("down", "up")]
+    return [
+        (round(t, 6), kind, vk)
+        for t, kind, vk in world.events
+        if kind in ("down", "up")
+    ]
 
 
 class KeyComboTests(unittest.TestCase):
     def test_diagonal_walk_releases_in_reverse_order(self):
         driver, world, clock = make_driver()
         driver.hold_keys(("w", "a"), 0.3)
-        self.assertEqual(key_events(world), [(0.0, "down", VK_W), (0.0, "down", VK_A), (0.3, "up", VK_A), (0.3, "up", VK_W)])
+        self.assertEqual(
+            key_events(world),
+            [
+                (0.0, "down", VK_W),
+                (0.0, "down", VK_A),
+                (0.3, "up", VK_A),
+                (0.3, "up", VK_W),
+            ],
+        )
         self.assertFalse(driver.holding)
 
     def test_sprint_taps_shift_while_holding_forward(self):
         driver, world, clock = make_driver()
         driver.sprint(0.8)
         events = key_events(world)
-        self.assertEqual([(kind, vk) for _, kind, vk in events], [("down", VK_W), ("down", VK_SHIFT), ("up", VK_SHIFT), ("up", VK_W)])
+        self.assertEqual(
+            [(kind, vk) for _, kind, vk in events],
+            [("down", VK_W), ("down", VK_SHIFT), ("up", VK_SHIFT), ("up", VK_W)],
+        )
         self.assertAlmostEqual(events[1][0], keys.SPRINT_LEAD)
         self.assertAlmostEqual(events[-1][0], 0.8)
 
@@ -41,13 +56,19 @@ class KeyComboTests(unittest.TestCase):
         driver, world, _ = make_driver()
         driver.dodge("s")
         events = key_events(world)
-        self.assertEqual([(kind, vk) for _, kind, vk in events], [("down", VK_S), ("down", VK_SHIFT), ("up", VK_SHIFT), ("up", VK_S)])
+        self.assertEqual(
+            [(kind, vk) for _, kind, vk in events],
+            [("down", VK_S), ("down", VK_SHIFT), ("up", VK_SHIFT), ("up", VK_S)],
+        )
         self.assertAlmostEqual(events[1][0], keys.DODGE_LEAD)
 
     def test_plain_dodge_only_taps_shift(self):
         driver, world, _ = make_driver()
         driver.dodge("")
-        self.assertEqual([(kind, vk) for _, kind, vk in key_events(world)], [("down", VK_SHIFT), ("up", VK_SHIFT)])
+        self.assertEqual(
+            [(kind, vk) for _, kind, vk in key_events(world)],
+            [("down", VK_SHIFT), ("up", VK_SHIFT)],
+        )
 
     def test_interrupted_hold_still_releases(self):
         clock = FakeClock()
@@ -61,7 +82,9 @@ class KeyComboTests(unittest.TestCase):
         driver = inputs.InputDriver(world, stopping_sleep)
         with self.assertRaises(model.CombatStopped):
             driver.hold_keys(("w", "d"), 5.0)
-        self.assertEqual([kind for _, kind, _ in key_events(world)], ["down", "down", "up", "up"])
+        self.assertEqual(
+            [kind for _, kind, _ in key_events(world)], ["down", "down", "up", "up"]
+        )
         self.assertFalse(driver.holding)
 
 
@@ -74,7 +97,10 @@ class TurnTests(unittest.TestCase):
         self.assertTrue(all(0 < dx <= keys.TURN_STEP_PIXELS for dx in moves), moves)
         world.events.clear()
         self.assertTrue(driver.turn(-45))
-        self.assertEqual(sum(dx for _, kind, dx in world.events if kind == "move"), int(-45 * keys.TURN_PIXELS_PER_DEGREE))
+        self.assertEqual(
+            sum(dx for _, kind, dx in world.events if kind == "move"),
+            int(-45 * keys.TURN_PIXELS_PER_DEGREE),
+        )
         world.events.clear()
         self.assertTrue(driver.turn(0))
         self.assertEqual(world.events, [])

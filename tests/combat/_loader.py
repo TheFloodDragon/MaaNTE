@@ -38,7 +38,9 @@ def _install_stubs() -> None:
     logger_mod.logger = test_logger
     logger_mod.get_logger = logging.getLogger
     i18n = _module("utils.i18n")
-    i18n.T = lambda key, *args: "%s|%s" % (key, "|".join(map(str, args))) if args else key
+    i18n.T = lambda key, *args: (
+        "%s|%s" % (key, "|".join(map(str, args))) if args else key
+    )
     maafocus = _module("utils.maafocus")
     maafocus.Print = lambda context, text: PRINTED.append(text)
     maafocus.PrintT = lambda context, key, *args: PRINTED.append(i18n.T(key, *args))

@@ -76,7 +76,9 @@ class PrintReporter(Reporter):
         if result.reason == EndReason.NO_COMBAT:
             self._print("combat.ended_no_fight")
         else:
-            self._print("combat.ended", _t("combat.reason.%s" % result.reason), result.duration)
+            self._print(
+                "combat.ended", _t("combat.reason.%s" % result.reason), result.duration
+            )
 
     def slot_unavailable(self, slot: int) -> None:
         self._print("combat.slot_unavailable", slot)
@@ -126,7 +128,9 @@ def _announce_once(key: tuple, action) -> None:
         action()
 
 
-def build_engine(context, scheme: CombatScheme, options: CombatOptions, reporter: Reporter) -> CombatEngine:
+def build_engine(
+    context, scheme: CombatScheme, options: CombatOptions, reporter: Reporter
+) -> CombatEngine:
     controller = context.tasker.controller
 
     def capture():
@@ -187,7 +191,9 @@ def run_combat(
     for warning in scheme.warnings:
         logger.warning("combat scheme %s: %s", scheme.source, warning)
     if scheme.team:
-        _announce_once(("team", scheme.source, scheme.name), lambda: reporter.team_hint(scheme))
+        _announce_once(
+            ("team", scheme.source, scheme.name), lambda: reporter.team_hint(scheme)
+        )
     changes = strategy_changes(options)
     if changes:
         _announce_once(("strategy",) + changes, lambda: reporter.strategy_hint(changes))
