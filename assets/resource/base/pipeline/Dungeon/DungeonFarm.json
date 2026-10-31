@@ -1,24 +1,66 @@
 {
-    // 刷本（异象界域）主流程。状态识别节点见 DungeonStatus.json，Python 桥接见 agent/custom/action/Dungeon。
-    // 消费只发生在领奖弹窗点击普通「领取」：每次点击前由 dungeon_gate 读余额判定，
-    // 看到结算「获得道具」才计一次；最后一轮不点「再次挑战」，直接退出副本。
+    // 刷本主流程（未实机校准）。识别节点见 DungeonStatus.json，profile 目录与模板见 DungeonProfiles.json。
+    // 入场前、领奖前、再次挑战前三处体力闸门；40/80 由同帧按钮文字与成本数字关联，只有 DungeonFarmClaim 一个消费动作。
+    // 所有可执行节点显式 rate_limit / pre_delay / post_delay = 0，不用节点 timeout 推进流程。
     "DungeonFarm_RunsOption": {
-        "desc": "选项载体：刷取次数（0 = 刷到余额不足）",
+        "desc": "选项载体：成功领奖轮数上限（0 = 不限，仍受预算 / 保留线约束）",
         "enabled": false,
         "attach": {
             "runs": "0"
         }
     },
     "DungeonFarm_StageOption": {
-        "desc": "选项载体：副本稳定 ID 与单次普通领取消耗",
+        "desc": "选项载体：副本 profile id；cost 仅兼容旧配置，只接受 40",
         "enabled": false,
         "attach": {
             "name": "clock_trick",
             "cost": 40
         }
     },
+    "DungeonFarm_TypeOption": {
+        "desc": "选项载体：副本类型 id，须与 profile.type_id 一致",
+        "enabled": false,
+        "attach": {
+            "type_id": "anomaly_domain"
+        }
+    },
+    "DungeonFarm_EntranceOption": {
+        "desc": "选项载体：副本入口 id，须与 profile.entrance_id 一致",
+        "enabled": false,
+        "attach": {
+            "entrance_id": "rabbithole"
+        }
+    },
+    "DungeonFarm_PlanOption": {
+        "desc": "选项载体：体力计划 exhaust（用完本次预算）/ reserve（保留指定值）",
+        "enabled": false,
+        "attach": {
+            "mode": "exhaust"
+        }
+    },
+    "DungeonFarm_ReserveOption": {
+        "desc": "选项载体：至少保留的本性像素（仅 reserve 计划生效）",
+        "enabled": false,
+        "attach": {
+            "reserve": "0"
+        }
+    },
+    "DungeonFarm_RewardOption": {
+        "desc": "选项载体：单次领取消耗策略 40 / 80 / auto",
+        "enabled": false,
+        "attach": {
+            "reward_mode": "40"
+        }
+    },
+    "DungeonFarm_TeamOption": {
+        "desc": "选项载体：队伍策略，目前只支持沿用当前队伍",
+        "enabled": false,
+        "attach": {
+            "team_mode": "current"
+        }
+    },
     "DungeonFarmMain": {
-        "desc": "刷本入口：读选项并重置计次",
+        "desc": "入口：解析选项与 profile、整节点注入所选副本识别/路线，重建计次；配置错误在任何输入前失败",
         "recognition": {
             "type": "DirectHit"
         },
@@ -39,13 +81,66 @@
         ]
     },
     "DungeonFarmStart": {
-        "desc": "判断起点：已在副本选择界面 / 已站在入口 / 需要传送；其他界面先回大世界",
+        "desc": "起点分类：先拒绝接管非本任务的战斗/关卡/领奖/结算，再从目标列表、入口或大世界开始",
         "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
+            "DungeonFarmUnsafeStart",
+            "DungeonFarmEntryGate",
             "DungeonFarmSelectStage",
             "DungeonFarmEnterEntrance",
+            "DungeonFarmTeleport",
+            "DungeonFarmStartFromMenu"
+        ],
+        "on_error": [
+            "DungeonFarmFail"
+        ]
+    },
+    "DungeonFarmUnsafeStart": {
+        "desc": "非本任务发起的战斗、关卡、奖励或结算：不接管，报告后失败",
+        "recognition": {
+            "type": "Or",
+            "param": {
+                "any_of": [
+                    "CombatEnemyVisible",
+                    "DungeonEnemyCounter",
+                    "DungeonRewardPrompt",
+                    "DungeonRewardPopup",
+                    "DungeonSettlement"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_fail",
+                "custom_action_param": {
+                    "reason": "unsafe_start"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonFarmStartFromMenu": {
+        "desc": "只在已识别的菜单内调用公共回世界接口，不对未知画面盲按 Esc",
+        "recognition": {
+            "type": "Or",
+            "param": {
+                "any_of": [
+                    "InEscMenu",
+                    "InBagMenu",
+                    "InExplorationGuideMenu"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "DungeonFarmUnsafeStart",
             "DungeonFarmTeleport",
             "[JumpBack]SceneAnyEnterWorld"
         ],
@@ -54,7 +149,7 @@
         ]
     },
     "DungeonFarmTeleport": {
-        "desc": "在大世界：地图传送到兔子洞（新赫兰德区 · 异象界域）",
+        "desc": "未校准：在大世界按 profile 传送点打开地图索引传送（兔子洞 worldX/Y 为占位 0，不作寻路坐标）；传送完成不等于到达，须再识别入口",
         "recognition": {
             "type": "And",
             "param": {
@@ -77,6 +172,8 @@
         "post_delay": 0,
         "next": [
             "DungeonFarmEnterEntrance",
+            "[JumpBack]SceneLoadingType1",
+            "[JumpBack]SceneLoadingType2",
             "DungeonFarmWalkToEntrance"
         ],
         "on_error": [
@@ -84,7 +181,7 @@
         ]
     },
     "DungeonFarmWalkToEntrance": {
-        "desc": "传送后：按住 W 前进，每帧识别入口 F 提示，看到即松键（有界、可中断）",
+        "desc": "未校准历史路线：仅在大世界有界按住 W，入口提示出现即松键；战斗/加载/弹窗立即松键交还识别；没有校准的进展锚点",
         "recognition": {
             "type": "And",
             "param": {
@@ -100,6 +197,14 @@
                 "custom_action_param": {
                     "key": "W",
                     "until": "DungeonEntrancePrompt",
+                    "guard": "InWorld",
+                    "abort_nodes": [
+                        "CombatEnemyVisible",
+                        "DungeonEnemyCounter",
+                        "DungeonRewardPopup",
+                        "SceneLoadingType1",
+                        "SceneLoadingType2"
+                    ],
                     "timeout": 15
                 }
             }
@@ -115,7 +220,7 @@
         ]
     },
     "DungeonFarmEnterEntrance": {
-        "desc": "看到「兔子洞」F 提示：按一次 F 打开副本选择",
+        "desc": "大世界看到 profile 入口提示：按一次 F，再识别副本选择界面",
         "recognition": {
             "type": "And",
             "param": {
@@ -135,6 +240,7 @@
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
+            "DungeonFarmEntryGate",
             "DungeonFarmSelectStage",
             "[JumpBack]SceneLoadingType1",
             "[JumpBack]SceneLoadingType2"
@@ -144,7 +250,7 @@
         ]
     },
     "DungeonFarmSelectStage": {
-        "desc": "副本选择界面：点击左侧列表中的目标副本（难度沿用游戏当前选择）",
+        "desc": "副本选择界面：点击 profile 绑定的目标列表项；难度沿用游戏当前选择",
         "recognition": {
             "type": "And",
             "param": {
@@ -162,14 +268,50 @@
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
-            "DungeonFarmEnter"
+            "DungeonFarmEntryGate"
         ],
         "on_error": [
             "DungeonFarmFail"
         ]
     },
+    "DungeonFarmEntryGate": {
+        "desc": "详情复核为目标后，首次读余额冻结预算；读不到余额或预算不足一次领取都不进入战斗",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "DungeonStageListTitle",
+                    "DungeonStageDetail",
+                    "DungeonEnterButton"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_gate",
+                "custom_action_param": {
+                    "phase": "entry",
+                    "balance_node": "DungeonEntryBalance",
+                    "continue": [
+                        "DungeonFarmEnter"
+                    ],
+                    "finish": [
+                        "DungeonFarmLeave"
+                    ]
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [],
+        "on_error": [
+            "DungeonFarmFail"
+        ]
+    },
     "DungeonFarmEnter": {
-        "desc": "右侧详情已是目标副本且画面静止后，点「进入」",
+        "desc": "闸门批准后：新截图重新定位「进入」并单击一次；点击不等于入场成功",
         "recognition": {
             "type": "And",
             "param": {
@@ -181,18 +323,15 @@
                 "box_index": 2
             }
         },
-        "pre_wait_freezes": {
-            "target": [
-                240,
-                0,
-                1040,
-                640
-            ],
-            "time": 500,
-            "timeout": 5000
-        },
         "action": {
-            "type": "Click"
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_enter",
+                "custom_action_param": {
+                    "phase": "entry",
+                    "button_node": "DungeonEnterButton"
+                }
+            }
         },
         "rate_limit": 0,
         "pre_delay": 0,
@@ -207,7 +346,7 @@
         ]
     },
     "DungeonFarmInDungeon": {
-        "desc": "已进入副本（左上「剩余敌人数」可见）：分派到战斗 / 领奖 / 前进",
+        "desc": "HUD 与敌人数证明已在关卡内：开始本轮并建立截止时间（同轮不重置）",
         "recognition": {
             "type": "And",
             "param": {
@@ -217,12 +356,22 @@
                 ]
             }
         },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_begin_round",
+                "custom_action_param": {
+                    "round_timeout": 600
+                }
+            }
+        },
         "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
-            "DungeonFarmFight",
+            "DungeonFarmClaimGate",
             "DungeonFarmRewardPrompt",
+            "DungeonFarmFight",
             "DungeonFarmAdvance"
         ],
         "on_error": [
@@ -230,7 +379,7 @@
         ]
     },
     "DungeonFarmFight": {
-        "desc": "看到敌人血条才调度战斗；多波敌人共享本轮总时限。返回后重新识别，不把战斗结束当通关",
+        "desc": "血条与 HUD 均在才调度战斗；返回不等于通关，先识别奖励 / 加载，再战斗或有界前行",
         "recognition": {
             "type": "And",
             "param": {
@@ -245,7 +394,6 @@
             "param": {
                 "custom_action": "dungeon_fight",
                 "custom_action_param": {
-                    "round_timeout": 600,
                     "wait_timeout": 5
                 }
             }
@@ -254,8 +402,11 @@
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
-            "DungeonFarmFight",
+            "DungeonFarmClaimGate",
             "DungeonFarmRewardPrompt",
+            "[JumpBack]SceneLoadingType1",
+            "[JumpBack]SceneLoadingType2",
+            "DungeonFarmFight",
             "DungeonFarmAdvance"
         ],
         "on_error": [
@@ -263,7 +414,7 @@
         ]
     },
     "DungeonFarmAdvance": {
-        "desc": "副本内看不到敌人和奖励：按住 W 前进，直到看到敌人血条或奖励 F 提示（有界、可中断）",
+        "desc": "未校准历史关内前进：须保有 HUD 与敌人数；敌人血条或奖励提示即停，弹窗/结算/加载立即松键；不猜进展 ROI、不做左右纠偏",
         "recognition": {
             "type": "And",
             "param": {
@@ -280,6 +431,13 @@
                 "custom_action_param": {
                     "key": "W",
                     "until": "__DungeonFarmAdvanceTarget",
+                    "guard": "__DungeonFarmMovementGuard",
+                    "abort_nodes": [
+                        "DungeonRewardPopup",
+                        "DungeonSettlement",
+                        "SceneLoadingType1",
+                        "SceneLoadingType2"
+                    ],
                     "timeout": 20
                 }
             }
@@ -288,21 +446,39 @@
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
-            "DungeonFarmFight",
-            "DungeonFarmRewardPrompt"
+            "DungeonFarmClaimGate",
+            "DungeonFarmRewardPrompt",
+            "[JumpBack]SceneLoadingType1",
+            "[JumpBack]SceneLoadingType2",
+            "DungeonFarmFight"
         ],
         "on_error": [
             "DungeonFarmFail"
         ]
     },
+    "__DungeonFarmMovementGuard": {
+        "desc": "关内移动守护场景（仅识别）",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CombatInHud",
+                    "DungeonEnemyCounter"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
     "__DungeonFarmAdvanceTarget": {
-        "desc": "前进的停止条件：敌人血条或奖励 F 提示（仅识别）",
+        "desc": "关内前进停止条件：奖励提示或敌人血条（仅识别）",
         "recognition": {
             "type": "Or",
             "param": {
                 "any_of": [
-                    "CombatEnemyVisible",
-                    "DungeonRewardPrompt"
+                    "DungeonRewardPrompt",
+                    "CombatEnemyVisible"
                 ]
             }
         },
@@ -311,7 +487,7 @@
         "post_delay": 0
     },
     "DungeonFarmRewardPrompt": {
-        "desc": "看到奖励 F 提示：按一次 F 打开领奖弹窗",
+        "desc": "独立的奖励交互提示出现才按 F；不以战斗 cleared 推断通关",
         "recognition": {
             "type": "And",
             "param": {
@@ -338,13 +514,12 @@
         ]
     },
     "DungeonFarmClaimGate": {
-        "desc": "领奖弹窗：读余额决定领取还是结束。next 由 dungeon_gate 按判定结果改写",
+        "desc": "弹窗标题证明是领奖弹窗：同帧读余额与可用按钮成本，决定领取还是结束。next 由闸门改写",
         "recognition": {
             "type": "And",
             "param": {
                 "all_of": [
-                    "DungeonRewardPopup",
-                    "DungeonClaimButton"
+                    "DungeonRewardPopup"
                 ]
             }
         },
@@ -363,7 +538,14 @@
             "param": {
                 "custom_action": "dungeon_gate",
                 "custom_action_param": {
+                    "phase": "claim",
+                    "popup_node": "DungeonRewardPopup",
                     "balance_node": "DungeonBalance",
+                    "options_node": "DungeonRewardOptions",
+                    "buttons": {
+                        "40": "DungeonClaimButton",
+                        "80": "DungeonClaim80Button"
+                    },
                     "continue": [
                         "DungeonFarmClaim"
                     ],
@@ -382,21 +564,28 @@
         ]
     },
     "DungeonFarmClaim": {
-        "desc": "点击左侧普通「领取」一次（未确认前拒绝再点），然后等待结算",
+        "desc": "唯一消费动作：新截图关联按钮与 40/80 成本、复核批准预算后单击一次；不使用 argv.box 与左右位置",
         "recognition": {
             "type": "And",
             "param": {
                 "all_of": [
-                    "DungeonRewardPopup",
-                    "DungeonClaimButton"
-                ],
-                "box_index": 1
+                    "DungeonRewardPopup"
+                ]
             }
         },
         "action": {
             "type": "Custom",
             "param": {
-                "custom_action": "dungeon_claim"
+                "custom_action": "dungeon_claim",
+                "custom_action_param": {
+                    "popup_node": "DungeonRewardPopup",
+                    "balance_node": "DungeonBalance",
+                    "options_node": "DungeonRewardOptions",
+                    "buttons": {
+                        "40": "DungeonClaimButton",
+                        "80": "DungeonClaim80Button"
+                    }
+                }
             }
         },
         "rate_limit": 0,
@@ -410,7 +599,7 @@
         ]
     },
     "DungeonFarmSettlement": {
-        "desc": "结算「获得道具」：确认本轮领取成功并计一次，再决定再次挑战或退出。next 由 dungeon_confirm 改写",
+        "desc": "本轮结算：80 档也只记一轮，重复确认不重计；达到次数则不走再次挑战",
         "recognition": {
             "type": "And",
             "param": {
@@ -424,6 +613,41 @@
             "param": {
                 "custom_action": "dungeon_confirm",
                 "custom_action_param": {
+                    "continue": [
+                        "DungeonFarmRepeatGate"
+                    ],
+                    "finish": [
+                        "DungeonFarmLeave"
+                    ]
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [],
+        "on_error": [
+            "DungeonFarmFail"
+        ]
+    },
+    "DungeonFarmRepeatGate": {
+        "desc": "再次挑战前：读到余额须与推算一致，读不到用标记为推算的余额；不足一次领取则退出",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "DungeonSettlement",
+                    "DungeonChallengeAgain"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_gate",
+                "custom_action_param": {
+                    "phase": "repeat",
+                    "balance_node": "DungeonRepeatBalance",
                     "continue": [
                         "DungeonFarmAgain"
                     ],
@@ -442,7 +666,7 @@
         ]
     },
     "DungeonFarmAgain": {
-        "desc": "还要继续：点「再次挑战」原地重开（消费仍在下一轮领取前由闸门判定）",
+        "desc": "闸门批准后单击「再次挑战」一次，再识别新一轮关卡",
         "recognition": {
             "type": "And",
             "param": {
@@ -454,7 +678,14 @@
             }
         },
         "action": {
-            "type": "Click"
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_enter",
+                "custom_action_param": {
+                    "phase": "repeat",
+                    "button_node": "DungeonChallengeAgain"
+                }
+            }
         },
         "rate_limit": 0,
         "pre_delay": 0,
@@ -469,7 +700,15 @@
         ]
     },
     "DungeonFarmClosePopup": {
-        "desc": "余额不足或已达次数：关闭领奖弹窗，不领取",
+        "desc": "已识别领奖弹窗才按 Esc 关闭，不领取",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "DungeonRewardPopup"
+                ]
+            }
+        },
         "action": {
             "type": "ClickKey",
             "param": {
@@ -481,10 +720,38 @@
         "post_delay": 0,
         "next": [
             "DungeonFarmLeave"
+        ],
+        "on_error": [
+            "DungeonFarmFail"
         ]
     },
     "DungeonFarmLeave": {
-        "desc": "最终退出：经公共场景接口回到大世界，回到大世界后才报完成（不点「再次挑战」）",
+        "desc": "正常结束：只从已知画面经公共接口回大世界，未知画面保留现场并失败",
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "DungeonFarmFinished",
+            "DungeonFarmLeaveKnown"
+        ],
+        "on_error": [
+            "DungeonFarmFail"
+        ]
+    },
+    "DungeonFarmLeaveKnown": {
+        "desc": "已知的副本相关画面：交给公共回世界接口",
+        "recognition": {
+            "type": "Or",
+            "param": {
+                "any_of": [
+                    "DungeonSettlement",
+                    "DungeonStageListTitle",
+                    "InMiniWorld",
+                    "InEscMenu",
+                    "DungeonRewardPrompt"
+                ]
+            }
+        },
         "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0,
@@ -497,7 +764,7 @@
         ]
     },
     "DungeonFarmFinished": {
-        "desc": "已回到大世界：只有正常结束（指定次数 / 余额不足）才报成功",
+        "desc": "回到大世界后汇总：只有达到次数 / 预算用尽才报成功",
         "recognition": {
             "type": "And",
             "param": {
@@ -517,7 +784,7 @@
         "post_delay": 0
     },
     "DungeonFarmFail": {
-        "desc": "失败汇总：停在当前画面并报告已确认的领取次数，不做盲目导航",
+        "desc": "失败汇总：停在当前画面，不强制退出、不补体力、不复活重试；已确认计数不被清理覆盖",
         "action": {
             "type": "Custom",
             "param": {

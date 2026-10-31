@@ -5,19 +5,39 @@
             "label": "$task_dungeon_farm_label",
             "entry": "DungeonFarmMain",
             "description": "$task_dungeon_farm_desc",
-            "option": [
-                "DungeonFarmStage",
-                "DungeonFarmRuns"
-            ],
-            "controller": [
-                "Win32-Front"
-            ],
-            "group": [
-                "Daily"
-            ]
+            "option": ["DungeonFarmType", "DungeonFarmPlan", "DungeonFarmReward", "DungeonFarmRuns", "DungeonFarmTeam"],
+            "controller": ["Win32-Front"],
+            "group": ["Daily"]
         }
     ],
     "option": {
+        "DungeonFarmType": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_type",
+            "default_case": "AnomalyDomain",
+            "cases": [
+                {
+                    "name": "AnomalyDomain",
+                    "label": "$task_dungeon_farm_option_type_anomaly_domain",
+                    "option": ["DungeonFarmEntrance"],
+                    "pipeline_override": {"DungeonFarm_TypeOption": {"attach": {"type_id": "anomaly_domain"}}}
+                }
+            ]
+        },
+        "DungeonFarmEntrance": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_entrance",
+            "description": "$task_dungeon_farm_option_entrance_desc",
+            "default_case": "RabbitHole",
+            "cases": [
+                {
+                    "name": "RabbitHole",
+                    "label": "$task_dungeon_farm_option_entrance_rabbithole",
+                    "option": ["DungeonFarmStage"],
+                    "pipeline_override": {"DungeonFarm_EntranceOption": {"attach": {"entrance_id": "rabbithole"}}}
+                }
+            ]
+        },
         "DungeonFarmStage": {
             "type": "select",
             "label": "$task_dungeon_farm_option_stage",
@@ -27,15 +47,47 @@
                 {
                     "name": "ClockTrick",
                     "label": "$task_dungeon_farm_option_stage_clock_trick",
-                    "pipeline_override": {
-                        "DungeonFarm_StageOption": {
-                            "attach": {
-                                "name": "clock_trick",
-                                "cost": 40
-                            }
-                        }
-                    }
+                    "pipeline_override": {"DungeonFarm_StageOption": {"attach": {"name": "clock_trick", "cost": 40}}}
                 }
+            ]
+        },
+        "DungeonFarmPlan": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_plan",
+            "description": "$task_dungeon_farm_option_plan_desc",
+            "default_case": "Exhaust",
+            "cases": [
+                {
+                    "name": "Exhaust",
+                    "label": "$task_dungeon_farm_option_plan_exhaust",
+                    "pipeline_override": {"DungeonFarm_PlanOption": {"attach": {"mode": "exhaust"}}}
+                },
+                {
+                    "name": "Reserve",
+                    "label": "$task_dungeon_farm_option_plan_reserve",
+                    "option": ["DungeonFarmReserve"],
+                    "pipeline_override": {"DungeonFarm_PlanOption": {"attach": {"mode": "reserve"}}}
+                }
+            ]
+        },
+        "DungeonFarmReserve": {
+            "type": "input",
+            "label": "$task_dungeon_farm_option_reserve",
+            "description": "$task_dungeon_farm_option_reserve_desc",
+            "inputs": [
+                {"name": "reserve", "default": "0", "pipeline_type": "string", "verify": "^(0|[1-9]\\d{0,5})$", "pattern_msg": "$task_dungeon_farm_option_reserve_invalid"}
+            ],
+            "pipeline_override": {"DungeonFarm_ReserveOption": {"attach": {"reserve": "{reserve}"}}}
+        },
+        "DungeonFarmReward": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_reward",
+            "description": "$task_dungeon_farm_option_reward_desc",
+            "default_case": "40",
+            "cases": [
+                {"name": "40", "label": "$task_dungeon_farm_option_reward_40", "pipeline_override": {"DungeonFarm_RewardOption": {"attach": {"reward_mode": "40"}}}},
+                {"name": "Auto", "label": "$task_dungeon_farm_option_reward_auto", "pipeline_override": {"DungeonFarm_RewardOption": {"attach": {"reward_mode": "auto"}}}},
+                {"name": "80", "label": "$task_dungeon_farm_option_reward_80", "pipeline_override": {"DungeonFarm_RewardOption": {"attach": {"reward_mode": "80"}}}}
             ]
         },
         "DungeonFarmRuns": {
@@ -43,21 +95,18 @@
             "label": "$task_dungeon_farm_option_runs",
             "description": "$task_dungeon_farm_option_runs_desc",
             "inputs": [
-                {
-                    "name": "runs",
-                    "default": "0",
-                    "pipeline_type": "string",
-                    "verify": "^(0|[1-9]\\d{0,2})$",
-                    "pattern_msg": "$task_dungeon_farm_option_runs_invalid"
-                }
+                {"name": "runs", "default": "0", "pipeline_type": "string", "verify": "^(0|[1-9]\\d{0,2})$", "pattern_msg": "$task_dungeon_farm_option_runs_invalid"}
             ],
-            "pipeline_override": {
-                "DungeonFarm_RunsOption": {
-                    "attach": {
-                        "runs": "{runs}"
-                    }
-                }
-            }
+            "pipeline_override": {"DungeonFarm_RunsOption": {"attach": {"runs": "{runs}"}}}
+        },
+        "DungeonFarmTeam": {
+            "type": "select",
+            "label": "$task_dungeon_farm_option_team",
+            "description": "$task_dungeon_farm_option_team_desc",
+            "default_case": "Current",
+            "cases": [
+                {"name": "Current", "label": "$task_dungeon_farm_option_team_current", "pipeline_override": {"DungeonFarm_TeamOption": {"attach": {"team_mode": "current"}}}}
+            ]
         }
     }
 }

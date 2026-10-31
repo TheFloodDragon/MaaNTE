@@ -1,9 +1,11 @@
 {
-    // 刷本（异象界域）状态识别节点：只识别、不动作，供 DungeonFarm.json 组合使用。
-    // 注意：ROI 沿用历史 rabbit_hole.json 按玩家截图标定的数值，尚未在实机上核对，
-    // 首次使用需实机截图校准；识别不到时流程会停在当前状态并报错，不会盲点。
+    // 刷本状态识别节点：只识别、不动作，供 DungeonFarm.json 组合使用。
+    // 全部未实机校准：ROI 与文字复用历史 rabbit_hole.json / 旧版状态节点，没有国服 40/80 按钮校准图。
+    // 按钮按完整文字识别，成本由同帧 OCR 数字按距离唯一关联；绝不以左/右位置推断普通/双倍。
+    // 这些默认值与 DungeonProfiles.json 中钟表把戏模板一致；dungeon_reset 每次按所选 profile 整节点重注入。
+    // 缺余额、多值、成本歧义或未知界面一律停止，不盲点。
     "DungeonEntrancePrompt": {
-        "desc": "大世界中兔子洞入口的 F 交互提示",
+        "desc": "未校准：大世界兔子洞入口 F 交互提示（历史 rabbit_hole.json 区域）",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -24,7 +26,7 @@
         "post_delay": 0
     },
     "DungeonStageListTitle": {
-        "desc": "异象界域副本选择界面标题（左上）",
+        "desc": "未校准：副本选择界面左上标题",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -45,7 +47,7 @@
         "post_delay": 0
     },
     "DungeonStageEntry": {
-        "desc": "左侧副本列表中的目标副本（当前仅开放钟表把戏）",
+        "desc": "未校准：左侧列表中的目标副本名",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -66,7 +68,7 @@
         "post_delay": 0
     },
     "DungeonStageDetail": {
-        "desc": "右侧详情区显示目标副本名，用于选择后复核身份（ROI 为列表右侧整片区域，待实机收窄）",
+        "desc": "未校准：右侧详情区目标副本名，选择后复核身份（区域为列表右侧整片，待收窄）",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -87,7 +89,7 @@
         "post_delay": 0
     },
     "DungeonEnterButton": {
-        "desc": "副本选择界面右下角「进入」按钮",
+        "desc": "未校准：副本选择界面右下「进入」",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -107,8 +109,30 @@
         "pre_delay": 0,
         "post_delay": 0
     },
+    "DungeonEntryBalance": {
+        "desc": "未校准：入场前余额「当前/上限」。没有该界面的余额校准图，暂复用详情区；读不到或多值即停止，绝不先战斗",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    240,
+                    0,
+                    1040,
+                    640
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^\\d+\\s*/\\s*\\d+$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
     "DungeonEnemyCounter": {
-        "desc": "副本内左上角「剩余敌人数」计数，作为已进入副本的证据",
+        "desc": "未校准：关卡内左上「剩余敌人数」，作为已在关卡内的证据",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -129,7 +153,7 @@
         "post_delay": 0
     },
     "DungeonRewardPrompt": {
-        "desc": "通关后奖励交互的 F 提示（位置按入口提示推定，文本与位置均待实机核对）",
+        "desc": "未校准：通关后奖励 F 交互提示（位置按入口提示推定）",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -150,7 +174,7 @@
         "post_delay": 0
     },
     "DungeonRewardPopup": {
-        "desc": "「领取奖励」弹窗标题",
+        "desc": "未校准：「领取奖励」弹窗标题",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -170,19 +194,20 @@
         "pre_delay": 0,
         "post_delay": 0
     },
-    "DungeonClaimButton": {
-        "desc": "领奖弹窗左侧普通「领取」。ROI 只覆盖弹窗左半，刻意不碰右侧「双倍领取」",
+    "DungeonRewardOptions": {
+        "desc": "未校准：整个历史奖励弹窗区域的全部文字与位置，供 40/80 成本数字与按钮按距离唯一关联；不按左右推断",
         "recognition": {
             "type": "OCR",
             "param": {
                 "roi": [
                     384,
-                    508,
-                    260,
-                    84
+                    264,
+                    512,
+                    328
                 ],
                 "expected": [
-                    "领取"
+                    // @i18n-skip
+                    ".*"
                 ],
                 "threshold": 0.6
             }
@@ -192,7 +217,7 @@
         "post_delay": 0
     },
     "DungeonBalance": {
-        "desc": "领奖弹窗内的余额「当前/上限」。读不到即视为余额未知，领取前停止（位置待实机核对）",
+        "desc": "未校准：领奖弹窗内余额「当前/上限」，读不到即余额未知、不领取",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -213,8 +238,52 @@
         "pre_delay": 0,
         "post_delay": 0
     },
+    "DungeonClaimButton": {
+        "desc": "未校准：弹窗内完整文字「领取」（不含「双倍领取」）；其成本必须由同帧最近数字唯一关联为40，否则不点",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    264,
+                    512,
+                    328
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^领取$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonClaim80Button": {
+        "desc": "未校准候选文案：弹窗内完整文字「双倍领取」；无国服按钮校准图，只有同帧唯一关联到80成本才允许点击",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    264,
+                    512,
+                    328
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^双倍领取$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
     "DungeonSettlement": {
-        "desc": "领取成功后的结算界面「获得道具」，作为本轮领取成功的证据",
+        "desc": "未校准：领取后结算「获得道具」，作为本轮领取成功的证据",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -235,7 +304,7 @@
         "post_delay": 0
     },
     "DungeonChallengeAgain": {
-        "desc": "结算界面「再次挑战」",
+        "desc": "未校准：结算界面「再次挑战」",
         "recognition": {
             "type": "OCR",
             "param": {
@@ -247,6 +316,28 @@
                 ],
                 "expected": [
                     "再次挑战"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "DungeonRepeatBalance": {
+        "desc": "未校准：结算后余额。没有结算界面余额校准图，暂复用详情区；读不到时由流程使用标记为推算的余额，读到则必须与推算一致",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    240,
+                    0,
+                    1040,
+                    640
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^\\d+\\s*/\\s*\\d+$"
                 ],
                 "threshold": 0.6
             }

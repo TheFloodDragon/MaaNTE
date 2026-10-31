@@ -34,11 +34,14 @@
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
-            "__ScenePrivateAnyEnterWorldSuccess"
+            "__ScenePrivateAnyEnterWorldSuccess",
+            "__ScenePrivateMiniWorldExitConfirm",
+            "[JumpBack]SceneLoadingType1",
+            "[JumpBack]SceneLoadingType2"
         ]
     },
     "__ScenePrivateMiniWorldExitConfirm": {
-        "desc": "小世界退出确认",
+        "desc": "小世界退出确认：只在点击小世界退出按钮之后才会被识别，点击确认后等待加载回到大世界",
         "recognition": "OCR",
         "roi": [
             657,
@@ -52,10 +55,12 @@
             "(?i)Confirm",
             "確定"
         ],
+        "action": "Click",
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
             "__ScenePrivateAnyEnterWorldSuccess",
+            "[JumpBack]SceneLoadingType1",
             "[JumpBack]SceneLoadingType2"
         ]
     ,

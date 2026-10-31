@@ -102,6 +102,8 @@ __all__ = [
     "CombatInHudRecognition",
     "DungeonResetAction",
     "DungeonGateAction",
+    "DungeonEnterAction",
+    "DungeonBeginRoundAction",
     "DungeonClaimAction",
     "DungeonConfirmAction",
     "DungeonWalkUntilAction",

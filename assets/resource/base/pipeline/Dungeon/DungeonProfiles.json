@@ -1,0 +1,858 @@
+{
+    // 副本目录与 profile 模板。目录依据 https://www.ntestation.com/index.php?title=副本关卡&oldid=3332：四入口共 3/5/5/6 项，仅证明名称与产出；
+    // 该页面不证明各副本路线、国服 40/80 按钮文字与位置。supported_costs 依据公开资料的 40 普通 / 80 双份说明录入，未逐副本实证。
+    // type_id 仅兔子洞经传送索引「异象界域」核实，其余三入口分类与传送点未核实，留空。
+    // 只有钟表把戏 executable=true（历史实验流程，calibrated=false）；其余 18 项不复制钟表把戏路线，不向界面开放。
+    "DungeonFarmProfiles": {
+        "desc": "副本目录：资料存在不等于可执行；仅 executable=true 且绑定完整的 profile 可被选择",
+        "enabled": false,
+        "attach": {
+            "source": "https://www.ntestation.com/index.php?title=副本关卡&oldid=3332",
+            "profiles": [
+                {
+                    "id": "collected_edition",
+                    "content_id": "collected_edition",
+                    "name": "合订本",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_magic",
+                    "entrance_name": "胡迪尼的魔术舞台",
+                    "output": "角色升级资源",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "kaleidoscope",
+                    "content_id": "kaleidoscope",
+                    "name": "万花筒",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_magic",
+                    "entrance_name": "胡迪尼的魔术舞台",
+                    "output": "弧盘升级资源",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "coin_story",
+                    "content_id": "coin_story",
+                    "name": "硬币记",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_magic",
+                    "entrance_name": "胡迪尼的魔术舞台",
+                    "output": "甲硬币",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "beware_doves",
+                    "content_id": "beware_doves",
+                    "name": "小心鸽子",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_trick",
+                    "entrance_name": "胡迪尼的诡计舞台",
+                    "output": "异能强化材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "poker_tea_party",
+                    "content_id": "poker_tea_party",
+                    "name": "扑克茶会",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_trick",
+                    "entrance_name": "胡迪尼的诡计舞台",
+                    "output": "异能强化材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "surprise_party",
+                    "content_id": "surprise_party",
+                    "name": "惊喜派对",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_trick",
+                    "entrance_name": "胡迪尼的诡计舞台",
+                    "output": "异能强化材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "telepathy",
+                    "content_id": "telepathy",
+                    "name": "心电感应",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_trick",
+                    "entrance_name": "胡迪尼的诡计舞台",
+                    "output": "异能强化材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "escape_art",
+                    "content_id": "escape_art",
+                    "name": "越狱艺术",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "houdini_trick",
+                    "entrance_name": "胡迪尼的诡计舞台",
+                    "output": "异能强化材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "apple_core",
+                    "content_id": "apple_core",
+                    "name": "泡影罐头·苹果核",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "bubble_factory",
+                    "entrance_name": "泡影罐头工厂",
+                    "output": "弧盘突破材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "spiral_music",
+                    "content_id": "spiral_music",
+                    "name": "泡影罐头·螺旋乐",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "bubble_factory",
+                    "entrance_name": "泡影罐头工厂",
+                    "output": "弧盘突破材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "liquid_dream",
+                    "content_id": "liquid_dream",
+                    "name": "泡影罐头·液态梦",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "bubble_factory",
+                    "entrance_name": "泡影罐头工厂",
+                    "output": "弧盘突破材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "cold_dessert",
+                    "content_id": "cold_dessert",
+                    "name": "泡影罐头·冷甜点",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "bubble_factory",
+                    "entrance_name": "泡影罐头工厂",
+                    "output": "弧盘突破材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "drama_core",
+                    "content_id": "drama_core",
+                    "name": "泡影罐头·戏剧芯",
+                    "type_id": null,
+                    "type_name": null,
+                    "entrance_id": "bubble_factory",
+                    "entrance_name": "泡影罐头工厂",
+                    "output": "弧盘突破材料",
+                    "teleport_point_id": null,
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "clock_trick",
+                    "content_id": "clock_trick",
+                    "name": "钟表把戏",
+                    "type_id": "anomaly_domain",
+                    "type_name": "异象界域",
+                    "entrance_id": "rabbithole",
+                    "entrance_name": "兔子洞",
+                    "output": "卡带「失落光芒」「迪亚波罗斯」；萝卜币、空幕强化资源",
+                    "teleport_point_id": "rabbithole",
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": true,
+                    "difficulty_mode": "current",
+                    "team_modes": [
+                        "current"
+                    ],
+                    "calibration_note": "历史实验流程：入口/关内路线、入场与结算余额、40/80 按钮文字与位置均未实机校准，不保证可无人值守。",
+                    "bindings": {
+                        "DungeonBalance": "DungeonProfileClockTrickBalance",
+                        "DungeonChallengeAgain": "DungeonProfileClockTrickChallengeAgain",
+                        "DungeonClaim80Button": "DungeonProfileClockTrickClaim80Button",
+                        "DungeonClaimButton": "DungeonProfileClockTrickClaimButton",
+                        "DungeonEnemyCounter": "DungeonProfileClockTrickEnemyCounter",
+                        "DungeonEnterButton": "DungeonProfileClockTrickEnterButton",
+                        "DungeonEntrancePrompt": "DungeonProfileClockTrickEntrancePrompt",
+                        "DungeonEntryBalance": "DungeonProfileClockTrickEntryBalance",
+                        "DungeonFarmAdvance": "DungeonProfileClockTrickAdvance",
+                        "DungeonFarmTeleport": "DungeonProfileClockTrickTeleport",
+                        "DungeonFarmWalkToEntrance": "DungeonProfileClockTrickWalkToEntrance",
+                        "DungeonRepeatBalance": "DungeonProfileClockTrickRepeatBalance",
+                        "DungeonRewardOptions": "DungeonProfileClockTrickRewardOptions",
+                        "DungeonRewardPopup": "DungeonProfileClockTrickRewardPopup",
+                        "DungeonRewardPrompt": "DungeonProfileClockTrickRewardPrompt",
+                        "DungeonSettlement": "DungeonProfileClockTrickSettlement",
+                        "DungeonStageDetail": "DungeonProfileClockTrickStageDetail",
+                        "DungeonStageEntry": "DungeonProfileClockTrickStageEntry",
+                        "DungeonStageListTitle": "DungeonProfileClockTrickStageListTitle"
+                    }
+                },
+                {
+                    "id": "sculpture_gallery",
+                    "content_id": "sculpture_gallery",
+                    "name": "雕塑展馆",
+                    "type_id": "anomaly_domain",
+                    "type_name": "异象界域",
+                    "entrance_id": "rabbithole",
+                    "entrance_name": "兔子洞",
+                    "output": "卡带「恶魔之血：诅咒」「街头拳王」；萝卜币、空幕强化资源",
+                    "teleport_point_id": "rabbithole",
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "weft_loom",
+                    "content_id": "weft_loom",
+                    "name": "纬线织机",
+                    "type_id": "anomaly_domain",
+                    "type_name": "异象界域",
+                    "entrance_id": "rabbithole",
+                    "entrance_name": "兔子洞",
+                    "output": "卡带「森林萤火之心」「真红：双生蝶」；萝卜币、空幕强化资源",
+                    "teleport_point_id": "rabbithole",
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "carrot_guard",
+                    "content_id": "carrot_guard",
+                    "name": "守卫萝卜",
+                    "type_id": "anomaly_domain",
+                    "type_name": "异象界域",
+                    "entrance_id": "rabbithole",
+                    "entrance_name": "兔子洞",
+                    "output": "卡带「缇娅的夜间酒馆」「守卫王国」；萝卜币、空幕强化资源",
+                    "teleport_point_id": "rabbithole",
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "mind_map",
+                    "content_id": "mind_map",
+                    "name": "精神图谱",
+                    "type_id": "anomaly_domain",
+                    "type_name": "异象界域",
+                    "entrance_id": "rabbithole",
+                    "entrance_name": "兔子洞",
+                    "output": "卡带「音速蓝刺猬」「静谧山庄」；萝卜币、空幕强化资源",
+                    "teleport_point_id": "rabbithole",
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                },
+                {
+                    "id": "orbital_night",
+                    "content_id": "orbital_night",
+                    "name": "轨道之夜",
+                    "type_id": "anomaly_domain",
+                    "type_name": "异象界域",
+                    "entrance_id": "rabbithole",
+                    "entrance_name": "兔子洞",
+                    "output": "卡带「影之信条」「小小大冒险」；萝卜币、空幕强化资源",
+                    "teleport_point_id": "rabbithole",
+                    "supported_costs": [
+                        40,
+                        80
+                    ],
+                    "calibrated": false,
+                    "executable": false
+                }
+            ]
+        }
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickBalance": {
+        "enabled": false,
+        "desc": "未校准：领奖弹窗内余额「当前/上限」，读不到即余额未知、不领取",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    264,
+                    512,
+                    328
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^\\d+\\s*/\\s*\\d+$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickChallengeAgain": {
+        "enabled": false,
+        "desc": "未校准：结算界面「再次挑战」",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    672,
+                    592,
+                    272,
+                    76
+                ],
+                "expected": [
+                    "再次挑战"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickClaim80Button": {
+        "enabled": false,
+        "desc": "未校准候选文案：弹窗内完整文字「双倍领取」；无国服按钮校准图，只有同帧唯一关联到80成本才允许点击",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    264,
+                    512,
+                    328
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^双倍领取$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickClaimButton": {
+        "enabled": false,
+        "desc": "未校准：弹窗内完整文字「领取」（不含「双倍领取」）；其成本必须由同帧最近数字唯一关联为40，否则不点",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    264,
+                    512,
+                    328
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^领取$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickEnemyCounter": {
+        "enabled": false,
+        "desc": "未校准：关卡内左上「剩余敌人数」，作为已在关卡内的证据",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    0,
+                    156,
+                    240,
+                    88
+                ],
+                "expected": [
+                    "剩余敌人数"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickEnterButton": {
+        "enabled": false,
+        "desc": "未校准：副本选择界面右下「进入」",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    896,
+                    644,
+                    368,
+                    72
+                ],
+                "expected": [
+                    "进入"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickEntrancePrompt": {
+        "enabled": false,
+        "desc": "未校准：大世界兔子洞入口 F 交互提示（历史 rabbit_hole.json 区域）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    744,
+                    352,
+                    456,
+                    184
+                ],
+                "expected": [
+                    "兔子洞"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickEntryBalance": {
+        "enabled": false,
+        "desc": "未校准：入场前余额「当前/上限」。没有该界面的余额校准图，暂复用详情区；读不到或多值即停止，绝不先战斗",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    240,
+                    0,
+                    1040,
+                    640
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^\\d+\\s*/\\s*\\d+$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickAdvance": {
+        "enabled": false,
+        "desc": "未校准历史关内前进：须保有 HUD 与敌人数；敌人血条或奖励提示即停，弹窗/结算/加载立即松键；不猜进展 ROI、不做左右纠偏",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "CombatInHud",
+                    "DungeonEnemyCounter"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_walk_until",
+                "custom_action_param": {
+                    "key": "W",
+                    "until": "__DungeonFarmAdvanceTarget",
+                    "guard": "__DungeonFarmMovementGuard",
+                    "abort_nodes": [
+                        "DungeonRewardPopup",
+                        "DungeonSettlement",
+                        "SceneLoadingType1",
+                        "SceneLoadingType2"
+                    ],
+                    "timeout": 20
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "DungeonFarmClaimGate",
+            "DungeonFarmRewardPrompt",
+            "[JumpBack]SceneLoadingType1",
+            "[JumpBack]SceneLoadingType2",
+            "DungeonFarmFight"
+        ],
+        "on_error": [
+            "DungeonFarmFail"
+        ]
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickTeleport": {
+        "enabled": false,
+        "desc": "未校准：在大世界按 profile 传送点打开地图索引传送（兔子洞 worldX/Y 为占位 0，不作寻路坐标）；传送完成不等于到达，须再识别入口",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "InWorld"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "map_teleport_to_point",
+                "custom_action_param": {
+                    "teleport_point_id": "rabbithole"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "DungeonFarmEnterEntrance",
+            "[JumpBack]SceneLoadingType1",
+            "[JumpBack]SceneLoadingType2",
+            "DungeonFarmWalkToEntrance"
+        ],
+        "on_error": [
+            "DungeonFarmFail"
+        ]
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickWalkToEntrance": {
+        "enabled": false,
+        "desc": "未校准历史路线：仅在大世界有界按住 W，入口提示出现即松键；战斗/加载/弹窗立即松键交还识别；没有校准的进展锚点",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "InWorld"
+                ]
+            }
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "dungeon_walk_until",
+                "custom_action_param": {
+                    "key": "W",
+                    "until": "DungeonEntrancePrompt",
+                    "guard": "InWorld",
+                    "abort_nodes": [
+                        "CombatEnemyVisible",
+                        "DungeonEnemyCounter",
+                        "DungeonRewardPopup",
+                        "SceneLoadingType1",
+                        "SceneLoadingType2"
+                    ],
+                    "timeout": 15
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "DungeonFarmEnterEntrance"
+        ],
+        "on_error": [
+            "DungeonFarmFail"
+        ]
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickRepeatBalance": {
+        "enabled": false,
+        "desc": "未校准：结算后余额。没有结算界面余额校准图，暂复用详情区；读不到时由流程使用标记为推算的余额，读到则必须与推算一致",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    240,
+                    0,
+                    1040,
+                    640
+                ],
+                "expected": [
+                    // @i18n-skip
+                    "^\\d+\\s*/\\s*\\d+$"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickRewardOptions": {
+        "enabled": false,
+        "desc": "未校准：整个历史奖励弹窗区域的全部文字与位置，供 40/80 成本数字与按钮按距离唯一关联；不按左右推断",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    384,
+                    264,
+                    512,
+                    328
+                ],
+                "expected": [
+                    // @i18n-skip
+                    ".*"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickRewardPopup": {
+        "enabled": false,
+        "desc": "未校准：「领取奖励」弹窗标题",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    392,
+                    264,
+                    496,
+                    84
+                ],
+                "expected": [
+                    "领取奖励"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickRewardPrompt": {
+        "enabled": false,
+        "desc": "未校准：通关后奖励 F 交互提示（位置按入口提示推定）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    744,
+                    352,
+                    456,
+                    184
+                ],
+                "expected": [
+                    "领取奖励"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickSettlement": {
+        "enabled": false,
+        "desc": "未校准：领取后结算「获得道具」，作为本轮领取成功的证据",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    472,
+                    76,
+                    336,
+                    88
+                ],
+                "expected": [
+                    "获得道具"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickStageDetail": {
+        "enabled": false,
+        "desc": "未校准：右侧详情区目标副本名，选择后复核身份（区域为列表右侧整片，待收窄）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    240,
+                    0,
+                    1040,
+                    640
+                ],
+                "expected": [
+                    "钟表把戏"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickStageEntry": {
+        "enabled": false,
+        "desc": "未校准：左侧列表中的目标副本名",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    8,
+                    6,
+                    196,
+                    646
+                ],
+                "expected": [
+                    "钟表把戏"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // 钟表把戏模板：禁用、不被界面覆盖；dungeon_reset 每次从这里整节点重建运行识别/路线，防止跨任务残留。
+    "DungeonProfileClockTrickStageListTitle": {
+        "enabled": false,
+        "desc": "未校准：副本选择界面左上标题",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    4,
+                    2,
+                    232,
+                    56
+                ],
+                "expected": [
+                    "异象界域"
+                ],
+                "threshold": 0.6
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

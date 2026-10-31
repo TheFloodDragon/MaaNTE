@@ -6,7 +6,7 @@ import unittest
 
 from ._loader import ACTION_DIR, RESOURCE_BASE, ROOT, submodule
 
-flow = submodule("flow")
+config = submodule("config")
 budget = submodule("budget")
 
 ASSETS = ROOT / "assets"
@@ -55,7 +55,7 @@ def all_pipeline():
 
 ALL = all_pipeline()
 OWN = {}
-for _name in ("DungeonFarm.json", "DungeonStatus.json"):
+for _name in ("DungeonFarm.json", "DungeonStatus.json", "DungeonProfiles.json"):
     OWN.update(load_json(PIPELINE_DIR / "Dungeon" / _name))
 TASK = load_json(TASK_FILE)
 INTERFACE = load_json(ASSETS / "interface.json")
@@ -123,26 +123,34 @@ class PipelineTests(unittest.TestCase):
             self.assertNotIn("timeout", node, name)  # 不用节点超时推进流程
 
     def test_option_carriers_disabled_and_match_flow(self):
-        for name in (flow.RUNS_NODE, flow.STAGE_NODE):
-            self.assertIs(OWN[name]["enabled"], False)
-        self.assertEqual(budget.parse_runs(OWN[flow.RUNS_NODE]["attach"]["runs"]), 0)
+        for name in config.OPTION_NODES:
+            self.assertIs(OWN[name]["enabled"], False, name)
+        self.assertEqual(budget.parse_runs(OWN[config.RUNS_NODE]["attach"]["runs"]), 0)
 
-    def test_gate_routes_only_to_claim_or_close(self):
+    def test_gates_route_only_via_custom(self):
         _, gate = custom_param(OWN["DungeonFarmClaimGate"])
         self.assertEqual(gate["continue"], ["DungeonFarmClaim"])
         self.assertEqual(OWN["DungeonFarmClaimGate"]["next"], [])  # next 只由闸门改写
         _, confirm = custom_param(OWN["DungeonFarmSettlement"])
-        self.assertEqual(confirm["continue"], ["DungeonFarmAgain"])
+        self.assertEqual(confirm["continue"], ["DungeonFarmRepeatGate"])  # 再次挑战前必须重新过预算闸门
         self.assertEqual(OWN["DungeonFarmSettlement"]["next"], [])
         self.assertNotIn("DungeonFarmAgain", confirm["finish"])  # 最后一轮不点再次挑战
+        _, repeat = custom_param(OWN["DungeonFarmRepeatGate"])
+        self.assertEqual(repeat["continue"], ["DungeonFarmAgain"])
+        self.assertNotIn("DungeonFarmAgain", repeat["finish"])
+        self.assertEqual(OWN["DungeonFarmRepeatGate"]["next"], [])
 
-    def test_claim_roi_excludes_double_claim(self):
-        claim = OWN["DungeonClaimButton"]["recognition"]["param"]
-        popup = OWN["DungeonRewardPopup"]["recognition"]["param"]["roi"]
-        x, _, w, _ = claim["roi"]
-        self.assertLessEqual(x + w, popup[0] + popup[2] // 2 + 4)  # 只覆盖弹窗左半
-        self.assertEqual(claim["expected"], ["领取"])
-        self.assertTrue(all("双倍" not in t for t in claim["expected"]))
+    def test_claim_buttons_semantically_isolated(self):
+        # 40/80 各自独立识别完整文字，不靠左右位置推断；两者文字互不匹配。
+        pairs = [("DungeonClaimButton", "DungeonClaim80Button")]
+        pairs.append(("DungeonProfileClockTrickClaimButton", "DungeonProfileClockTrickClaim80Button"))
+        for name40, name80 in pairs:
+            p40 = re.compile(OWN[name40]["recognition"]["param"]["expected"][0])
+            p80 = re.compile(OWN[name80]["recognition"]["param"]["expected"][0])
+            self.assertTrue(p40.fullmatch("领取"), name40)
+            self.assertFalse(p40.search("双倍领取"), name40)
+            self.assertTrue(p80.fullmatch("双倍领取"), name80)
+            self.assertFalse(p80.fullmatch("领取"), name80)
 
     def test_claim_only_reachable_via_gate(self):
         sources = [n for n, node in OWN.items()
@@ -166,7 +174,8 @@ class TaskTests(unittest.TestCase):
             names = {n for o in overrides for n in o}
             self.assertEqual(len(names), 1, names)
             targets.append(names.pop())
-        self.assertEqual(sorted(targets), sorted([flow.RUNS_NODE, flow.STAGE_NODE]))
+        self.assertEqual(len(targets), len(set(targets)), targets)  # 一个选项一个载体，互不覆盖
+        self.assertEqual(sorted(targets), sorted(config.OPTION_NODES))
         for name in targets:
             self.assertIs(OWN[name]["enabled"], False)
 
@@ -174,7 +183,7 @@ class TaskTests(unittest.TestCase):
         stage = TASK["option"]["DungeonFarmStage"]
         self.assertIn(stage["default_case"], [c["name"] for c in stage["cases"]])
         for case in stage["cases"]:
-            attach = case["pipeline_override"][flow.STAGE_NODE]["attach"]
+            attach = case["pipeline_override"][config.STAGE_NODE]["attach"]
             self.assertTrue(re.fullmatch(r"[a-z_]+", attach["name"]))
             self.assertGreater(attach["cost"], 0)
 
@@ -201,7 +210,8 @@ class LocaleTests(unittest.TestCase):
         source = (ACTION_DIR / "Dungeon" / "flow.py").read_text(encoding="utf-8")
         used = set(re.findall(r'"(dungeon\.[a-z_.]+)"', source)) - {"dungeon.stage.", "dungeon.finished."}
         used |= {"dungeon.finished.%s" % r for r in budget.FINISHED}
-        stages = {c["pipeline_override"][flow.STAGE_NODE]["attach"]["name"]
+        used |= {"dungeon.reward_mode.%s" % m for m in config.REWARD_MODES}
+        stages = {c["pipeline_override"][config.STAGE_NODE]["attach"]["name"]
                   for c in TASK["option"]["DungeonFarmStage"]["cases"]}
         used |= {"dungeon.stage.%s" % s for s in stages}
         self.assertLessEqual(used, keys)
