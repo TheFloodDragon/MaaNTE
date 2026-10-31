@@ -78,8 +78,14 @@ def override_attaches(obj):
             yield from override_attaches(item)
 
 
-def default_layers(checked=()):
-    """模拟 MXU：未改动的全局选项按默认值覆盖载体节点；checked 为「不使用的动作」里勾选的项。"""
+def default_layers(checked=None, cases=None, inputs=None):
+    """按 MXU 的合并方式模拟全局选项，返回 collect_layers 的结果。
+
+    checked：{checkbox 选项: [勾选项]}；cases：{select/switch 选项: case 名}；
+    inputs：{input 字段名: 用户输入}。未给出的一律使用默认值。
+    与 MXU 一致：只递归选中 case 的子选项；字符串输入经 JSON 转义后代入。
+    """
+    checked, cases, inputs = checked or {}, cases or {}, inputs or {}
     nodes = {name: dict(PIPELINE[name]) for name in settings.GLOBAL_SETTING_NODES}
 
     def apply(override):
@@ -91,20 +97,26 @@ def default_layers(checked=()):
     def handle(key):
         option = OPTIONS[key]
         if option["type"] == "checkbox":
-            chosen = set(checked) if checked else set(option.get("default_case", []))
+            chosen = set(checked.get(key, option.get("default_case", [])))
             for case in option["cases"]:
                 if case["name"] in chosen:
                     apply(case["pipeline_override"])
         elif option["type"] == "input":
             text = json.dumps(option["pipeline_override"])
             for item in option["inputs"]:
+                value = inputs.get(item["name"], item["default"])
                 if item.get("pipeline_type") in ("int", "bool"):
-                    text = text.replace('"{%s}"' % item["name"], item["default"])
+                    text = text.replace('"{%s}"' % item["name"], value or "0")
                 else:
-                    text = text.replace("{%s}" % item["name"], item["default"])
+                    escaped = json.dumps(value)[1:-1]
+                    text = text.replace("{%s}" % item["name"], escaped)
             apply(json.loads(text))
         else:  # select / switch
-            name = option.get("default_case") or option["cases"][0]["name"]
+            name = (
+                cases.get(key)
+                or option.get("default_case")
+                or option["cases"][0]["name"]
+            )
             case = next(c for c in option["cases"] if c["name"] == name)
             apply(case.get("pipeline_override", {}))
             for nested in case.get("option", []):
@@ -120,29 +132,30 @@ class WiringTests(unittest.TestCase):
         imports = INTERFACE["import"]
         self.assertIn("resource/tasks/AutoCombat.json", imports)
         self.assertIn("resource/tasks/CombatSetting.json", imports)
-        sections = {s["name"]: s for s in INTERFACE["setting"]}
-        self.assertTrue({"Combat", "CombatStrategy"} <= set(sections))
-        shown = [
-            key
-            for name in ("Combat", "CombatStrategy")
-            for key in sections[name]["option"]
-        ]
         combat_options = set(TASKS["CombatSetting.json"]["option"])
+        sections = [
+            s for s in INTERFACE["setting"] if set(s["option"]) & combat_options
+        ]
+        self.assertEqual(
+            [s["name"] for s in sections],
+            ["Combat", "CombatTeam", "CombatInput", "CombatStrategy"],
+        )
+        shown = [key for s in sections for key in s["option"]]
         # MXU 只在运行时合并 global_option 里的选项：设置页显示的每个顶层战斗选项都必须登记
         self.assertEqual(
             sorted(shown),
             sorted(k for k in INTERFACE["global_option"] if k in combat_options),
         )
-        nested = {
-            n
-            for key in shown
-            for c in OPTIONS[key].get("cases", [])
-            for n in c.get("option", [])
-        }
+        nested, frontier = set(), list(shown)
+        while frontier:  # 子选项可以逐层嵌套，随父选项选中的 case 合并
+            key = frontier.pop()
+            for case in OPTIONS[key].get("cases", []):
+                for child in case.get("option", []):
+                    if child not in nested:
+                        nested.add(child)
+                        frontier.append(child)
         self.assertEqual(set(shown) | nested, combat_options)
-        self.assertFalse(
-            set(shown) & nested
-        )  # 子选项随父选项的 case 合并，不能重复登记
+        self.assertFalse(set(shown) & nested)  # 子选项不能重复登记为顶层
 
     def test_task_entry_options_and_override_targets_exist(self):
         task = TASKS["AutoCombat.json"]["task"][0]
@@ -217,11 +230,80 @@ class WiringTests(unittest.TestCase):
 
     def test_checked_actions_disable_only_those(self):
         options, warnings = settings.merge_options(
-            default_layers(checked=("ultimate", "switch"))
+            default_layers(checked={"CombatDisabledActions": ["ultimate", "switch"]})
         )
         self.assertEqual(warnings, [])
         self.assertEqual(options.disabled_actions, ("ultimate", "switch"))
         self.assertEqual((options.team_size, options.lock_target), (4, True))
+
+    def test_advanced_off_ignores_hidden_slot_inputs(self):
+        """高级调整关闭时，即使之前填过槽位内容也不生效（MXU 只合并选中 case 的子选项）。"""
+        layers = default_layers(
+            checked={"CombatDisabledSlots": ["2"]},
+            inputs={"slot1_combo": "jump", "rotation_order": "3,1"},
+        )
+        options, warnings, errors = settings.merge_options_strict(layers)
+        self.assertEqual((warnings, errors), ([], []))
+        self.assertEqual(options, settings.CombatOptions())
+
+    def test_advanced_slot_overrides_merge_per_field(self):
+        layers = default_layers(
+            cases={"CombatAdvanced": "Yes", "CombatRotationMode": "cycle"},
+            checked={"CombatDisabledSlots": ["3"]},
+            inputs={
+                "rotation_order": "2，1, 4",
+                "min_field_time": "1.5",
+                "slot1_character": '主C "零"',
+                "slot1_combo": "skill, ultimate, l_click(1.5)",
+                "slot2_field_time": "0",
+            },
+        )
+        options, warnings, errors = settings.merge_options_strict(layers)
+        self.assertEqual((warnings, errors), ([], []))
+        self.assertEqual(options.rotation_mode, "cycle")
+        self.assertEqual(options.rotation_order, (2, 1, 4))
+        self.assertEqual(options.min_field_time, 1.5)
+        self.assertEqual(options.disabled_slots, (3,))
+        self.assertEqual(
+            options.slot(1).character, '主C "零"'
+        )  # 引号经 JSON 转义后原样保留
+        self.assertEqual(options.slot(1).combo, "skill, ultimate, l_click(1.5)")
+        self.assertEqual(options.slot(2).min_field_time, 0.0)  # 明确的 0 不是“未设置”
+        self.assertIsNone(options.slot(3).min_field_time)
+        self.assertTrue(options.slot(4).empty)
+
+    def test_verify_patterns_match_parsers(self):
+        patterns = {
+            item["name"]: re.compile(item["verify"])
+            for option in OPTIONS.values()
+            for item in option.get("inputs", [])
+            if "verify" in item
+        }
+        ok = {
+            "combat_speed": ["0.5", "0.75", "1", "1.0", "1.25", "2", "2.0", "2.00"],
+            "rotation_order": [
+                "",
+                "1",
+                "1,2,1,3",
+                "2，1、4",
+                " 1, 2 ",
+                ",".join(["1"] * 16),
+            ],
+            "min_field_time": ["", "0", "1.5", "9.99", "10", "10.0"],
+        }
+        bad = {
+            "combat_speed": ["", "0", "0.4", "2.1", "3", "1.255", "abc", "-1"],
+            "rotation_order": ["0", "5", "1,", ",1", "1,,2", "a", ",".join(["1"] * 17)],
+            "min_field_time": ["-1", "10.5", "11", "1.234", "x"],
+        }
+        for name, values in ok.items():
+            for value in values:
+                self.assertTrue(patterns[name].search(value), (name, value))
+                if name == "rotation_order" and value:
+                    settings.parse_order(value)  # UI 放行的值，代码也必须接受
+        for name, values in bad.items():
+            for value in values:
+                self.assertFalse(patterns[name].search(value), (name, value))
 
     def test_custom_names_registered_and_option_nodes_exist(self):
         source = (ACTION_DIR / "Combat" / "actions.py").read_text(encoding="utf-8")
@@ -239,23 +321,64 @@ class WiringTests(unittest.TestCase):
             reco = node.get("recognition", {})
             if isinstance(reco, dict) and reco.get("type") == "Custom":
                 self.assertIn(reco["param"]["custom_recognition"], recognitions, name)
-            if isinstance(reco, dict) and reco.get("type") == "And":
-                for child in reco["param"]["all_of"]:
-                    self.assertIn(child, PIPELINE)
+            if isinstance(reco, dict) and reco.get("type") in ("And", "Or"):
+                key = "all_of" if reco["type"] == "And" else "any_of"
+                for child in reco["param"][key]:
+                    self.assertIn(child, PIPELINE, (name, child))
         registry = (ACTION_DIR / "__init__.py").read_text(encoding="utf-8")
         self.assertIn("from .Combat.actions import *", registry)
-        for cls in ("CombatRunAction", "CombatInHudRecognition"):
+        for cls in (
+            "CombatRunAction",
+            "CombatInHudRecognition",
+            "CombatEnemyBarRecognition",
+        ):
             self.assertIn('"%s"' % cls, registry)
 
-    def test_enemy_node_matches_pinkpaw_calibration(self):
+    def test_enemy_nodes_and_signal_wiring(self):
+        """精确颜色血条保留粉爪已实机校准的基准参数；其余证据各自独立、均已启用。"""
+        api = submodule("api")
         pinkpaw = load_json(
             ASSETS / "resource" / "base" / "pipeline" / "PinkPawHeist" / "tools.json"
         )
         self.assertEqual(
-            PIPELINE["CombatEnemyVisible"]["recognition"]["param"],
+            PIPELINE[api.ENEMY_NODE]["recognition"]["param"],
             pinkpaw["PinkPawHeist_CheckMonsterOnce"]["recognition"]["param"],
         )
-        self.assertIn(submodule("api").ENEMY_NODE, PIPELINE)
+        evidence = [api.ENEMY_NODE, api.BAR_SHAPE_NODE, api.LEVEL_NODE, api.BOSS_NODE]
+        # Pipeline 门控与 Python 内核使用同一组敌人证据
+        self.assertEqual(
+            PIPELINE["CombatEnemyVisible"]["recognition"]["param"]["any_of"], evidence
+        )
+        for name in evidence + [api.RETREAT_PROMPT_NODE]:
+            node = PIPELINE[name]
+            self.assertNotEqual(node.get("enabled", True), False, name)
+            self.assertNotIn("action", node, name)  # 只识别，不动作
+            self.assertEqual(
+                (node["rate_limit"], node["pre_delay"], node["post_delay"]), (0, 0, 0)
+            )
+        retreat = PIPELINE[api.RETREAT_PROMPT_NODE]["recognition"]["param"]
+        self.assertEqual(
+            retreat["roi"],
+            pinkpaw["PinkPawHeist_CheckEvacuateOnce"]["recognition"]["param"]["roi"],
+        )
+        self.assertEqual(
+            submodule("perception").SignalConfig().enemy, (api.ENEMY_NODE,)
+        )
+
+    def test_pipeline_accepts_lifecycle_reasons_explicitly(self):
+        """改了 success 语义后，连续运行的入口必须显式列出可交还的结束原因。"""
+        expected = ["cleared", "disengaged", "target_lost"]
+        for name in ("AutoCombatMain", "CombatFightWhenEnemy"):
+            param = PIPELINE[name]["action"]["param"]["custom_action_param"]
+            self.assertEqual(param["accepted_reasons"], expected, name)
+            reasons, warnings = settings.parse_accepted_reasons(
+                param["accepted_reasons"]
+            )
+            self.assertEqual(warnings, [])
+            self.assertNotIn("retreated", reasons)
+            self.assertNotIn("timeout", reasons)
+        run = PIPELINE["CombatRun"]["action"]["param"]["custom_action_param"]
+        self.assertNotIn("accepted_reasons", run)  # 公开接口默认只接受 cleared
 
 
 class LocaleTests(unittest.TestCase):
@@ -302,6 +425,47 @@ class LocaleTests(unittest.TestCase):
                 if text.startswith("$"):
                     for lang in LANGS:
                         self.assertIn(text[1:], locale("agent", lang), (lang, text))
+
+    @staticmethod
+    def _runtime_errors():
+        """从真实代码路径取得新增的错误码与参数，避免文案占位符和代码不一致。"""
+        plan = submodule("plan")
+        api = submodule("api")
+        base = scheme.parse_scheme({"version": 1, "combos": {"default": "skill"}})
+        found = []
+
+        def record(exc):
+            params = exc.params + (("detail",) if exc.combo_error else ())
+            found.append(("combat.scheme.%s" % exc.code, params))
+
+        for layers in (
+            [{"slots": {"1": {"combo": "x = 1"}}}],
+            [{"slots": {str(s): {"enabled": False} for s in (1, 2, 3, 4)}}],
+        ):
+            options, _, _ = settings.merge_options_strict(layers)
+            try:
+                plan.apply_overrides(base, options)
+            except scheme.SchemeError as exc:
+                record(exc)
+        _, _, bad = settings.merge_options_strict([{"combat_speed": 9}])
+        found.append(("combat.scheme.bad_option", bad[0]))
+        try:
+            api.validate_signal_nodes(lambda name: None, {"cleared": ["Missing"]})
+        except scheme.SchemeError as exc:
+            record(exc)
+        try:
+            dsl.compile_combo("speed(3)")
+        except dsl.ComboError as exc:
+            found.append(("combat.dsl.%s" % exc.code, exc.params))
+        codes = [code for code, _ in found]
+        assert codes == [
+            "combat.scheme.slot_combo",
+            "combat.scheme.no_enabled_slot",
+            "combat.scheme.bad_option",
+            "combat.scheme.bad_signal",
+            "combat.dsl.speed_out_of_range",
+        ], codes
+        return found
 
     def test_every_error_code_formats_in_every_language(self):
         errors = []
@@ -372,6 +536,7 @@ class LocaleTests(unittest.TestCase):
             ("custom_not_json", ("x.txt",)),
         ]:
             errors.append(("combat.scheme.%s" % code, params))
+        errors += self._runtime_errors()
         errors += [
             ("combat.dsl.at", (1, 2)),
             ("combat.waiting", ("name",)),
@@ -388,16 +553,26 @@ class LocaleTests(unittest.TestCase):
             ("combat.strategy.disabled", ("a/b",)),
             ("combat.strategy.lock_off", ()),
             ("combat.strategy.search_turn", ()),
+            ("combat.strategy.assist_off", ()),
+            ("combat.plan.header", ("name", "source", "1", "rotation")),
+            ("combat.plan.cycle", ("1→2", 1)),
+            ("combat.plan.stay", ()),
+            ("combat.plan.slot", (1, "label", "source", "skill", "1")),
+            ("combat.plan.slot_off", (4,)),
+            ("combat.plan.from_builtin", ()),
+            ("combat.plan.from_file", ("a.json",)),
+            ("combat.plan.from_script", ()),
+            ("combat.state.verifying", ()),
+            ("combat.state.resumed", ()),
+            ("combat.state.retreat_prompt", ()),
         ]
-        reasons = [
-            v
-            for k, v in vars(submodule("model").EndReason).items()
-            if not k.startswith("_")
-        ]
-        self.assertEqual(len(reasons), 7)
+        model = submodule("model")
+        reasons = sorted(model.END_REASONS)
+        self.assertEqual(len(reasons), 13)
         errors += [("combat.reason.%s" % r, ()) for r in reasons]
+        errors += [("combat.action.%s" % a, ()) for a in model.TOGGLE_ACTIONS]
         errors += [
-            ("combat.action.%s" % a, ()) for a in submodule("model").TOGGLE_ACTIONS
+            ("combat.plan.source.%s" % s, ()) for s in ("scheme", "default", "override")
         ]
         codes = {code for code, _ in errors}
         self.assertTrue(
@@ -405,7 +580,12 @@ class LocaleTests(unittest.TestCase):
                 "combat.dsl.not_text",
                 "combat.dsl.too_many_commands",
                 "combat.dsl.degrees_out_of_range",
+                "combat.dsl.speed_out_of_range",
                 "combat.scheme.missing_combo",
+                "combat.scheme.slot_combo",
+                "combat.scheme.no_enabled_slot",
+                "combat.scheme.bad_option",
+                "combat.scheme.bad_signal",
             }
             <= codes
         )

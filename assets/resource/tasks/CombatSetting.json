@@ -268,6 +268,28 @@
                 }
             ]
         },
+        "CombatSpeed": {
+            "type": "input",
+            "label": "$setting_combat_speed",
+            "description": "$setting_combat_speed_desc",
+            "inputs": [
+                {
+                    "name": "combat_speed",
+                    "label": "$setting_combat_speed_input",
+                    "default": "1.0",
+                    "pipeline_type": "string",
+                    "verify": "^(0\\.[5-9]\\d?|1(\\.\\d{1,2})?|2(\\.0{1,2})?)$",
+                    "pattern_msg": "$setting_combat_speed_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_Speed": {
+                    "attach": {
+                        "combat_speed": "{combat_speed}"
+                    }
+                }
+            }
+        },
         "CombatLockTarget": {
             "type": "switch",
             "label": "$setting_combat_lock_target",
@@ -328,6 +350,36 @@
                 }
             ]
         },
+        "CombatAssistDetection": {
+            "type": "switch",
+            "label": "$setting_combat_assist_detection",
+            "description": "$setting_combat_assist_detection_desc",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "pipeline_override": {
+                        "CombatSetting_AssistDetection": {
+                            "attach": {
+                                "assist_detection": true
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no",
+                    "pipeline_override": {
+                        "CombatSetting_AssistDetection": {
+                            "attach": {
+                                "assist_detection": false
+                            }
+                        }
+                    }
+                }
+            ]
+        },
         "CombatClearConfirm": {
             "type": "input",
             "label": "$setting_combat_clear_confirm",
@@ -346,6 +398,389 @@
                 "CombatSetting_ClearConfirm": {
                     "attach": {
                         "clear_confirm": "{clear_confirm}"
+                    }
+                }
+            }
+        },
+        "CombatAdvanced": {
+            "type": "switch",
+            "label": "$setting_combat_advanced",
+            "description": "$setting_combat_advanced_desc",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "$option_switch_case_yes",
+                    "option": [
+                        "CombatRotationMode",
+                        "CombatRotationOrder",
+                        "CombatFieldTime",
+                        "CombatDisabledSlots",
+                        "CombatSlot1",
+                        "CombatSlot2",
+                        "CombatSlot3",
+                        "CombatSlot4"
+                    ]
+                },
+                {
+                    "name": "No",
+                    "label": "$option_switch_case_no"
+                }
+            ]
+        },
+        "CombatRotationMode": {
+            "type": "select",
+            "label": "$setting_combat_rotation_mode",
+            "description": "$setting_combat_rotation_mode_desc",
+            "default_case": "inherit",
+            "cases": [
+                {
+                    "name": "inherit",
+                    "label": "$setting_combat_rotation_mode_inherit",
+                    "pipeline_override": {
+                        "CombatSetting_RotationMode": {
+                            "attach": {
+                                "rotation_mode": ""
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "cycle",
+                    "label": "$setting_combat_rotation_mode_cycle",
+                    "pipeline_override": {
+                        "CombatSetting_RotationMode": {
+                            "attach": {
+                                "rotation_mode": "cycle"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "stay",
+                    "label": "$setting_combat_rotation_mode_stay",
+                    "pipeline_override": {
+                        "CombatSetting_RotationMode": {
+                            "attach": {
+                                "rotation_mode": "stay"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CombatRotationOrder": {
+            "type": "input",
+            "label": "$setting_combat_rotation_order",
+            "description": "$setting_combat_rotation_order_desc",
+            "inputs": [
+                {
+                    "name": "rotation_order",
+                    "label": "$setting_combat_rotation_order_input",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^$|^\\s*[1-4](\\s*[,，、]\\s*[1-4]){0,15}\\s*$",
+                    "pattern_msg": "$setting_combat_rotation_order_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_RotationOrder": {
+                    "attach": {
+                        "rotation_order": "{rotation_order}"
+                    }
+                }
+            }
+        },
+        "CombatFieldTime": {
+            "type": "input",
+            "label": "$setting_combat_field_time",
+            "description": "$setting_combat_field_time_desc",
+            "inputs": [
+                {
+                    "name": "min_field_time",
+                    "label": "$setting_combat_seconds_input",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^$|^(10(\\.0{1,2})?|\\d(\\.\\d{1,2})?)$",
+                    "pattern_msg": "$setting_combat_field_time_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_FieldTime": {
+                    "attach": {
+                        "min_field_time": "{min_field_time}"
+                    }
+                }
+            }
+        },
+        "CombatDisabledSlots": {
+            "type": "checkbox",
+            "label": "$setting_combat_disabled_slots",
+            "description": "$setting_combat_disabled_slots_desc",
+            "default_case": [],
+            "cases": [
+                {
+                    "name": "1",
+                    "label": "$setting_combat_slot_1",
+                    "pipeline_override": {
+                        "CombatSetting_DisableSlot1": {
+                            "attach": {
+                                "slots": {
+                                    "1": {
+                                        "enabled": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "2",
+                    "label": "$setting_combat_slot_2",
+                    "pipeline_override": {
+                        "CombatSetting_DisableSlot2": {
+                            "attach": {
+                                "slots": {
+                                    "2": {
+                                        "enabled": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "3",
+                    "label": "$setting_combat_slot_3",
+                    "pipeline_override": {
+                        "CombatSetting_DisableSlot3": {
+                            "attach": {
+                                "slots": {
+                                    "3": {
+                                        "enabled": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "4",
+                    "label": "$setting_combat_slot_4",
+                    "pipeline_override": {
+                        "CombatSetting_DisableSlot4": {
+                            "attach": {
+                                "slots": {
+                                    "4": {
+                                        "enabled": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "CombatSlot1": {
+            "type": "input",
+            "label": "$setting_combat_slot_1",
+            "description": "$setting_combat_slot_desc",
+            "inputs": [
+                {
+                    "name": "slot1_character",
+                    "label": "$setting_combat_slot_character",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot1_note",
+                    "label": "$setting_combat_slot_note",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot1_combo",
+                    "label": "$setting_combat_slot_combo",
+                    "description": "$setting_combat_slot_combo_desc",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,500}$"
+                },
+                {
+                    "name": "slot1_field_time",
+                    "label": "$setting_combat_slot_field_time",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^$|^(10(\\.0{1,2})?|\\d(\\.\\d{1,2})?)$",
+                    "pattern_msg": "$setting_combat_field_time_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_Slot1": {
+                    "attach": {
+                        "slots": {
+                            "1": {
+                                "character": "{slot1_character}",
+                                "note": "{slot1_note}",
+                                "combo": "{slot1_combo}",
+                                "min_field_time": "{slot1_field_time}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "CombatSlot2": {
+            "type": "input",
+            "label": "$setting_combat_slot_2",
+            "description": "$setting_combat_slot_desc",
+            "inputs": [
+                {
+                    "name": "slot2_character",
+                    "label": "$setting_combat_slot_character",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot2_note",
+                    "label": "$setting_combat_slot_note",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot2_combo",
+                    "label": "$setting_combat_slot_combo",
+                    "description": "$setting_combat_slot_combo_desc",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,500}$"
+                },
+                {
+                    "name": "slot2_field_time",
+                    "label": "$setting_combat_slot_field_time",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^$|^(10(\\.0{1,2})?|\\d(\\.\\d{1,2})?)$",
+                    "pattern_msg": "$setting_combat_field_time_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_Slot2": {
+                    "attach": {
+                        "slots": {
+                            "2": {
+                                "character": "{slot2_character}",
+                                "note": "{slot2_note}",
+                                "combo": "{slot2_combo}",
+                                "min_field_time": "{slot2_field_time}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "CombatSlot3": {
+            "type": "input",
+            "label": "$setting_combat_slot_3",
+            "description": "$setting_combat_slot_desc",
+            "inputs": [
+                {
+                    "name": "slot3_character",
+                    "label": "$setting_combat_slot_character",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot3_note",
+                    "label": "$setting_combat_slot_note",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot3_combo",
+                    "label": "$setting_combat_slot_combo",
+                    "description": "$setting_combat_slot_combo_desc",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,500}$"
+                },
+                {
+                    "name": "slot3_field_time",
+                    "label": "$setting_combat_slot_field_time",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^$|^(10(\\.0{1,2})?|\\d(\\.\\d{1,2})?)$",
+                    "pattern_msg": "$setting_combat_field_time_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_Slot3": {
+                    "attach": {
+                        "slots": {
+                            "3": {
+                                "character": "{slot3_character}",
+                                "note": "{slot3_note}",
+                                "combo": "{slot3_combo}",
+                                "min_field_time": "{slot3_field_time}"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "CombatSlot4": {
+            "type": "input",
+            "label": "$setting_combat_slot_4",
+            "description": "$setting_combat_slot_desc",
+            "inputs": [
+                {
+                    "name": "slot4_character",
+                    "label": "$setting_combat_slot_character",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot4_note",
+                    "label": "$setting_combat_slot_note",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,30}$"
+                },
+                {
+                    "name": "slot4_combo",
+                    "label": "$setting_combat_slot_combo",
+                    "description": "$setting_combat_slot_combo_desc",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^.{0,500}$"
+                },
+                {
+                    "name": "slot4_field_time",
+                    "label": "$setting_combat_slot_field_time",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^$|^(10(\\.0{1,2})?|\\d(\\.\\d{1,2})?)$",
+                    "pattern_msg": "$setting_combat_field_time_pattern"
+                }
+            ],
+            "pipeline_override": {
+                "CombatSetting_Slot4": {
+                    "attach": {
+                        "slots": {
+                            "4": {
+                                "character": "{slot4_character}",
+                                "note": "{slot4_note}",
+                                "combo": "{slot4_combo}",
+                                "min_field_time": "{slot4_field_time}"
+                            }
+                        }
                     }
                 }
             }

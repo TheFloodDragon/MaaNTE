@@ -121,9 +121,12 @@
     "global_option": [
         "CombatScheme",
         "CombatTeamSize",
+        "CombatAdvanced",
+        "CombatSpeed",
         "CombatDisabledActions",
         "CombatLockTarget",
         "CombatSearchTurn",
+        "CombatAssistDetection",
         "CombatClearConfirm"
     ],
     "setting": [
@@ -138,6 +141,24 @@
             "default_expand": true
         },
         {
+            "name": "CombatTeam",
+            "label": "$setting_combat_team_label",
+            "description": "$setting_combat_team_desc",
+            "option": [
+                "CombatAdvanced"
+            ],
+            "default_expand": false
+        },
+        {
+            "name": "CombatInput",
+            "label": "$setting_combat_input_label",
+            "description": "$setting_combat_input_desc",
+            "option": [
+                "CombatSpeed"
+            ],
+            "default_expand": true
+        },
+        {
             "name": "CombatStrategy",
             "label": "$setting_combat_strategy_label",
             "description": "$setting_combat_strategy_desc",
@@ -145,6 +166,7 @@
                 "CombatDisabledActions",
                 "CombatLockTarget",
                 "CombatSearchTurn",
+                "CombatAssistDetection",
                 "CombatClearConfirm"
             ],
             "default_expand": true

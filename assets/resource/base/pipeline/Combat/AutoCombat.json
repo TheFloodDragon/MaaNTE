@@ -1,6 +1,6 @@
 {
     "AutoCombatMain": {
-        "desc": "自动战斗入口：按全局战斗配置执行战斗。持续模式下 next 被选项改为指回自身",
+        "desc": "自动战斗入口：按全局战斗配置执行一场战斗。确认结束（cleared/disengaged）或目标丢失（target_lost）视为本轮交还成功；持续模式下 next 被选项改为指回自身、重新等待新的敌人。撤退、超时、HUD/截图异常、出错均走失败，结束任务，不会在撤退后立即重开",
         "recognition": {
             "type": "DirectHit"
         },
@@ -13,6 +13,11 @@
                         "AutoCombat_ModeOption",
                         "AutoCombat_WaitTimeoutOption",
                         "AutoCombat_MaxDurationOption"
+                    ],
+                    "accepted_reasons": [
+                        "cleared",
+                        "disengaged",
+                        "target_lost"
                     ]
                 }
             }

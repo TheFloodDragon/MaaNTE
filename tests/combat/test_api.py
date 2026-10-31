@@ -43,13 +43,15 @@ class FakeController:
 
 
 class FakeContext:
-    def __init__(self, image, nodes=None, enemy=True, stop_after=None):
+    def __init__(self, image, nodes=None, enemy=True, stop_after=None, signals=None):
         controller = FakeController(image)
         self.tasker = type("Tasker", (), {})()
         self.tasker.controller = controller
         self.nodes = nodes or {}
         self.enemy = enemy
+        self.signals = signals or {}  # 调用方信号节点名 -> 是否命中
         self.recognitions = 0
+        self.seen: set[str] = set()
         self.stop_after = stop_after
         type(self.tasker).stopping = property(lambda _: self._stopping())
 
@@ -60,9 +62,15 @@ class FakeContext:
         return self.nodes.get(name)
 
     def run_recognition(self, entry, image, pipeline_override=None):
-        assert entry == api.ENEMY_NODE
         self.recognitions += 1
-        return type("Detail", (), {"hit": self.enemy})()
+        self.seen.add(entry)
+        if entry == api.ENEMY_NODE:
+            hit = self.enemy
+        elif entry in self.signals:
+            hit = self.signals[entry]
+        else:
+            hit = False  # 等级/Boss/撤离提示等：明确未命中
+        return type("Detail", (), {"hit": hit})()
 
 
 def hud_frame():
@@ -115,9 +123,127 @@ class RunCombatTests(unittest.TestCase):
         self.assertTrue(
             len(clicks) > 1 and all(args[2] == 0 for args in clicks[1:]), clicks[:3]
         )  # 之后都是左键普攻
-        self.assertEqual(PRINTED[0], "combat.waiting|combat.scheme_name.basic_attack")
-        self.assertEqual(PRINTED[1], "combat.started|combat.scheme_name.basic_attack")
+        self.assertEqual(
+            PRINTED[0],
+            "combat.plan.header|combat.scheme_name.basic_attack|combat.plan.from_builtin"
+            "|1|combat.plan.stay",
+        )  # 摘要只写来源类别，不暴露安装路径
+        self.assertEqual(
+            PRINTED[1:5],
+            [
+                "combat.plan.slot|%d|combat.team.any|combat.plan.source.default|l_click(1)|0"
+                % slot
+                for slot in (1, 2, 3, 4)
+            ],
+        )
+        self.assertEqual(PRINTED[5], "combat.waiting|combat.scheme_name.basic_attack")
+        self.assertEqual(PRINTED[6], "combat.started|combat.scheme_name.basic_attack")
         self.assertTrue(PRINTED[-1].startswith("combat.ended|combat.reason.stopped|"))
+
+    def test_summary_repeats_only_when_effective_plan_changes(self):
+        def run(overrides):
+            combat.run_combat(
+                FakeContext(np.zeros((720, 1280, 3), dtype=np.uint8)),
+                overrides={"wait_timeout": 0.3, **overrides},
+            )
+
+        run({})
+        run({})
+        run({"slots": {"2": {"combo": "jump", "character": "零"}}})
+        headers = [p for p in PRINTED if p.startswith("combat.plan.header|")]
+        self.assertEqual(len(headers), 2)
+        self.assertIn(
+            "combat.plan.slot|2|零|combat.plan.source.override|jump|1", PRINTED
+        )
+
+    def test_disabled_slot_shown_and_cycle_summary(self):
+        combat.run_combat(
+            FakeContext(np.zeros((720, 1280, 3), dtype=np.uint8)),
+            overrides={
+                "wait_timeout": 0.3,
+                "rotation_order": "3,1",
+                "slots": {"2": {"enabled": False}},
+                "combat_speed": 1.25,
+            },
+        )
+        self.assertTrue(
+            PRINTED[0].endswith("|1.25|combat.plan.cycle|3→1|3"), PRINTED[0]
+        )
+        self.assertIn("combat.plan.slot_off|2", PRINTED)
+
+    def test_invalid_new_option_fails_before_input(self):
+        for overrides, code in (
+            ({"combat_speed": 5}, "bad_option"),
+            ({"slots": {"1": {"combo": "perform"}}}, "slot_combo"),
+            ({"slots": {s: {"enabled": False} for s in "1234"}}, "no_enabled_slot"),
+        ):
+            PRINTED.clear()
+            ctx = FakeContext(hud_frame())
+            result = combat.run_combat(ctx, overrides=overrides)
+            self.assertEqual(result.reason, "scheme_error", overrides)
+            self.assertEqual(ctx.tasker.controller.calls, [], overrides)
+            self.assertTrue(
+                PRINTED[0].startswith("combat.scheme_error|combat.scheme.%s|" % code)
+                or PRINTED[0] == "combat.scheme_error|combat.scheme.%s" % code,
+                PRINTED[0],
+            )
+
+    def test_signal_nodes_validated_and_used(self):
+        nodes = {
+            "Mine_Victory": {"recognition": {"type": "OCR", "param": {}}},
+            "Mine_Direct": {"recognition": {"type": "DirectHit"}},
+            "Mine_Off": {"recognition": {"type": "OCR"}, "enabled": False},
+        }
+        for signal in (
+            {"cleared": ["Mine_Direct"]},
+            {"cleared": ["Mine_Off"]},
+            {"cleared": ["Missing"]},
+            {"victory": ["Mine_Victory"]},
+            {"cleared": [""]},
+            ["Mine_Victory"],
+        ):
+            ctx = FakeContext(hud_frame(), nodes)
+            result = combat.run_combat(ctx, signal_nodes=signal)
+            self.assertEqual(result.reason, "scheme_error", signal)
+            self.assertEqual(ctx.tasker.controller.calls, [], signal)
+        # 进战后敌人消失、调用方的胜利节点命中：两张新图确认后以 cleared 结束
+        ctx = FakeContext(hud_frame(), nodes)
+        ctx.enemy_until = 4  # 前几次敌人识别命中，之后消失
+        calls = {"n": 0}
+        original = ctx.run_recognition
+
+        def scripted_recognition(entry, image, pipeline_override=None):
+            if entry == api.ENEMY_NODE:
+                calls["n"] += 1
+                ctx.enemy = calls["n"] <= ctx.enemy_until
+            if entry == "Mine_Victory":
+                ctx.signals["Mine_Victory"] = not ctx.enemy
+            return original(entry, image, pipeline_override)
+
+        ctx.run_recognition = scripted_recognition
+        result = combat.run_combat(
+            ctx,
+            overrides={"scheme": "basic_attack", "max_duration": 30},
+            signal_nodes={"cleared": "Mine_Victory"},
+        )
+        self.assertIn("Mine_Victory", ctx.seen)
+        self.assertEqual((result.reason, result.success), ("cleared", True))
+        self.assertTrue(result.confirmed_end)
+        self.assertIn(("cleared", True), result.evidence)
+
+    def test_prepare_combat_has_no_side_effects(self):
+        ctx = FakeContext(hud_frame())
+        plan = combat.prepare_combat(
+            ctx,
+            overrides={"rotation_order": "2,1", "slots": {"1": {"combo": "skill"}}},
+            scheme_data={"version": 1, "combos": {"default": "jump"}},
+        )
+        self.assertEqual((plan.order, plan.opener), ((2, 1), 2))
+        self.assertEqual(plan.slots[0].combo, "skill")
+        self.assertEqual(plan.slots[1].combo, "jump")
+        self.assertEqual(ctx.tasker.controller.calls, [])
+        self.assertEqual(ctx.recognitions, 0)
+        self.assertEqual(PRINTED, [])
 
     def test_team_hint_printed_once_per_scheme(self):
         nodes = {"CombatSetting_Scheme": {"attach": {"scheme": "main_dps"}}}
@@ -157,7 +283,7 @@ class RunCombatTests(unittest.TestCase):
         )
 
     def test_strategy_options_reach_engine(self):
-        options, _ = combat.merge_options(
+        options, _, _ = combat.merge_options_strict(
             [
                 {
                     "team_size": 2,
@@ -168,8 +294,9 @@ class RunCombatTests(unittest.TestCase):
             ]
         )
         scheme = combat.load_scheme("main_dps")
+        plan = combat.apply_overrides(scheme, options)
         engine = api.build_engine(
-            FakeContext(hud_frame()), scheme, options, combat.Reporter()
+            FakeContext(hud_frame()), plan, options, combat.Reporter()
         )
         self.assertEqual(engine.order, [1, 2])
         self.assertFalse(engine.switch_allowed)

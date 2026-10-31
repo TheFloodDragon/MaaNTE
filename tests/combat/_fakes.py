@@ -47,6 +47,7 @@ class FakeWorld:
         hidden=(),
         manual=(),
         crash_at=None,
+        extra=None,
     ):
         self.clock = clock
         self.alive = set(alive)
@@ -60,6 +61,9 @@ class FakeWorld:
         self.hidden = list(hidden)  # [(开始, 结束)] HUD 不可见的时间段
         self.manual = sorted(manual)  # [(时间, 槽位)] 模拟用户手动切人
         self.crash_at = crash_at
+        self.extra = (
+            extra  # t -> dict，覆盖快照字段（等级/Boss/撤离提示/黑屏/终局信号…）
+        )
         self.pending = None
         self.events: list[tuple[float, str, int]] = []
         self.captures = 0
@@ -115,7 +119,7 @@ class FakeWorld:
             self.slot, self.pending = self.pending[0], None
         hud = self.hud_visible(t)
         enemy = self.enemy(t) if callable(self.enemy) else self.enemy
-        return self._snapshot_cls(
+        fields = dict(
             at=0.0,
             valid=True,
             in_hud=hud,
@@ -123,6 +127,15 @@ class FakeWorld:
             slot=self.slot if (hud and self.detect_slots) else 0,
             enemy=enemy if hud else None,
         )
+        if self.extra is not None:
+            fields.update(self.extra(t) or {})
+        if not fields["valid"]:
+            return self._snapshot_cls(at=0.0, valid=False)
+        if fields.get("black"):
+            fields["in_hud"] = False
+        if not fields["in_hud"]:  # 与真实感知一致：界面不可见时不判断槽位和敌人
+            fields["slot"], fields["enemy"] = 0, None
+        return self._snapshot_cls(**fields)
 
     def is_stopping(self) -> bool:
         return self.stop_at is not None and self.clock.t >= self.stop_at
@@ -178,14 +191,16 @@ class RecordingReporter:
         self.calls.append(("strategy_hint", changes))
 
 
-def make_engine(scheme: dict, config: dict | None = None, **world_kwargs):
-    """返回 (engine, world, clock, reporter)。scheme 为方案 dict，config 为 EngineConfig 字段。
+def make_engine(scheme, config: dict | None = None, **world_kwargs):
+    """返回 (engine, world, clock, reporter)。scheme 为方案 dict 或已解析的 CombatScheme，
+    config 为 EngineConfig 字段。
 
     锁敌默认关闭，避免中键点击干扰与锁敌无关的用例；锁敌相关用例显式传 lock_target=True。
     """
     config = {"lock_target": False, **(config or {})}
-    if "disabled" in config:
-        config["disabled"] = frozenset(config["disabled"])
+    for key in ("disabled", "disabled_slots"):
+        if key in config:
+            config[key] = frozenset(config[key])
     runtime = submodule("runtime")
     inputs = submodule("inputs")
     engine_mod = submodule("engine")
@@ -197,10 +212,9 @@ def make_engine(scheme: dict, config: dict | None = None, **world_kwargs):
     )
     driver = inputs.InputDriver(world, rt.sleep)
     cfg = engine_mod.EngineConfig(
-        **{"wait_timeout": 5.0, "max_duration": 20.0, **(config or {})}
+        **{"wait_timeout": 5.0, "max_duration": 20.0, **config}
     )
     reporter = RecordingReporter()
-    engine = engine_mod.CombatEngine(
-        rt, driver, scheme_mod.parse_scheme(scheme), cfg, reporter
-    )
+    parsed = scheme_mod.parse_scheme(scheme) if isinstance(scheme, dict) else scheme
+    engine = engine_mod.CombatEngine(rt, driver, parsed, cfg, reporter)
     return engine, world, clock, reporter

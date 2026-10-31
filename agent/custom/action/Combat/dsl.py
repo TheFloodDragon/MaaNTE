@@ -11,9 +11,17 @@
 from __future__ import annotations
 
 import ast
+import math
 from dataclasses import dataclass
 
-from .keys import ALLOWED_KEYS, DIRECTIONS, MOUSE_CONTACT, OPPOSITE_DIRECTIONS
+from .keys import (
+    ALLOWED_KEYS,
+    DIRECTIONS,
+    MOUSE_CONTACT,
+    OPPOSITE_DIRECTIONS,
+    SPEED_MAX,
+    SPEED_MIN,
+)
 
 MAX_COMMANDS = 200
 MAX_SECONDS = 10.0
@@ -64,7 +72,9 @@ _SPECS: dict[str, tuple[tuple[str, str, object], ...]] = {
     "mousedown": (("button", "button", "left"),),
     "mouseup": (("button", "button", "left"),),
     "click": (("button", "button", "left"),),
+    "speed": (("factor", "speed", _REQUIRED),),  # 控制指令：本场后续的输入节奏倍率
 }
+CONTROL_COMMANDS = frozenset({"speed"})  # 不发送游戏输入，不计为一次出招
 _ALIASES = {"attack": "l_click", "heavy": "l_hold"}
 COMMANDS = frozenset(_SPECS) | frozenset(_ALIASES)
 
@@ -86,9 +96,15 @@ def _coerce(kind: str, value, cmd: str, param: str, node):
     def bad():
         return ComboError("bad_value", *_pos(node), cmd, param, value)
 
-    if kind in ("sec", "pos", "deg"):
+    if kind in ("sec", "pos", "deg", "speed"):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise bad()
+        if kind == "speed":
+            if not math.isfinite(value) or not SPEED_MIN <= value <= SPEED_MAX:
+                raise ComboError(
+                    "speed_out_of_range", *_pos(node), cmd, value, SPEED_MIN, SPEED_MAX
+                )
+            return float(value)
         if kind == "deg":
             if not -MAX_DEGREES <= value <= MAX_DEGREES:
                 raise ComboError(

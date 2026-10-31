@@ -42,6 +42,10 @@ SLOT_KEYS = {1: "1", 2: "2", 3: "3", 4: "4"}
 TAP_SECONDS = 0.05
 # 连点间隔，与 ok-NTE continues_normal_attack 一致
 CLICK_INTERVAL = 0.1
+# 输入节奏倍率（不是游戏速度）。只缩放默认连点间隔、每轮最短耗时，低于 1 时在指令间加间隔
+SPEED_MIN = 0.5
+SPEED_MAX = 2.0
+SLOW_COMMAND_GAP = 0.1  # 倍率 0.5 时每条指令后额外等待 0.1 秒，倍率 >= 1 时为 0
 # 冲刺：按住 W 这么久后点 Shift（ok-NTE 跑图同款）
 SPRINT_LEAD = 0.1
 # 带方向闪避：先按住方向键这么久再点 Shift，保证游戏读到方向

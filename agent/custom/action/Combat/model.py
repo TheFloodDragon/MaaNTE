@@ -1,4 +1,4 @@
-"""战斗内核共用的数据类型与异常。本模块不依赖 maa，可直接单测。"""
+"""战斗数据类型。未知信号不等于阴性，停止输出不等于确认清场。"""
 
 from __future__ import annotations
 
@@ -6,22 +6,38 @@ from dataclasses import dataclass
 
 
 class EndReason:
-    """一场战斗的结束原因。值同时用作 agent i18n key 的后缀。"""
+    CLEARED = "cleared"
+    DISENGAGED = "disengaged"
+    TARGET_LOST = "target_lost"
+    RETREATED = "retreated"
+    DEFEATED = "defeated"
+    TIMEOUT = "timeout"
+    HUD_LOST = "hud_lost"
+    OBSERVATION_LOST = "observation_lost"
+    NO_COMBAT = "no_combat"
+    STOPPED = "stopped"
+    SCRIPT_FINISHED = "script_finished"
+    ERROR = "error"
+    SCHEME_ERROR = "scheme_error"
 
-    CLEARED = "cleared"  # 敌人血条持续消失，判定脱战
-    TIMEOUT = "timeout"  # 超过单场最长时长
-    HUD_LOST = "hud_lost"  # 战斗中长时间看不到可操作界面（阵亡/剧情/弹窗）
-    NO_COMBAT = "no_combat"  # 等待超时仍未进入战斗
-    STOPPED = "stopped"  # 用户停止任务
-    ERROR = "error"  # 内部异常
-    SCHEME_ERROR = "scheme_error"  # 方案文件加载或校验失败
 
-
-# 视为"正常结束"的原因：把画面交还调用方的 next 继续识别
-SUCCESS_REASONS = frozenset({EndReason.CLEARED, EndReason.TIMEOUT, EndReason.HUD_LOST})
-
-# 战斗策略里可以禁用的动作。名称同时用作选项 use_<name> 与 agent i18n key combat.action.<name> 的后缀
+SUCCESS_REASONS = frozenset({EndReason.CLEARED})
+CONFIRMED_REASONS = frozenset(
+    {EndReason.CLEARED, EndReason.DISENGAGED, EndReason.RETREATED, EndReason.DEFEATED}
+)
+END_REASONS = frozenset(
+    value for key, value in vars(EndReason).items() if key.isupper()
+)
 TOGGLE_ACTIONS = ("ultimate", "skill", "arc", "dodge", "jump", "switch")
+
+
+class Phase:
+    WAITING = "waiting"
+    ACTIVE = "active"
+    UNCERTAIN = "uncertain"
+    VERIFYING = "verifying"
+    SUSPENDED = "suspended"
+    ENDED = "ended"
 
 
 @dataclass(frozen=True)
@@ -29,27 +45,109 @@ class CombatResult:
     success: bool
     reason: str
     duration: float = 0.0
+    entered: bool = False
+    confirmed_end: bool = False
+    evidence: tuple[tuple[str, bool | None], ...] = ()
 
     @classmethod
-    def of(cls, reason: str, duration: float = 0.0) -> "CombatResult":
-        return cls(success=reason in SUCCESS_REASONS, reason=reason, duration=duration)
+    def of(
+        cls, reason: str, duration: float = 0.0, *, entered: bool = False, evidence=()
+    ) -> "CombatResult":
+        return cls(
+            success=reason in SUCCESS_REASONS,
+            reason=reason,
+            duration=duration,
+            entered=entered,
+            confirmed_end=reason in CONFIRMED_REASONS,
+            evidence=tuple(evidence),
+        )
+
+
+@dataclass(frozen=True)
+class ActionResult:
+    """sent 仅表示控制器接受输入，不表示技能释放/命中成功。"""
+
+    status: str
+    executed: int = 0
+    skipped: int = 0
+    controls: int = 0
+
+    @property
+    def success(self) -> bool:
+        """sent 已发送 / unchanged 已是目标角色 / configured 仅改了节奏 / completed 默认轮转跑完。"""
+        return self.status in {"sent", "unchanged", "configured", "completed"}
 
 
 @dataclass(frozen=True)
 class Snapshot:
-    """一帧感知结果。未知统一用 None，消费方按"未知即不满足"处理。"""
+    """一张截图的证据；所有识别共享此图，None 表示未知或未配置。"""
 
     at: float
     valid: bool
     in_hud: bool | None = None
     black: bool | None = None
-    slot: int = 0  # 当前高亮槽位 1-4，0 表示无法判断
+    slot: int = 0
     enemy: bool | None = None
+    health_bar: bool | None = None
+    enemy_level: bool | None = None
+    boss: bool | None = None
+    active: bool | None = None
+    cleared: bool | None = None
+    disengaged: bool | None = None
+    retreated: bool | None = None
+    defeated: bool | None = None
+    suspended: bool | None = False
+    retreat_prompt: bool | None = False
+    evidence: tuple[tuple[str, bool | None], ...] = ()
+
+    @property
+    def hostile(self) -> bool | None:
+        if any(
+            value is True
+            for value in (
+                self.enemy,
+                self.health_bar,
+                self.enemy_level,
+                self.boss,
+                self.active,
+            )
+        ):
+            return True
+        return self.enemy
+
+    @property
+    def terminal_signals(self) -> tuple[str, ...]:
+        return tuple(
+            name
+            for name in ("cleared", "disengaged", "retreated", "defeated")
+            if getattr(self, name) is True
+        )
+
+    @property
+    def terminal_reason(self) -> str | None:
+        signals = self.terminal_signals
+        # 同帧仍有敌人，或者多个互斥终局同时命中，均不擅自宣布胜利。
+        if (
+            self.valid
+            and self.black is False
+            and self.suspended is False
+            and self.retreat_prompt is False
+            and self.hostile is not True
+            and len(signals) == 1
+        ):
+            return signals[0]
+        return None
 
     @property
     def ready(self) -> bool:
-        """可以接收战斗输入：看得到 HUD 且不是黑屏。"""
-        return bool(self.valid and self.in_hud and not self.black)
+        return bool(
+            self.valid
+            and self.in_hud is True
+            and self.black is False
+            and self.suspended is False
+            and self.retreat_prompt is False
+            and not self.terminal_signals
+        )
 
 
 INVALID_SNAPSHOT = Snapshot(at=0.0, valid=False)
@@ -60,16 +158,16 @@ class CombatStopped(Exception):
 
 
 class CombatEnded(Exception):
-    """战斗结束信号，从任意深度的执行流程中跳出。"""
-
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
 
 
-class SwitchFailed(Exception):
-    """出招表中的 switch(n) 未能确认，放弃本段剩余指令。"""
+class InputSuspended(Exception):
+    """画面不可操作，放弃当前动作的剩余部分，不将槽位标记为阵亡。"""
 
+
+class SwitchFailed(Exception):
     def __init__(self, slot: int):
         super().__init__(slot)
         self.slot = slot

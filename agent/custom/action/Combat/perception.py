@@ -1,11 +1,15 @@
-"""战斗画面感知（纯 numpy）。
+"""战斗画面感知。
 
-阈值移植自 pinkpaw/pinkpaw_core3.py（已在实机校准），坐标基于 1280x720，
-按截图实际尺寸等比缩放。敌人血条检测走 Pipeline 节点 CombatEnemyVisible，不在本模块。
+HUD / 当前槽位 / 黑屏阈值移植自 pinkpaw/pinkpaw_core3.py（已实机校准），坐标基于 1280x720，
+按截图实际尺寸等比缩放。敌人血条、等级文字、撤离提示等走 Pipeline 节点，由 observe_frame
+通过注入的 recognize 回调执行；find_health_bars 是 combat_enemy_bar 识别（CombatEnemyBarShape 节点）的实现，
+需要 OpenCV，战斗内核直接调用它，不经 run_recognition。
+未实机校准的部分：血条形状阈值、等级文字区域（参考 ok-NTE 换算到 720p）。
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
@@ -142,13 +146,163 @@ def current_slot(image: np.ndarray) -> int:
     return 0
 
 
-def observe_frame(image, detect_enemy: Callable[[np.ndarray], bool | None]) -> Snapshot:
-    """把一帧截图转换为 Snapshot。HUD 不可见时不判断槽位和敌人，避免菜单/动画误判。"""
+@dataclass(frozen=True)
+class SignalConfig:
+    """同帧识别的节点组；空组未配置，不作为已观察的阴性。"""
+
+    enemy: tuple[str, ...] = ("CombatEnemyHealthBar",)  # 与 api.ENEMY_NODE 一致
+    level: tuple[str, ...] = ()
+    boss: tuple[str, ...] = ()
+    retreat_prompt: tuple[str, ...] = ()
+    caller: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+    def nodes(self, kind: str) -> tuple[str, ...]:
+        return dict(self.caller).get(kind, ())
+
+
+SIGNAL_KINDS = ("active", "cleared", "disengaged", "retreated", "defeated", "suspended")
+_TERMINAL_KINDS = ("cleared", "disengaged", "retreated", "defeated")
+
+
+def any_hit(recognize: Callable[[str], bool | None], names) -> bool | None:
+    """任一命中即 True；全部明确未命中为 False；否则（含识别失败）为 None。未配置返回 None。"""
+    if not names:
+        return None
+    unknown = False
+    for name in names:
+        hit = recognize(name)
+        if hit is True:
+            return True
+        if hit is None:
+            unknown = True
+    return None if unknown else False
+
+
+def observe_frame(
+    image,
+    recognize: Callable[[str, object], bool | None],
+    signals: SignalConfig | None = None,
+) -> Snapshot:
+    """同一张图获取独立证据。HUD 隐藏仍识别撤离/终局；黑屏一律未知。
+
+    血条阳性时省略等级 OCR；否则全部已配置的敌人证据均阴性才能判目标暂失。
+    识别异常/缺失不冒充阴性，任一阳性（含调用方 active）优先。
+    """
     bgr = as_bgr(image)
     if bgr is None:
         return INVALID_SNAPSHOT
+    signals = signals or SignalConfig()
+    cache: dict[str, bool | None] = {}
+
+    def recognize_once(name):
+        if name not in cache:
+            try:
+                cache[name] = recognize(name, image)
+            except Exception:
+                cache[name] = None
+        return cache[name]
+
+    def hit(names):
+        return any_hit(recognize_once, names)
+
     black = is_black(bgr)
-    hud = (not black) and in_hud(bgr)
+    hud = not black and in_hud(bgr)
+    caller = {
+        kind: None if black else hit(signals.nodes(kind)) for kind in SIGNAL_KINDS
+    }
+    retreat = (
+        (None if black else hit(signals.retreat_prompt))
+        if signals.retreat_prompt
+        else False
+    )
     slot = current_slot(bgr) if hud else 0
-    enemy = detect_enemy(image) if hud else None
-    return Snapshot(at=0.0, valid=True, in_hud=hud, black=black, slot=slot, enemy=enemy)
+    health = hit(signals.enemy) if hud else None
+    level = boss = None
+    if hud and health is not True:
+        level, boss = hit(signals.level), hit(signals.boss)
+    hostile = [health]
+    if signals.level:
+        hostile.append(level)
+    if signals.boss:
+        hostile.append(boss)
+    if signals.nodes("active"):
+        hostile.append(caller["active"])
+    enemy = (
+        True
+        if any(v is True for v in hostile)
+        else False if all(v is False for v in hostile) else None
+    )
+    evidence = (
+        ("hud", hud),
+        ("health_bar", health),
+        ("enemy_level", level),
+        ("boss", boss),
+        ("retreat_prompt", retreat),
+        *((kind, caller[kind]) for kind in SIGNAL_KINDS if signals.nodes(kind)),
+    )
+    return Snapshot(
+        at=0.0,
+        valid=True,
+        in_hud=hud,
+        black=black,
+        slot=slot,
+        enemy=enemy,
+        health_bar=health,
+        enemy_level=level,
+        boss=boss,
+        active=caller["active"],
+        cleared=caller["cleared"],
+        disengaged=caller["disengaged"],
+        retreated=caller["retreated"],
+        defeated=caller["defeated"],
+        suspended=caller["suspended"] if signals.nodes("suspended") else False,
+        retreat_prompt=retreat,
+        evidence=evidence,
+    )
+
+
+# ---- 敌人血条形状（combat_enemy_bar），与 CombatEnemyHealthBar 的精确颜色匹配互补 ----
+# 颜色与区域参考 ok-NTE CombatCheck._find_red_health_bar（2560x1440，提交 893525d）换算到 720p：
+# HSV S>=190、V>=175 后再取 R 210~255 / G 20~80 / B 20~100；区域去掉左侧 UI、底部自身血条与右侧队伍栏。
+# 与上游不同：最小宽度从 50px 放宽到 6px，残血短条也能识别；但仍要求长宽比 >= 2.5 以排除红色粒子，
+# 更短的残血条由精确颜色节点（count=3）和等级/Boss 证据覆盖。未在 MaaNTE 实机校准。
+BAR_ROI = (126, 0, 1021, 644)
+BAR_HSV_LOWER = (0, 190, 175)
+BAR_HSV_UPPER = (179, 255, 255)
+BAR_BGR_LOWER = (20, 20, 210)
+BAR_BGR_UPPER = (100, 80, 255)
+BAR_MIN_W, BAR_MAX_W = 6, 100
+BAR_MIN_H, BAR_MAX_H = 2, 6
+BAR_MIN_ASPECT = 2.5
+BAR_MIN_FILL = 0.7
+
+
+def find_health_bars(image) -> list[tuple[int, int, int, int]]:
+    """返回疑似敌人血条的框（截图坐标）。只接受细长、填充饱满的红色连通块，排除大片红色场景。"""
+    import cv2
+
+    bgr = as_bgr(image)
+    if bgr is None:
+        return []
+    x, y, w, h = scale_roi(BAR_ROI, bgr.shape)
+    region = np.ascontiguousarray(bgr[y : y + h, x : x + w])
+    if region.size == 0:
+        return []
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, BAR_HSV_LOWER, BAR_HSV_UPPER) & cv2.inRange(
+        region, BAR_BGR_LOWER, BAR_BGR_UPPER
+    )
+    count, _, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    sx, sy = bgr.shape[1] / BASE_WIDTH, bgr.shape[0] / BASE_HEIGHT
+    boxes = []
+    for i in range(1, count):
+        bx, by, bw, bh, area = (int(v) for v in stats[i])
+        w720, h720 = bw / sx, bh / sy
+        if not (BAR_MIN_W <= w720 <= BAR_MAX_W and BAR_MIN_H <= h720 <= BAR_MAX_H):
+            continue
+        if w720 / max(h720, 1e-6) < BAR_MIN_ASPECT:
+            continue
+        if area / float(bw * bh) < BAR_MIN_FILL:
+            continue
+        boxes.append((x + bx, y + by, bw, bh))
+    return boxes

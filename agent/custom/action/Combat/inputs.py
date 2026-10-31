@@ -36,6 +36,12 @@ def _wait(job) -> bool:
     return bool(getattr(result, "succeeded", True))
 
 
+def _require(job) -> bool:
+    if not _wait(job):
+        raise OSError("combat input rejected by controller")
+    return True
+
+
 class InputDriver:
     def __init__(self, controller, sleep: Callable[[float], None], center=(640, 360)):
         self._controller = controller
@@ -44,30 +50,43 @@ class InputDriver:
         self._held_keys: set[int] = set()
         self._held_mouse: set[int] = set()
         self._turn_supported = True
+        self.before_input: Callable[[], None] = lambda: None
 
-    # ---- 键盘 ----
     def key_down(self, key: str) -> bool:
+        self.before_input()
+        return self._press(key)
+
+    def _press(self, key: str) -> bool:
+        """已通过门控后按下；先记账再发送，发送异常也能在清理时松开。"""
         vk = VK[key]
         self._held_keys.add(vk)
-        return _wait(self._controller.post_key_down(vk))
+        return _require(self._controller.post_key_down(vk))
 
     def key_up(self, key: str) -> bool:
         vk = VK[key]
-        self._held_keys.discard(vk)
-        return _wait(self._controller.post_key_up(vk))
+        ok = _wait(self._controller.post_key_up(vk))
+        if ok:
+            self._held_keys.discard(vk)
+        return ok
 
     @contextmanager
     def pressing(self, keys: Iterable[str]):
-        """按住一组键；退出时（含停止、结束信号、异常）逆序松开。"""
+        """同时按下一组键：只做一次输入门控（同一张新图），单个松键异常不影响其余。"""
+        keys = tuple(keys)
         pressed: list[str] = []
         try:
+            if keys:
+                self.before_input()
             for key in keys:
-                self.key_down(key)
                 pressed.append(key)
+                self._press(key)
             yield
         finally:
             for key in reversed(pressed):
-                self.key_up(key)
+                try:
+                    self.key_up(key)
+                except Exception as exc:
+                    logger.warning("combat release key %s failed: %s", key, exc)
 
     def tap(self, key: str, seconds: float = TAP_SECONDS) -> None:
         """按下 → 保持 seconds → 松开。保持期间可被停止/结束信号打断，finally 松键。"""
@@ -96,21 +115,24 @@ class InputDriver:
             self._sleep(DODGE_LEAD)
             self.tap(DODGE_KEY)
 
-    # ---- 鼠标（Win32 控制器 contact：0 左 / 1 右 / 2 中）----
     def mouse_down(self, button: str) -> bool:
+        self.before_input()
         contact = MOUSE_CONTACT[button]
         self._held_mouse.add(contact)
         x, y = self.center
-        return _wait(self._controller.post_touch_down(x, y, contact))
+        return _require(self._controller.post_touch_down(x, y, contact))
 
     def mouse_up(self, button: str) -> bool:
         contact = MOUSE_CONTACT[button]
-        self._held_mouse.discard(contact)
-        return _wait(self._controller.post_touch_up(contact))
+        ok = _wait(self._controller.post_touch_up(contact))
+        if ok:
+            self._held_mouse.discard(contact)
+        return ok
 
     def click(self, button: str = "left") -> bool:
+        self.before_input()
         x, y = self.center
-        return _wait(self._controller.post_click(x, y, MOUSE_CONTACT[button]))
+        return _require(self._controller.post_click(x, y, MOUSE_CONTACT[button]))
 
     def hold_mouse(self, button: str, seconds: float) -> None:
         self.mouse_down(button)
@@ -131,6 +153,7 @@ class InputDriver:
         steps = max(1, math.ceil(abs(total) / TURN_STEP_PIXELS))
         sent = 0
         for i in range(1, steps + 1):
+            self.before_input()
             target = int(round(total * i / steps))
             try:
                 ok = _wait(move(target - sent, 0))

@@ -99,4 +99,5 @@ __all__ = [
     "LuckyStarRetryOrFinish",
     "CombatRunAction",
     "CombatInHudRecognition",
+    "CombatEnemyBarRecognition",
 ]

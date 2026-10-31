@@ -53,6 +53,13 @@ class CombatScheme:
     min_field_time: float = 1.0
     source: str = ""
     warnings: list[str] = field(default_factory=list)
+    field_times: dict[int, float] = field(default_factory=dict)  # 槽位覆盖（来自配置）
+    combo_sources: dict[str, str] = field(
+        default_factory=dict
+    )  # 出招来源：scheme / override
+
+    def field_time_for(self, slot: int) -> float:
+        return self.field_times.get(slot, self.min_field_time)
 
     def combo_for(self, slot: int) -> list[Command]:
         """取槽位出招表：槽位专属 → default → 轮转首位。校验已保证至少一项存在。"""

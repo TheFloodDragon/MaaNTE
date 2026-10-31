@@ -65,11 +65,80 @@
         }
     },
     "CombatSetting_ClearConfirm": {
-        "desc": "全局战斗策略载体：敌人血条持续消失多少秒判定脱战",
+        "desc": "全局战斗策略载体：目标持续丢失多少秒后停止本场（不代表确认清场）",
         "enabled": false,
         "attach": {
             "clear_confirm": 3
         }
+    },
+    "CombatSetting_Speed": {
+        "desc": "全局战斗配置载体：输入节奏倍率 0.5~2.0（不是游戏速度）",
+        "enabled": false,
+        "attach": {
+            "combat_speed": 1.0
+        }
+    },
+    "CombatSetting_AssistDetection": {
+        "desc": "全局战斗策略载体：血条之外再用血条形状、敌人等级、Boss 等级辅助确认敌人",
+        "enabled": false,
+        "attach": {
+            "assist_detection": true
+        }
+    },
+    "CombatSetting_RotationMode": {
+        "desc": "高级覆盖载体：轮转方式 cycle/stay，空字符串沿用方案",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_RotationOrder": {
+        "desc": "高级覆盖载体：轮转顺序如 1,2,1,3，空字符串沿用方案；首位即首发",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_FieldTime": {
+        "desc": "高级覆盖载体：所有槽位的最短站场秒数，空字符串沿用方案",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableSlot1": {
+        "desc": "高级覆盖载体：「不参与轮转的槽位」勾选 1 号位时写入 slots.1.enabled=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableSlot2": {
+        "desc": "高级覆盖载体：「不参与轮转的槽位」勾选 2 号位时写入 slots.2.enabled=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableSlot3": {
+        "desc": "高级覆盖载体：「不参与轮转的槽位」勾选 3 号位时写入 slots.3.enabled=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_DisableSlot4": {
+        "desc": "高级覆盖载体：「不参与轮转的槽位」勾选 4 号位时写入 slots.4.enabled=false",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_Slot1": {
+        "desc": "高级覆盖载体：1 号位的名称/备注/出招/站场时间，空字符串沿用方案",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_Slot2": {
+        "desc": "高级覆盖载体：2 号位的名称/备注/出招/站场时间，空字符串沿用方案",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_Slot3": {
+        "desc": "高级覆盖载体：3 号位的名称/备注/出招/站场时间，空字符串沿用方案",
+        "enabled": false,
+        "attach": {}
+    },
+    "CombatSetting_Slot4": {
+        "desc": "高级覆盖载体：4 号位的名称/备注/出招/站场时间，空字符串沿用方案",
+        "enabled": false,
+        "attach": {}
     },
     "CombatInHud": {
         "desc": "公开识别：处于可操作的战斗/大世界界面（底部血条可见且非黑屏）",
@@ -84,7 +153,24 @@
         "post_delay": 0
     },
     "CombatEnemyVisible": {
-        "desc": "公开识别：画面中有敌人血条（参数与 PinkPawHeist_CheckMonsterOnce 一致）",
+        "desc": "公开识别：画面中有敌人（任一证据命中：血条精确颜色 / 血条形状 / 敌人等级 / Boss 等级）。战斗内核逐个执行同一组子节点并分别记录证据",
+        "recognition": {
+            "type": "Or",
+            "param": {
+                "any_of": [
+                    "CombatEnemyHealthBar",
+                    "CombatEnemyBarShape",
+                    "CombatEnemyLevel",
+                    "CombatBossLevel"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatEnemyHealthBar": {
+        "desc": "公开识别：敌人血条精确颜色（参数与 PinkPawHeist_CheckMonsterOnce 一致，已实机校准）",
         "recognition": {
             "type": "ColorMatch",
             "param": {
@@ -113,8 +199,87 @@
         "pre_delay": 0,
         "post_delay": 0
     },
+    "CombatEnemyBarShape": {
+        "desc": "公开识别：容差颜色 + 细长形状的敌人血条，覆盖压缩变色和低血量短条（参数参考 ok-NTE，未实机校准）",
+        "recognition": {
+            "type": "Custom",
+            "param": {
+                "custom_recognition": "combat_enemy_bar"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatEnemyLevel": {
+        "desc": "公开识别：敌人头顶的等级文字 Lv.xx（区域参考 ok-NTE find_lv 换算到 720p，未实机校准）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    198,
+                    0,
+                    963,
+                    504
+                ],
+                "expected": [
+                    "(?i)^\\s*L[vV]\\.?\\s*\\d{1,3}\\s*$" // @i18n-skip
+                ],
+                "threshold": 0.3
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatBossLevel": {
+        "desc": "公开识别：屏幕上方 Boss 血条旁的等级文字（区域参考 ok-NTE is_boss 换算到 720p，未实机校准）",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    458,
+                    15,
+                    182,
+                    26
+                ],
+                "expected": [
+                    "(?i)L[vV]\\.?\\s*\\d{1,3}" // @i18n-skip
+                ],
+                "threshold": 0.3
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CombatRetreatPrompt": {
+        "desc": "公开识别：撤离确认界面（文字与区域同 PinkPawHeist_CheckEvacuateOnce）。只用于暂停输入，不会自动确认撤离",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "expected": [
+                    "确认撤离",
+                    "確認撤離",
+                    "(?i)Confirm\\s*Retreat",
+                    "撤退確定",
+                    "確認撤离",
+                    "철수 확인"
+                ],
+                "roi": [
+                    670,
+                    481,
+                    199,
+                    46
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
     "CombatRun": {
-        "desc": "公开接口：执行一场战斗（读取全局战斗配置）。可直接作为子流程使用，也可参考此节点在自己的流程中调用 combat_run",
+        "desc": "公开接口：执行一场战斗（读取全局战斗配置）。默认只有确认清场（cleared）才算动作成功；调用方可在 custom_action_param 中用 accepted_reasons 放宽、用 signal_nodes 提供自己的胜利/脱战识别。可直接作为子流程使用，也可参考此节点在自己的流程中调用 combat_run",
         "recognition": {
             "type": "DirectHit"
         },
@@ -130,7 +295,7 @@
         "post_delay": 0
     },
     "CombatFightWhenEnemy": {
-        "desc": "公开接口：看到敌人才开打，打完回到父节点（建议以 [JumpBack]CombatFightWhenEnemy 挂在 next 中）",
+        "desc": "公开接口：看到敌人才开打，打完回到父节点（建议以 [JumpBack]CombatFightWhenEnemy 挂在 next 中）。确认结束或目标丢失都视为打完；撤退、超时、异常走 on_error",
         "recognition": {
             "type": "And",
             "param": {
@@ -145,7 +310,12 @@
             "param": {
                 "custom_action": "combat_run",
                 "custom_action_param": {
-                    "wait_timeout": 5
+                    "wait_timeout": 5,
+                    "accepted_reasons": [
+                        "cleared",
+                        "disengaged",
+                        "target_lost"
+                    ]
                 }
             }
         },
@@ -153,4 +323,4 @@
         "pre_delay": 0,
         "post_delay": 0
     }
-}
+    }

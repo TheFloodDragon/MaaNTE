@@ -40,7 +40,9 @@ class RotationTests(unittest.TestCase):
         engine, world, _, rep = make_engine(ROTATION, {"max_duration": 12.0})
         result = engine.run()
         self.assertEqual(result.reason, "timeout")
-        self.assertTrue(result.success)
+        self.assertFalse(result.success)  # 超时不等于清场
+        self.assertTrue(result.entered)
+        self.assertFalse(result.confirmed_end)
         self.assertEqual(world.slot_presses()[:4], [2, 3, 4, 1])
         downs = [v for _, v in world.downs()]
         self.assertEqual(downs[:2], [VK_Q, VK_E])  # 首个角色先 Q 再 E
@@ -134,13 +136,14 @@ class StayTests(unittest.TestCase):
 
 
 class EndConditionTests(unittest.TestCase):
-    def test_cleared_after_confirm_window(self):
+    def test_enemy_absence_is_target_lost_not_cleared(self):
         engine, _, _, _ = make_engine(
             STAY, {"max_duration": 60.0}, enemy=lambda t: t < 5.0
         )
         result = engine.run()
-        self.assertEqual(result.reason, "cleared")
-        self.assertTrue(result.success)
+        self.assertEqual(result.reason, "target_lost")
+        self.assertFalse(result.success)
+        self.assertFalse(result.confirmed_end)
         self.assertGreater(result.duration, 7.0)
         self.assertLess(result.duration, 9.5)
 
@@ -149,16 +152,17 @@ class EndConditionTests(unittest.TestCase):
             STAY, {"max_duration": 60.0}, enemy=lambda t: t < 4.0, hidden=[(4.5, 9.5)]
         )
         result = engine.run()
-        self.assertEqual(result.reason, "cleared")
-        self.assertGreater(result.duration, 11.0)
+        self.assertEqual(result.reason, "target_lost")
+        self.assertGreater(result.duration, 11.0)  # 遮挡的 5 秒不计入确认窗口
 
-    def test_hud_lost_ends_fight(self):
-        engine, _, _, _ = make_engine(STAY, {"max_duration": 60.0}, hud_lost_at=3.0)
+    def test_hud_lost_ends_fight_without_blind_inputs(self):
+        engine, world, _, _ = make_engine(STAY, {"max_duration": 60.0}, hud_lost_at=3.0)
         result = engine.run()
         self.assertEqual(result.reason, "hud_lost")
-        self.assertTrue(result.success)
+        self.assertFalse(result.success)
         self.assertGreater(result.duration, 12.0)
         self.assertLess(result.duration, 14.5)
+        self.assertEqual([t for t in world.times("click", 0) if t >= 3.0], [])
 
     def test_no_combat_when_enemy_never_appears(self):
         engine, world, _, rep = make_engine(STAY, {"wait_timeout": 2.0}, enemy=False)
@@ -347,18 +351,20 @@ class InputGatingTests(unittest.TestCase):
 
 
 class TargetingIntegrationTests(unittest.TestCase):
-    def test_locks_at_start_and_relocks_after_enemy_lost(self):
+    def test_locks_at_start_and_relocks_once_after_enemy_lost(self):
         engine, world, _, _ = make_engine(
             STAY, {"max_duration": 60.0, "lock_target": True}, enemy=lambda t: t < 3.0
         )
         result = engine.run()
-        self.assertEqual(result.reason, "cleared")
+        self.assertEqual(result.reason, "target_lost")
         locks = world.times("click", 2)
         self.assertTrue(locks and locks[0] < 0.5, locks)  # 开战立即锁定
         self.assertEqual(
             [t for t in locks if 0.5 <= t < 3.0], []
         )  # 看得到敌人时不重复按中键
-        self.assertGreaterEqual(len([t for t in locks if t >= 3.0]), 2)
+        self.assertEqual(
+            len([t for t in locks if t >= 3.0]), 1
+        )  # 每次丢失只重锁一次，避免反复开关
 
     def test_ultimate_held_while_enemy_lost(self):
         data = scheme(
@@ -367,7 +373,7 @@ class TargetingIntegrationTests(unittest.TestCase):
         engine, world, _, _ = make_engine(
             data, {"max_duration": 60.0}, enemy=lambda t: t < 3.0
         )
-        self.assertEqual(engine.run().reason, "cleared")
+        self.assertEqual(engine.run().reason, "target_lost")
         q_times = world.times("down", VK_Q)
         self.assertTrue(q_times and q_times[0] < 1.0)
         self.assertEqual([t for t in q_times if t >= 4.5], [])
@@ -377,7 +383,7 @@ class TargetingIntegrationTests(unittest.TestCase):
             STAY, {"max_duration": 60.0, "search_turn": True}, enemy=lambda t: t < 3.0
         )
         result = engine.run()
-        self.assertEqual(result.reason, "cleared")
+        self.assertEqual(result.reason, "target_lost")
         moved = sum(dx for _, kind, dx in world.events if kind == "move")
         expected = (
             targeting.SEARCH_MAX_TURNS
