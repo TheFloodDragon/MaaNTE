@@ -179,6 +179,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(pretask.interface_dir([ROOT / "nope", ASSETS]), ASSETS)
         self.assertIsNone(pretask.interface_dir([ROOT / "nope"]))
 
+    def test_official_resource_is_only_the_bundle_the_pretask_loads(self):
+        # 预任务只加载 resource/base；资源包若新增路径，需要同步修改 run_flow 的加载列表。
+        paths = [item["path"] for item in self.interface["resource"]]
+        self.assertEqual(paths, [["resource/base"]])
+        self.assertEqual(pretask.RESOURCE_BUNDLE.as_posix(), "resource/base")
+
 
 @unittest.skipUnless(sys.platform == "win32", "Windows named mutex")
 class GuardTests(unittest.TestCase):
@@ -262,6 +268,20 @@ class BootstrapTests(unittest.TestCase):
             self.assertTrue(pretask._ensure_dependencies(Path(directory)))
             install.assert_not_called()
         self.assertEqual(events, ["acquire", "check", "check", "close"])
+
+    def test_prune_keeps_current_run_and_most_recent_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            now = time.time()
+            for index in range(8):
+                (parent / str(1000 + index)).mkdir()
+                os.utime(parent / str(1000 + index), (now - index * 60, now - index * 60))
+            current = parent / "4242"
+            current.mkdir()
+            os.utime(current, (now - 3600, now - 3600))  # 即使本次目录最旧也不能删
+            pretask._prune_old_logs(current, keep=5)
+            self.assertEqual(sorted(p.name for p in parent.iterdir()), ["1000", "1001", "1002", "1003", "1004", "4242"])
+            pretask._prune_old_logs(parent / "missing" / "1")  # 父目录不存在时静默跳过
 
     def test_offline_installer_respects_disabled_pip(self):
         with tempfile.TemporaryDirectory() as directory:

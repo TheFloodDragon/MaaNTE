@@ -8,7 +8,7 @@ MaaFramework Tasker 加载 resource/base 并运行 CloudWebStartEntrance，复�
 流程结束后 MXU 连接“异环云游戏”窗口，继续执行列表里的其他任务。
 
 MXU 预任务的限制（不改 MXU 无法绕开）：
-- 标准输出被丢弃：用户提示与诊断日志写入 debug/cloud_web_pretask/。
+- 标准输出被丢弃：用户提示与诊断日志写入 debug/cloud_web_pretask/<进程号>/，保留最近 6 次。
 - 点“停止”只结束 MXU 的等待，不会结束本进程；关闭浏览器窗口即可中止流程。再次开始时，
   新进程通知旧进程停止并接管，避免两个流程同时操作同一页面。
 - 退出码非 0 时 MXU 只记录警告，仍会继续连接窗口。
@@ -26,6 +26,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -40,6 +41,7 @@ OPTION_KEYS = ("CloudWebAutoQueue", "CloudWebLoginTimeout", "CloudWebQueueTimeou
 RESOURCE_BUNDLE = Path("resource") / "base"
 TASKS_FILE = Path("resource") / "tasks" / "CloudGame.json"
 LOG_DIR_NAME = "cloud_web_pretask"
+LOG_KEEP = 5  # 除本次外保留的历史运行目录数
 REQUIRED_MODULES = ("maa", "numpy", "cv2", "websockets")
 TAKEOVER_TIMEOUT = 30.0
 _RELAUNCH_ENV = "MAANTE_CLOUD_PRETASK_RELAUNCHED"
@@ -386,6 +388,27 @@ def _null_streams():
             setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
 
 
+def _mtime(path):
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _prune_old_logs(log_dir, keep=LOG_KEEP):
+    """每次运行单独一个目录（新旧进程接管时不共用日志文件），只保留最近 keep 次。
+
+    仍被其他进程打开的文件删不掉时跳过，下次再清理。
+    """
+    try:
+        others = [p for p in log_dir.parent.iterdir() if p.is_dir() and p.name != log_dir.name]
+    except OSError:
+        return
+    others.sort(key=_mtime, reverse=True)
+    for path in others[keep:]:
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def _bootstrap_log(log_dir, message):
     """依赖缺失时 utils.logger 不可用，只用标准库追加一行。"""
     try:
@@ -549,6 +572,7 @@ def main(argv=None):
         if dev is not None:
             env = dict(os.environ, **{_RELAUNCH_ENV: "1"})
             return subprocess.run([str(dev), str(Path(__file__).resolve()), *args], env=env, check=False).returncode
+    _prune_old_logs(log_dir)
     if not _ensure_dependencies(log_dir):
         return EXIT_MISSING_DEPS
     os.environ.setdefault("PI_CONTROLLER", json.dumps({"name": CONTROLLER, "type": "Win32"}))
