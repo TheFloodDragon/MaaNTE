@@ -32,6 +32,7 @@ REASONS = {
     "no_recipients",
     "unknown_character",
     "character_not_found",
+    "character_limit",
     "identity",
     "gift_not_found",
     "gift_identity",
@@ -100,7 +101,7 @@ def catalogs():
         ],
     }
     gifts = {
-        "schema_version": 1,
+        "schema_version": 2,
         "gifts": [
             {
                 "id": "Food_003",
@@ -637,6 +638,31 @@ class GiftRenderingTests(unittest.TestCase):
             schema_validator("interface_import.schema.json").validate(self.task)
             schema_validator("pipeline.schema.json").validate(self.nodes)
 
+    def test_handwritten_gift_pipelines_pass_bundled_schema(self):
+        validator = schema_validator("pipeline.schema.json")
+        directory = ROOT / "assets/resource/base/pipeline/Gift"
+        with patch.object(
+            socket, "create_connection", side_effect=AssertionError("no network")
+        ):
+            for name in ("Gift.json", "GiftRecognition.json"):
+                with self.subTest(name=name):
+                    nodes = config._loads(
+                        (directory / name).read_text(encoding="utf-8")
+                    )
+                    validator.validate(nodes)
+        graph = config._loads((directory / "Gift.json").read_text(encoding="utf-8"))
+        # 失败出口：GiftFailed 使用公共 fail_task 且不再有任何后继/兜底。
+        self.assertEqual(
+            graph["GiftFailed"]["action"]["param"]["custom_action"], "fail_task"
+        )
+        self.assertNotIn("next", graph["GiftFailed"])
+        self.assertNotIn("on_error", graph["GiftFailed"])
+        # 滚轮节点只供代码 run_action 调用，不出现在任何 next/on_error 中。
+        self.assertEqual(graph["GiftScrollWheel"]["action"]["type"], "Scroll")
+        for node in graph.values():
+            for key in ("next", "on_error"):
+                self.assertNotIn("GiftScrollWheel", node.get(key, []))
+
 
 class GiftTranslationTests(unittest.TestCase):
     def setUp(self):
@@ -718,7 +744,7 @@ class GiftTranslationTests(unittest.TestCase):
             with self.subTest(language=language):
                 self.assertIn("溶月茶具 > 时令寿司船", description)
                 self.assertIn("resource/base/data/gifts.json", description)
-                self.assertIn("`source`", description)
+                self.assertIn("`source.game`", description)
                 self.assertEqual(
                     len(
                         [
@@ -733,7 +759,7 @@ class GiftTranslationTests(unittest.TestCase):
                     self.assertIn("`%s`" % gift["id"], description)
                     self.assertIn(gift["names"]["zh_cn"], description)
                 self.assertIn("10", messages["task_gift_limit_desc"])
-        for phrase in ("不购买", "未知喜好", "不代表不喜欢"):
+        for phrase in ("不购买", "专属礼物", "游戏数据表快照"):
             self.assertIn(phrase, self.locales["zh_cn"]["task_gift_priority_desc"])
 
     def test_wiki_names_cannot_inject_markdown_or_html_into_help(self):
@@ -882,9 +908,11 @@ class GiftUpdateTests(unittest.TestCase):
                 "task_gift_limit_invalid",
                 "task_gift_plan_recipient_2",
                 "task_gift_recipient_char_1952",
-                "task_gift_item_Furniture_draw_004",
             ):
                 self.assertIn(key, messages)
+            # 礼物项随游戏表增删：已移出目录的礼物不再出现在文案中。
+            self.assertNotIn("task_gift_item_Furniture_draw_004", messages)
+            self.assertIn("task_gift_item_Food_003", messages)
             self.assertEqual(messages["cloud_game.keep"], "保留用户暂存改动")
 
     def test_feature_drift_is_detected_and_repaired_without_touching_other_keys(self):
@@ -974,7 +1002,7 @@ class GiftRepositoryTests(unittest.TestCase):
 
     def test_all_eligible_characters_have_independent_options_and_existing_icons(self):
         self.assertEqual(len(self.characters["characters"]), 24)
-        self.assertEqual(len(self.gifts["gifts"]), 214)
+        self.assertEqual(len(self.gifts["gifts"]), 256)
         eligible = {
             item["id"] for item in self.characters["characters"] if item["giftable"]
         }
@@ -1016,14 +1044,23 @@ class GiftRepositoryTests(unittest.TestCase):
             item["id"] for item in self.characters["characters"] if item["giftable"]
         ]
         gift_ids = [gift["id"] for gift in self.gifts["gifts"]]
+        exclusive = {
+            gift["id"]: gift["exclusive_character"] for gift in self.gifts["gifts"]
+        }
         icons = {
             gift["id"]: "resource/base/image/" + gift["image"]["path"]
             for gift in self.gifts["gifts"]
+            if gift["image"] is not None
         }
         for gift_id, icon in icons.items():
             self.assertTrue((ROOT / "assets" / icon).is_file(), gift_id)
             self.assertIn("Gift/Gifts/", icon)
         for character in eligible:
+            allowed = [
+                gift_id
+                for gift_id in gift_ids
+                if exclusive[gift_id] in (None, character)
+            ]
             for option, field in (
                 ("GiftPrimary", "primary_gift"),
                 ("GiftBackup", "backup_gift"),
@@ -1033,7 +1070,7 @@ class GiftRepositoryTests(unittest.TestCase):
                     (picker["type"], picker["default_case"]), ("select", "None")
                 )
                 self.assertEqual(
-                    [case["name"] for case in picker["cases"]], ["None", *gift_ids]
+                    [case["name"] for case in picker["cases"]], ["None", *allowed]
                 )
                 self.assertEqual(
                     picker["cases"][0]["pipeline_override"],
@@ -1041,7 +1078,7 @@ class GiftRepositoryTests(unittest.TestCase):
                 )
                 for case in picker["cases"][1:]:
                     self.assertEqual(case["label"], "$task_gift_item_%s" % case["name"])
-                    self.assertEqual(case["icon"], icons[case["name"]])
+                    self.assertEqual(case.get("icon"), icons.get(case["name"]))
                     self.assertEqual(
                         case["pipeline_override"],
                         {
@@ -1050,6 +1087,9 @@ class GiftRepositoryTests(unittest.TestCase):
                         },
                     )
         character = eligible[0]
+        gift_ids = [
+            gift_id for gift_id in gift_ids if exclusive[gift_id] in (None, character)
+        ]
         for gift_id in gift_ids:
             _, merged = mxu_render(
                 self.task,
@@ -1066,7 +1106,7 @@ class GiftRepositoryTests(unittest.TestCase):
                 (gift_id, gift_id),
             )
 
-    def test_real_interface_locales_cover_every_reference_and_all_214_gifts(self):
+    def test_real_interface_locales_cover_every_reference_and_all_256_gifts(self):
         required = set(references(self.task))
         for language in config.LANGUAGES:
             messages = json.loads(
@@ -1084,10 +1124,10 @@ class GiftRepositoryTests(unittest.TestCase):
                         if line.startswith("- `")
                     ]
                 ),
-                214,
+                256,
             )
             item_keys = {key for key in messages if key.startswith("task_gift_item_")}
-            self.assertEqual(len(item_keys), 214)
+            self.assertEqual(len(item_keys), 256)
             for gift in self.gifts["gifts"]:
                 self.assertIn("`%s`" % gift["id"], description)
                 self.assertIn(

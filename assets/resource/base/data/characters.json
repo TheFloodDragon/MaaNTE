@@ -2,7 +2,7 @@
     "schema_version": 1,
     "source": {
         "url": "https://www.ntestation.com/api.php",
-        "collected_at": "2026-10-17T11:56:55Z",
+        "collected_at": "2026-10-22T15:21:41Z",
         "license": {
             "status": "permission_not_confirmed",
             "game_artwork": "《异环》（Neverness to Everness）游戏美术归游戏及各素材原权利人所有。",
@@ -365,7 +365,7 @@
                 }
             ]
         },
-        "snapshot_id": "89fc351c5501978e8bd3abec2eade44eb8ed987b3679e57838db7547cacfd75a"
+        "snapshot_id": "a3cca2152ee2cf2acc66d02a9097f1a31ffcaf9c99d9f6a78192ef61af632e1d"
     },
     "characters": [
         {
@@ -1802,9 +1802,9 @@
             "source": {
                 "title": "明音凛",
                 "pageid": 2427,
-                "revid": 5719,
+                "revid": 5727,
                 "url": "https://www.ntestation.com/%E6%98%8E%E9%9F%B3%E5%87%9B",
-                "timestamp": "2026-10-15T15:28:00Z",
+                "timestamp": "2026-10-18T12:31:43Z",
                 "template": "{{角色信息\n|图片1 = [[File:Akane Normal.png|300px]]\n|标签1 = 明音凛\n|姓名 = 明音凛（中）<br>明音凛（日）<br>아카네 린（韩）<br>Akane Rin（英）\n|性别 = 女\n|中文配音 = 陈怡萱\n|日文配音 = 長谷川育美\n|韩文配音 = 김하루\n|英文配音 = Cristina Vee\n|属性= 相\n|弧盘= 液态\n|定位= 主力输出\n|版本= 1.4下半版本\n|能力= 「空白之星」\n|生日= 5月27日\n|所属= Star Sign\n}}",
                 "template_sha256": "fccb1fdc26f024dd896c6f6a9566f30c2785ed4e6248cc1ef86aeff0c948afaa",
                 "giftability_evidence": [

@@ -36,9 +36,9 @@ _INTERFACE_MESSAGES = {
             "用 `>` 分隔任意数量的礼物完整名称或 ID，例如 `溶月茶具 > 时令寿司船`；分隔符两侧可留空格。"
             "默认留空，使用完整优先序模式时必须填写。严格按此顺序使用已有库存，耗尽才换下一候选，不购买或自动替换。"
             "可复制下方完整原名、资料库中已核实的名称或 ID；不要使用猜测的外语译名。"
-            "未知喜好不代表不喜欢。\n\n"
-            "来源：[本地完整礼物资料库](resource/base/data/gifts.json)。每条记录的 `source` 保存 Wiki 来源与页面 ID；"
-            "下列清单由该库生成，显示 ID 与中文原名，有已核实的本地化名称时同时显示。"
+            "专属礼物只能赠送给对应角色。\n\n"
+            "来源：[本地完整礼物资料库](resource/base/data/gifts.json)。礼物清单与名称取自游戏数据表快照（`source.game`），"
+            "Wiki 只补充图标；没有图标的礼物会在游戏中点选后核对名称。下列清单由该库生成，显示 ID 与中文原名。"
         ),
         "task_gift_limit": "角色当日累计上限",
         "task_gift_limit_desc": (
@@ -81,9 +81,9 @@ _INTERFACE_MESSAGES = {
             "用 `>` 分隔任意數量的禮物完整名稱或 ID，例如 `溶月茶具 > 时令寿司船`；分隔符兩側可留空格。"
             "預設留空，使用完整優先順序模式時必須填寫。嚴格依此順序使用已有庫存，耗盡才換下一候選，不購買或自動替換。"
             "可複製下方完整原名、資料庫中已核實的名稱或 ID；不要使用猜測的外語譯名。"
-            "未知喜好不代表不喜歡。\n\n"
-            "來源：[本機完整禮物資料庫](resource/base/data/gifts.json)。每筆記錄的 `source` 保存 Wiki 來源與頁面 ID；"
-            "下列清單由該庫產生，顯示 ID 與中文原名，有已核實的本地化名稱時同時顯示。"
+            "專屬禮物只能贈送給對應角色。\n\n"
+            "來源：[本機完整禮物資料庫](resource/base/data/gifts.json)。禮物清單與名稱取自遊戲資料表快照（`source.game`），"
+            "Wiki 只補充圖示；沒有圖示的禮物會在遊戲中點選後核對名稱。下列清單由該庫產生，顯示 ID 與中文原名。"
         ),
         "task_gift_limit": "角色當日累計上限",
         "task_gift_limit_desc": (
@@ -131,10 +131,11 @@ _INTERFACE_MESSAGES = {
             "spaces are optional. Blank by default; required for each selected character. Existing stock is used in exactly "
             "this order, moving on only when exhausted, with no purchases or automatic substitutions. Copy a full original "
             "name, a verified name from the catalog, or an ID below; do not guess localized item names. "
-            "Unknown preferences do not mean dislike.\n\n"
-            "Source: [complete local gift catalog](resource/base/data/gifts.json). Each record's `source` contains its Wiki "
-            "source and page ID. The list below is generated from that catalog and shows every ID and original Chinese "
-            "name, together with a localized name only when verified."
+            "Exclusive gifts can only be given to their own character.\n\n"
+            "Source: [complete local gift catalog](resource/base/data/gifts.json). The gift list and names come from the "
+            "game data table snapshot (`source.game`); the Wiki only supplies icons, and gifts without an icon are verified "
+            "by name after being selected in game. The list below is generated from that catalog and shows every ID and "
+            "original Chinese name."
         ),
         "task_gift_limit": "Character's cumulative daily limit",
         "task_gift_limit_desc": (
@@ -199,9 +200,9 @@ _INTERFACE_MESSAGES = {
             "区切りの前後に空白を入れても構いません。初期値は空欄で、選択したキャラクターには入力が必要です。"
             "所持品をこの順序で使用し、使い切った場合のみ次へ進みます。購入や自動代替は行いません。"
             "下記の原名、資料庫で確認済みの名称、またはIDをコピーし、翻訳名を推測しないでください。"
-            "好みが不明でも嫌いとは限りません。\n\n"
-            "出典：[ローカルの全ギフト資料庫](resource/base/data/gifts.json)。各記録の `source` にWikiの出典とページIDがあります。"
-            "以下は資料庫から生成した全IDと中国語原名の一覧です。確認済みの翻訳名がある場合のみ併記します。"
+            "専用ギフトは対応するキャラクターにのみ贈れます。\n\n"
+            "出典：[ローカルの全ギフト資料庫](resource/base/data/gifts.json)。ギフト一覧と名称はゲームデータ表のスナップショット（`source.game`）から取得し、"
+            "Wikiはアイコンのみを補います。アイコンのないギフトはゲーム内で選択後に名称を照合します。以下は資料庫から生成した全IDと中国語原名の一覧です。"
         ),
         "task_gift_limit": "キャラクターの当日累計上限",
         "task_gift_limit_desc": (
@@ -245,9 +246,9 @@ _INTERFACE_MESSAGES = {
             "구분자 앞뒤의 공백은 선택 사항입니다. 기본값은 빈칸이며 선택한 캐릭터는 반드시 입력해야 합니다. "
             "입력한 순서대로 보유 재고를 사용하고 소진한 뒤에만 다음 후보로 넘어가며, 구매하거나 자동 대체하지 않습니다. "
             "아래의 원명, 자료에서 확인된 이름 또는 ID를 복사하세요. 번역된 이름을 추측해서 입력하지 마세요. "
-            "취향 미상은 싫어한다는 뜻이 아닙니다.\n\n"
-            "출처: [로컬 전체 선물 자료](resource/base/data/gifts.json). 각 항목의 `source`에 Wiki 출처와 페이지 ID가 있습니다. "
-            "아래 목록은 해당 자료에서 생성한 모든 ID와 중국어 원명이며, 확인된 번역명이 있을 때만 함께 표시합니다."
+            "전용 선물은 해당 캐릭터에게만 줄 수 있습니다.\n\n"
+            "출처: [로컬 전체 선물 자료](resource/base/data/gifts.json). 선물 목록과 이름은 게임 데이터 테이블 스냅숏(`source.game`)에서 가져오며, "
+            "Wiki는 아이콘만 보충합니다. 아이콘이 없는 선물은 게임에서 선택한 뒤 이름을 대조합니다. 아래 목록은 해당 자료에서 생성한 모든 ID와 중국어 원명입니다."
         ),
         "task_gift_limit": "캐릭터 당일 누적 한도",
         "task_gift_limit_desc": (
@@ -312,6 +313,7 @@ _AGENT_MESSAGES = {
         "gift.reason.no_recipients": "未选择可赠礼角色，未执行任何赠礼。",
         "gift.reason.unknown_character": "本地资料库不包含该角色，或该角色不可赠礼。",
         "gift.reason.character_not_found": "未在羁遇界面找到该角色，未向其他角色赠礼。",
+        "gift.reason.character_limit": "游戏提示该角色今日无法接受更多礼物或需提升羁遇等级，已跳过该角色。",
         "gift.reason.identity": "无法唯一确认当前角色，已停止赠礼。",
         "gift.reason.gift_not_found": "未找到配置的礼物，请核对礼物完整名称、ID 和背包。",
         "gift.reason.gift_identity": "无法唯一确认礼物身份，未提交赠礼。",
@@ -351,6 +353,7 @@ _AGENT_MESSAGES = {
         "gift.reason.no_recipients": "未選擇可贈禮角色，未執行任何贈禮。",
         "gift.reason.unknown_character": "本機資料庫不包含該角色，或該角色不可贈禮。",
         "gift.reason.character_not_found": "未在羈遇介面找到該角色，未向其他角色贈禮。",
+        "gift.reason.character_limit": "遊戲提示該角色今日無法接受更多禮物或需提升羈遇等級，已跳過該角色。",
         "gift.reason.identity": "無法唯一確認目前角色，已停止贈禮。",
         "gift.reason.gift_not_found": "未找到設定的禮物，請核對禮物完整名稱、ID 和背包。",
         "gift.reason.gift_identity": "無法唯一確認禮物身分，未提交贈禮。",
@@ -390,6 +393,7 @@ _AGENT_MESSAGES = {
         "gift.reason.no_recipients": "No eligible recipients selected. No gifts were sent.",
         "gift.reason.unknown_character": "The local catalog does not contain this character, or the character cannot receive gifts.",
         "gift.reason.character_not_found": "The character was not found on the bond screen. No other character was gifted instead.",
+        "gift.reason.character_limit": "The game says this character cannot accept more gifts today or needs a higher bond level. Character skipped.",
         "gift.reason.identity": "Cannot uniquely confirm the current character. Gift sending stopped.",
         "gift.reason.gift_not_found": "The configured gift was not found. Check its full name or ID and your inventory.",
         "gift.reason.gift_identity": "Cannot uniquely confirm the gift's identity. No gift was submitted.",
@@ -429,6 +433,7 @@ _AGENT_MESSAGES = {
         "gift.reason.no_recipients": "贈呈可能なキャラクターが選択されていません。ギフトは贈っていません。",
         "gift.reason.unknown_character": "ローカル資料庫にないキャラクター、またはギフトを受け取れないキャラクターです。",
         "gift.reason.character_not_found": "絆画面でキャラクターを見つけられませんでした。別のキャラクターには贈っていません。",
+        "gift.reason.character_limit": "このキャラクターは本日これ以上ギフトを受け取れないか、絆レベルの上昇が必要とゲームに表示されました。スキップしました。",
         "gift.reason.identity": "現在のキャラクターを一意に確認できないため、贈呈を停止しました。",
         "gift.reason.gift_not_found": "設定されたギフトが見つかりません。全名称、ID、所持品を確認してください。",
         "gift.reason.gift_identity": "ギフトを一意に確認できないため、贈呈を確定していません。",
@@ -468,6 +473,7 @@ _AGENT_MESSAGES = {
         "gift.reason.no_recipients": "선물 가능한 캐릭터를 선택하지 않았습니다. 선물을 보내지 않았습니다.",
         "gift.reason.unknown_character": "로컬 자료에 없는 캐릭터이거나 선물을 받을 수 없는 캐릭터입니다.",
         "gift.reason.character_not_found": "인연 화면에서 캐릭터를 찾지 못했습니다. 다른 캐릭터에게 대신 선물하지 않았습니다.",
+        "gift.reason.character_limit": "게임에서 이 캐릭터는 오늘 더 이상 선물을 받을 수 없거나 인연 레벨을 올려야 한다고 표시했습니다. 건너뛰었습니다.",
         "gift.reason.identity": "현재 캐릭터를 유일하게 확인할 수 없어 선물을 중지했습니다.",
         "gift.reason.gift_not_found": "설정한 선물을 찾지 못했습니다. 전체 이름, ID, 가방을 확인하세요.",
         "gift.reason.gift_identity": "선물을 유일하게 확인할 수 없어 선물을 확정하지 않았습니다.",
@@ -494,14 +500,17 @@ _AGENT_MESSAGES = {
 }
 
 
+_SCHEMAS = {"characters": 1, "gifts": 2}
+
+
 def _records(document: dict, field: str) -> list[dict]:
     """Validate renderer inputs without replacing the catalog's full validation."""
     if (
         not isinstance(document, dict)
         or type(document.get("schema_version")) is not int
     ):
-        raise ValueError("%s: schema_version must be integer 1" % field)
-    if document["schema_version"] != 1:
+        raise ValueError("%s: schema_version must be an integer" % field)
+    if document["schema_version"] != _SCHEMAS[field]:
         raise ValueError("%s: unsupported schema_version" % field)
     records = document.get(field)
     if not isinstance(records, list) or not records:
@@ -525,6 +534,13 @@ def _records(document: dict, field: str) -> list[dict]:
         ):
             raise ValueError("%s: names must be nonempty strings" % identifier)
         image = record.get("image")
+        if field == "gifts":
+            # 游戏表里没有 Wiki 图标的礼物：下拉不显示图标，运行时点选后读名称核对。
+            if image is None:
+                continue
+            exclusive = record.get("exclusive_character")
+            if exclusive is not None and not isinstance(exclusive, str):
+                raise ValueError("%s: invalid exclusive character" % identifier)
         image_path = image.get("path") if isinstance(image, dict) else None
         if not isinstance(image_path, str) or not image_path:
             raise ValueError("%s: missing local image path" % identifier)
@@ -669,12 +685,21 @@ def render_task(characters: dict, gifts: dict) -> dict:
                         {
                             "name": gift["id"],
                             "label": "$task_gift_item_%s" % gift["id"],
-                            "icon": "resource/base/image/%s" % gift["image"]["path"],
+                            **(
+                                {
+                                    "icon": "resource/base/image/%s"
+                                    % gift["image"]["path"]
+                                }
+                                if gift.get("image")
+                                else {}
+                            ),
                             "pipeline_override": {
                                 node: {"attach": {field: gift["id"]}}
                             },
                         }
                         for gift in gift_records
+                        # 专属礼物只出现在对应角色的下拉中。
+                        if gift.get("exclusive_character") in (None, identifier)
                     ],
                 ],
             }
@@ -877,8 +902,61 @@ def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _merge_locale(text: str, messages: dict[str, str]) -> str:
+def _member_keys(text: str) -> dict[str, int]:
+    """Start offset of each top-level key string, in document order."""
+    clean = _mask_comments(text)
+    decoder = json.JSONDecoder()
+    position = clean.index("{") + 1
+    result = {}
+    while True:
+        position = re.compile(r"\s*").match(clean, position).end()
+        if clean[position] == "}":
+            return result
+        start = position
+        key, position = decoder.raw_decode(clean, position)
+        position = clean.index(":", position) + 1
+        position = re.compile(r"\s*").match(clean, position).end()
+        _, position = decoder.raw_decode(clean, position)
+        result[key] = start
+        position = re.compile(r"\s*").match(clean, position).end()
+        if clean[position] == ",":
+            position += 1
+
+
+def _prune_locale(text: str, stale: set[str]) -> str:
+    """Remove generated members that the catalog no longer contains."""
+    while True:
+        keys = _member_keys(text)
+        targets = [key for key in keys if key in stale]
+        if not targets:
+            return text
+        order = list(keys)
+        spans = _member_spans(text)
+        index = order.index(targets[-1])
+        if index > 0:
+            # 删除「上一成员值结尾 → 本成员值结尾」，连同分隔逗号与缩进。
+            start, end = spans[order[index - 1]][1], spans[targets[-1]][1]
+        elif len(order) > 1:
+            start, end = keys[targets[-1]], keys[order[1]]
+        else:
+            start, end = keys[targets[-1]], spans[targets[-1]][1]
+        text = text[:start] + text[end:]
+        _loads(text)
+
+
+def _merge_locale(
+    text: str, messages: dict[str, str], prune_prefix: str | None = None
+) -> str:
     """Append/update only this feature's fields; leave all unrelated bytes alone."""
+    if prune_prefix:
+        text = _prune_locale(
+            text,
+            {
+                key
+                for key in _loads(text)
+                if key.startswith(prune_prefix) and key not in messages
+            },
+        )
     document = _loads(text)
     spans = _member_spans(text)
     replacements = []
@@ -971,7 +1049,12 @@ def _plan(root: Path, characters: dict | None, gifts: dict | None) -> dict[Path,
     ):
         for language, messages in translations.items():
             path = root / "assets/resource/locales" / family / (language + ".json")
-            plan[path] = _merge_locale(_read_text(path), messages)
+            # 礼物项随游戏表增删；已不在目录中的 task_gift_item_* 一并移除。
+            plan[path] = _merge_locale(
+                _read_text(path),
+                messages,
+                "task_gift_item_" if family == "interface" else None,
+            )
     interface_path = root / "assets/interface.json"
     plan[interface_path] = _ensure_import(_read_text(interface_path))
     return plan

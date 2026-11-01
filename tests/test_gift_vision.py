@@ -74,15 +74,8 @@ class FakeContext:
             "GiftBondMarker": template([24, 23, 31, 35]),
             "GiftTabOCR": text("赠礼", [994, 78, 64, 24]),
             "GiftCharacterNameOCR": text("残虹", [690, 117, 60, 28]),
-            "GiftCharacterSelectedOCR": text("已选择", [1158, 145, 44, 16]),
-            "GiftQuotaOCR": text("3/3", [824, 557, 46, 23]),
-            "GiftDetailTitleOCR": text("礼物详情", [580, 180, 75, 24]),
-            "GiftDetailNameOCR": text("溶月茶具", [700, 202, 85, 25]),
-            "GiftSelectedOCR": text("已选择", [696, 323, 48, 18]),
-            "GiftInventoryOCR": text("库存:3", [760, 446, 74, 24]),
-            "GiftQuantityOCR": text("赠送数量:1", [760, 504, 104, 23]),
-            "GiftSendOCR": text("赠送", [815, 584, 55, 23]),
-            "GiftListButton": template([1200, 640, 35, 35]),
+            "GiftQuotaOCR": text("赠送3/3", [790, 556, 90, 24]),
+            "GiftCurrentSelectionOCR": text("溶月茶具", [700, 202, 85, 25]),
         }
 
     def run_recognition(self, name, frame, pipeline_override=None):
@@ -111,6 +104,7 @@ GIFTS = {
         "names": {"zh_cn": "时令寿司船"},
         "image": {"path": "Gift/UI/InfiniteGift.png"},
     },
+    "N": {"names": {"zh_cn": "一封手写信"}, "image": None},
 }
 
 
@@ -121,36 +115,52 @@ def make_catalog():
 
 
 class StrictOcrTests(unittest.TestCase):
-    def test_quota_is_full_strict_and_never_clamped(self):
+    def test_quota_accepts_merged_or_bare_counter_and_never_clamps(self):
         for remaining in range(4):
+            self.assertEqual(vision.parse_quota("赠送%d/3" % remaining), (remaining, 3))
             self.assertEqual(vision.parse_quota("%d/3" % remaining), (remaining, 3))
-        self.assertEqual(vision.parse_quota(" ２ ／ ３ "), (2, 3))
+        self.assertEqual(vision.parse_quota(" 赠送 ２ ／ ３ "), (2, 3))
+        self.assertEqual(vision.parse_quota("贈送1/3"), (1, 3))
         for invalid in (
             "13/3",
+            "赠送13/3",
             "4/3",
             "-1/3",
             "03/3",
             "3/4",
             "3/30",
             "3/3次",
+            "赠礼3/3",
             "x3/3",
             "3.0/3",
+            "赠送",
             "∞",
             "",
         ):
             with self.subTest(invalid=invalid):
                 self.assertIsNone(vision.parse_quota(invalid))
 
-    def test_inventory_and_quantity_semantics(self):
-        for raw, expected in (("0", 0), ("库存：3", 3), ("×2", 2), ("持有数量 12", 12)):
-            self.assertEqual(vision.parse_inventory(raw), expected)
-        for raw in ("", "∞", "-1", "1/3", "1.0", "1个", "000", "库存:"):
-            self.assertIsNone(vision.parse_inventory(raw))
-        self.assertEqual(vision.parse_quantity("赠送数量：１"), 1)
-        self.assertEqual(vision.parse_quantity("数量:2"), 2)
-        for raw in ("1", "库存:1", "数量:0", "数量:01", "数量:-1", "数量:1/3"):
-            self.assertIsNone(vision.parse_quantity(raw))
+    def test_counter_box_is_the_merged_or_combined_send_button(self):
+        merged = [vision.TextHit("赠送2/3", 0.95, [790, 556, 90, 24])]
+        self.assertEqual(vision.quota_hit(merged), ((2, 3), [790, 556, 90, 24]))
+        split = [
+            vision.TextHit("赠送", 0.95, [780, 556, 44, 24]),
+            vision.TextHit("1/3", 0.97, [830, 556, 40, 24]),
+        ]
+        self.assertEqual(vision.quota_hit(split), ((1, 3), [780, 556, 90, 24]))
+        for hits in (
+            [vision.TextHit("赠送", 0.95, [780, 556, 44, 24])],
+            [vision.TextHit("2/3", 0.5, [830, 556, 40, 24])],
+            [
+                vision.TextHit("2/3", 0.95, [830, 556, 40, 24]),
+                vision.TextHit("1/3", 0.95, [870, 556, 40, 24]),
+            ],
+        ):
+            with self.subTest(hits=hits):
+                self.assertIsNone(vision.quota_hit(hits))
 
+
+class NameTests(unittest.TestCase):
     def test_full_name_only_nfkc_and_whitespace_normalization(self):
         hit = vision.TextHit(" 残 虹 ", 0.95, [680, 110, 60, 25])
         self.assertEqual(vision.unique_name([hit], CHARACTERS)[0], "char_a")
@@ -159,27 +169,39 @@ class StrictOcrTests(unittest.TestCase):
                 vision.unique_name([vision.TextHit(raw, 0.99, hit.box)], CHARACTERS)
             )
 
-    def test_multiple_low_score_nonfinite_or_shared_names_are_rejected(self):
+    def test_name_box_with_level_or_title_text_still_identifies_character(self):
+        hits = [
+            vision.TextHit("Lv.5", 0.99, [671, 110, 40, 22]),
+            vision.TextHit("残虹", 0.97, [720, 110, 60, 28]),
+            vision.TextHit("羁遇等级", 0.95, [800, 110, 80, 22]),
+        ]
+        self.assertEqual(vision.name_in_box(hits, CHARACTERS)[0], "char_a")
+
+    def test_two_names_low_scores_or_shared_names_never_identify(self):
         box = [680, 110, 60, 25]
+        both = [
+            vision.TextHit("残虹", 0.99, box),
+            vision.TextHit("薄荷", 0.99, [760, 110, 55, 25]),
+        ]
+        self.assertIsNone(vision.name_in_box(both, CHARACTERS))
         for score in (0.899, float("nan"), float("inf")):
             self.assertIsNone(
-                vision.unique_name([vision.TextHit("残虹", score, box)], CHARACTERS)
+                vision.name_in_box([vision.TextHit("残虹", score, box)], CHARACTERS)
             )
-        hits = [
-            vision.TextHit("残虹", 0.99, box),
-            vision.TextHit("薄荷", 0.1, [760, 110, 55, 25]),
-        ]
-        self.assertIsNone(vision.unique_name(hits, CHARACTERS))
         records = copy.deepcopy(CHARACTERS)
         records["char_b"]["names"]["zh_cn"] = "残虹"
-        self.assertIsNone(vision.unique_name(hits[:1], records))
+        self.assertIsNone(
+            vision.name_in_box([vision.TextHit("残虹", 0.99, box)], records)
+        )
+        # 同一名字被识别两次仍是同一个角色。
+        twice = [vision.TextHit("残虹", 0.99, box), vision.TextHit("残虹", 0.95, box)]
+        self.assertEqual(vision.name_in_box(twice, CHARACTERS)[0], "char_a")
 
     def test_all_results_keep_conflicts_hidden_by_expected_or_threshold(self):
         result = text_detail(
-            ("残虹", 0.99, [680, 110, 60, 25]), ("薄荷", 0.2, [760, 110, 60, 25])
+            ("残虹", 0.99, [680, 110, 60, 25]), ("薄荷", 0.95, [760, 110, 60, 25])
         )
-        self.assertEqual(len(result.filtered_results), 1)
-        self.assertIsNone(vision.unique_name(vision.text_hits(result), CHARACTERS))
+        self.assertIsNone(vision.name_in_box(vision.text_hits(result), CHARACTERS))
         raw = {
             "raw_detail": {
                 "detail": {
@@ -188,309 +210,211 @@ class StrictOcrTests(unittest.TestCase):
             }
         }
         self.assertEqual(
-            vision.unique_name(vision.text_hits(raw), CHARACTERS)[0], "char_a"
+            vision.name_in_box(vision.text_hits(raw), CHARACTERS)[0], "char_a"
         )
 
 
-class FrameEvidenceTests(unittest.TestCase):
+class _FrameCase(unittest.TestCase):
     def setUp(self):
         self.context = FakeContext()
         self.catalog = make_catalog()
         self.frame = np.zeros((720, 1280, 3), dtype=np.uint8)
         self.reader = vision.GiftVision(self.context, self.catalog)
-        self.image_boxes = {
-            "char_a": [[1150, 102, 66, 66]],
-            "char_b": [],
-            "A": [[686, 270, 66, 66]],
-            "B": [],
-        }
-        self.matcher = patch.object(
-            self.reader,
-            "_candidates",
-            side_effect=lambda frame, identifier, kind, roi: self.image_boxes[
-                identifier
-            ],
-        )
-        self.matcher.start()
-        self.addCleanup(self.matcher.stop)
 
-    def test_independent_positive_evidence_can_form_complete_view(self):
-        view = self.reader.inspect(self.frame)
+    def view(self):
+        return self.reader.inspect(self.frame)
+
+
+class FrameEvidenceTests(_FrameCase):
+    def test_merged_counter_name_box_and_current_selection_form_gift_view(self):
+        view = self.view()
         self.assertEqual(view.page, "gifts")
-        self.assertEqual((view.character_id, view.gift_id), ("char_a", "A"))
-        self.assertTrue(view.identity_verified)
-        self.assertTrue(view.gift_verified)
-        self.assertTrue(view.selected)
+        self.assertEqual((view.character_id, view.identity_verified), ("char_a", True))
         self.assertEqual(
-            (view.remaining, view.total, view.inventory, view.quantity), (3, 3, 3, 1)
+            (view.gift_id, view.gift_verified, view.selected), ("A", True, True)
         )
-        self.assertEqual(view.send_box, [815, 584, 55, 23])
+        self.assertEqual((view.remaining, view.total), (3, 3))
+        self.assertEqual(view.send_box, [790, 556, 90, 24])
+        self.assertEqual(view.controls["gift_tab"], [994, 78, 64, 24])
+        self.assertIsNone(view.affection)
+        self.assertIsNone(view.limit_prompt)
         self.assertEqual(view.errors, ())
 
-    def test_portrait_candidate_without_selected_marker_never_verifies_identity(self):
-        self.context.responses.pop("GiftCharacterSelectedOCR")
-        view = self.reader.inspect(self.frame)
+    def test_split_counter_text_is_still_the_gift_page(self):
+        self.context.responses["GiftQuotaOCR"] = text_detail(
+            ("赠送", 0.96, [780, 556, 44, 24]), ("2/3", 0.97, [830, 556, 40, 24])
+        )
+        view = self.view()
+        self.assertEqual((view.page, view.remaining), ("gifts", 2))
+        self.assertEqual(view.send_box, [780, 556, 90, 24])
+
+    def test_bond_tab_without_counter_is_bond_page_without_send_button(self):
+        self.context.responses["GiftQuotaOCR"] = None
+        view = self.view()
+        self.assertEqual(view.page, "bond")
+        self.assertIsNone(view.send_box)
+        self.assertEqual(view.controls, {"gift_tab": [994, 78, 64, 24]})
         self.assertEqual(view.character_id, "char_a")
-        self.assertFalse(view.identity_verified)
 
-    def test_wrong_selected_row_and_shared_portraits_never_verify_identity(self):
-        self.context.responses["GiftCharacterSelectedOCR"] = text(
-            "已选择", [1158, 245, 44, 16]
-        )
-        self.assertFalse(self.reader.inspect(self.frame).identity_verified)
-        self.context.responses["GiftCharacterSelectedOCR"] = text(
-            "已选择", [1158, 145, 44, 16]
-        )
-        self.image_boxes["char_b"] = self.image_boxes["char_a"]
-        self.assertFalse(self.reader.inspect(self.frame).identity_verified)
-
-    def test_multiple_or_low_confidence_names_never_verify_identity(self):
-        for result in (
-            text("残虹", [690, 117, 60, 28], 0.5),
+    def test_missing_or_ambiguous_selection_never_verifies_a_gift(self):
+        for detail in (
+            None,
+            text("溶月", [700, 202, 50, 25]),
+            text("溶月茶具", [700, 202, 85, 25], score=0.5),
             text_detail(
-                ("残虹", 0.99, [690, 117, 60, 28]), ("薄荷", 0.2, [765, 117, 60, 28])
+                ("溶月茶具", 0.99, [700, 202, 85, 25]),
+                ("时令寿司船", 0.99, [700, 240, 95, 25]),
             ),
         ):
-            self.context.responses["GiftCharacterNameOCR"] = result
-            self.assertFalse(self.reader.inspect(self.frame).identity_verified)
+            with self.subTest(detail=detail):
+                self.context.responses["GiftCurrentSelectionOCR"] = detail
+                view = self.view()
+                self.assertIsNone(view.gift_id)
+                self.assertFalse(view.gift_verified)
+                self.assertIn("gift_selection_unverified", view.errors)
 
-    def test_shared_gift_image_alone_cannot_authorize_selection(self):
-        self.image_boxes["B"] = self.image_boxes["A"]
-        self.context.responses.pop("GiftDetailNameOCR")
-        view = self.reader.inspect(self.frame)
-        self.assertFalse(view.gift_verified)
-        self.assertFalse(view.selected)
-        self.assertIsNone(view.inventory)
-
-    def test_wrong_image_or_wrong_selected_cell_does_not_verify_gift(self):
-        self.image_boxes["A"] = []
-        self.assertFalse(self.reader.inspect(self.frame).gift_verified)
-        self.image_boxes["A"] = [[686, 270, 66, 66]]
-        self.context.responses["GiftSelectedOCR"] = text("已选择", [850, 323, 48, 18])
-        self.assertFalse(self.reader.inspect(self.frame).gift_verified)
-
-    def test_two_physical_gift_candidates_remain_ambiguous(self):
-        self.image_boxes["A"].append([800, 270, 66, 66])
-        self.assertFalse(self.reader.inspect(self.frame).gift_verified)
-
-    def test_missing_quantity_is_unknown_not_implicit_one(self):
-        self.context.responses.pop("GiftQuantityOCR")
-        view = self.reader.inspect(self.frame)
-        self.assertIsNone(view.quantity)
-        self.assertIn("quantity_unverified_no_single_item_layout_evidence", view.errors)
-        self.context.responses["GiftQuantityOCR"] = text("数量:2", [760, 504, 104, 23])
-        self.assertEqual(self.reader.inspect(self.frame).quantity, 2)
-
-    def test_missing_inventory_exception_and_bad_counter_do_not_become_zero(self):
-        self.context.responses.pop("GiftInventoryOCR")
-        self.assertIsNone(self.reader.inspect(self.frame).inventory)
-        self.context.responses["GiftQuotaOCR"] = text("13/3", [824, 557, 46, 23])
-        self.assertIsNone(self.reader.inspect(self.frame).remaining)
-        self.context.responses["GiftInventoryOCR"] = RuntimeError("OCR failed")
-        view = self.reader.inspect(self.frame)
-        self.assertEqual(view.page, "unknown")
-        self.assertIsNone(view.inventory)
-        self.assertTrue(view.errors)
-
-    def test_infinite_template_and_exact_ocr_are_independent_blocking_channels(self):
-        self.context.responses["GiftInfiniteOCR"] = text("∞", [720, 340, 18, 15])
-        self.assertTrue(self.reader.inspect(self.frame).infinite)
-        self.context.responses["GiftInfiniteOCR"] = text("oo", [720, 340, 18, 15])
-        self.assertFalse(self.reader.inspect(self.frame).infinite)
-        self.context.responses["GiftInfiniteMarker"] = template(
-            [720, 340, 18, 15], [810, 340, 18, 15]
+    def test_unreadable_name_box_never_verifies_identity(self):
+        self.context.responses["GiftCharacterNameOCR"] = text_detail(
+            ("残虹", 0.99, [690, 117, 60, 28]), ("薄荷", 0.99, [760, 117, 50, 28])
         )
-        self.assertTrue(self.reader.inspect(self.frame).infinite)
+        view = self.view()
+        self.assertIsNone(view.character_id)
+        self.assertFalse(view.identity_verified)
+        self.assertIn("character_identity_unverified", view.errors)
 
-    def test_unrelated_page_and_missing_bond_tab_expose_no_click_controls(self):
-        self.context.responses.pop("GiftBondMarker")
-        view = self.reader.inspect(self.frame)
-        self.assertEqual(view.page, "unknown")
+
+class PromptEvidenceTests(_FrameCase):
+    def test_affection_prompt_names_exactly_one_known_character(self):
+        cases = (
+            (text("【残虹】的好感度提升了50点。", [400, 90, 300, 30]), "char_a"),
+            (text("【残虹】的好感度提升了120点", [400, 90, 300, 30]), "char_a"),
+            (text("【陌生人】的好感度提升了50点。", [400, 90, 300, 30]), None),
+            (text("【残虹】的好感度提升了0点。", [400, 90, 300, 30]), None),
+            (text("【残虹】的好感度提升了50点。", [400, 90, 300, 30], 0.5), None),
+            (
+                text_detail(
+                    ("【残虹】的好感度提升了50点。", 0.99, [400, 90, 300, 30]),
+                    ("【薄荷】的好感度提升了50点。", 0.99, [400, 130, 300, 30]),
+                ),
+                None,
+            ),
+        )
+        for detail, expected in cases:
+            with self.subTest(detail=detail):
+                self.context.responses["GiftAffectionOCR"] = detail
+                self.assertEqual(self.view().affection, expected)
+
+    def test_only_exact_refusal_texts_become_character_limit_prompt(self):
+        for raw, expected in (
+            ("对方今日无法接受更多的礼物", "character"),
+            ("提升羁遇等级后才能继续赠送礼物", "character"),
+            ("對方今日無法接受更多的禮物", "character"),
+            ("无法接受", None),
+            ("今日还能赠送3次礼物", None),
+        ):
+            with self.subTest(raw=raw):
+                self.context.responses["GiftLimitPromptOCR"] = text(
+                    raw, [420, 300, 360, 30]
+                )
+                self.assertEqual(self.view().limit_prompt, expected)
+
+    def test_daily_total_limit_text_is_global_limit_without_controls(self):
+        self.context.responses["GiftGlobalLimitOCR"] = text(
+            "今日赠礼次数已用完", [500, 300, 260, 30]
+        )
+        view = self.view()
+        self.assertEqual((view.page, view.global_limit), ("global_limit", True))
+        self.assertIsNone(view.send_box)
         self.assertEqual(view.controls, {})
-        self.assertEqual(self.reader.gift_candidates(self.frame, "A"), [])
-        self.context.responses["GiftBondMarker"] = template([24, 23, 31, 35])
-        self.context.responses.pop("GiftTabOCR")
-        self.assertEqual(self.reader.inspect(self.frame).controls, {})
 
-    def test_unknown_confirmation_purchase_unlock_or_submit_blocks_underlying_bond(
-        self,
-    ):
-        for word in ("确定", "确认", "购买", "解锁", "提交", "确认赠送"):
+    def test_unknown_confirmation_or_purchase_blocks_even_at_low_score(self):
+        for word in ("确定", "购买", "解锁", "确认赠送"):
             with self.subTest(word=word):
                 self.context.responses["GiftUnexpectedDialogOCR"] = text(
-                    word, [590, 390, 70, 25], score=0.55
+                    word, [600, 450, 60, 30], score=0.3
                 )
-                view = self.reader.inspect(self.frame)
+                view = self.view()
                 self.assertEqual(view.page, "unknown")
-                self.assertIn("unexpected_dialog", view.errors)
-                self.assertFalse(view.identity_verified)
-                self.assertFalse(view.gift_verified)
                 self.assertIsNone(view.send_box)
+                self.assertIn("unexpected_dialog", view.errors)
+
+    def test_unrelated_page_missing_tab_and_bad_frame_expose_no_controls(self):
+        for node in ("GiftBondMarker", "GiftTabOCR"):
+            with self.subTest(node=node):
+                context = FakeContext()
+                context.responses[node] = None
+                view = vision.GiftVision(context, self.catalog).inspect(self.frame)
+                self.assertEqual(view.page, "unknown")
                 self.assertEqual(view.controls, {})
-        self.context.responses["GiftUnexpectedDialogOCR"] = text(
-            "取消", [590, 390, 70, 25]
+        bad = np.zeros((360, 640, 3), dtype=np.uint8)
+        view = self.reader.inspect(bad)
+        self.assertEqual(view.errors, ("unsupported_frame_size_or_format",))
+
+    def test_infinite_badge_is_checked_only_inside_the_selected_cell_badge(self):
+        cells = self.reader.grid_cells()
+        expected = vision.badge_box(cells[0])
+
+        def badge(override):
+            roi = override["GiftInfiniteMarker"]["recognition"]["param"]["roi"]
+            return template([680, 330, 20, 20]) if roi == expected else template()
+
+        self.context.responses["GiftInfiniteMarker"] = badge
+        self.assertTrue(self.reader.infinite_at(self.frame, cells[0]))
+        self.assertFalse(self.reader.infinite_at(self.frame, cells[1]))
+        self.assertEqual(self.reader.gift_candidates(self.frame, "N"), [])
+
+
+class GeometryTests(unittest.TestCase):
+    def test_grid_cells_badges_and_sidebar_slots_stay_inside_their_regions(self):
+        x, y, w, h = vision.GRID_ROI
+        cells = vision.grid_cells()
+        self.assertEqual(len(cells), vision.GRID_COLUMNS * vision.GRID_ROWS)
+        for cell in cells:
+            self.assertTrue(x <= cell[0] and cell[0] + cell[2] <= x + w, cell)
+            self.assertTrue(y <= cell[1] and cell[1] + cell[3] <= y + h, cell)
+            badge = vision.badge_box(cell)
+            self.assertTrue(0 <= badge[0] <= cell[0] and 0 <= badge[1] <= cell[1])
+        self.assertEqual(
+            vision.slot_box(vision.SIDEBAR_SLOTS_Y[0]), vision.SIDEBAR_COMPARE
         )
-        self.assertEqual(self.reader.inspect(self.frame).page, "gifts")
+        for slot in vision.GiftVision.sidebar_slots():
+            self.assertTrue(0 <= slot[1] and slot[1] + slot[3] <= 720, slot)
 
-    def test_global_limit_is_explicit_and_invalid_frame_has_no_evidence(self):
-        self.context.responses["GiftGlobalLimitOCR"] = text(
-            "今日赠礼总次数已达上限", [400, 250, 400, 25]
+    def test_icon_match_maps_to_nearest_cell_or_none(self):
+        cells = vision.grid_cells()
+        for index in (0, 4, 7):
+            x, y, w, h = cells[index]
+            icon = [x + w // 2 - 20, y - 30, 40, 40]
+            self.assertEqual(vision.cell_at(icon), index)
+        self.assertIsNone(vision.cell_at([100, 100, 40, 40]))
+
+    def test_region_signature_detects_change_and_blank_slots(self):
+        rng = np.random.default_rng(7)
+        frame = rng.integers(0, 255, (720, 1280, 3), dtype=np.uint8)
+        same = frame.copy()
+        reader = vision.GiftVision
+        self.assertTrue(
+            reader.same(reader.grid_signature(frame), reader.grid_signature(same))
         )
-        view = self.reader.inspect(self.frame)
-        self.assertTrue(view.global_limit)
-        self.assertEqual(view.page, "global_limit")
-        self.assertFalse(view.identity_verified)
-        self.assertIsNone(view.send_box)
-        view = self.reader.inspect(np.zeros((1080, 1920, 3), dtype=np.uint8))
-        self.assertEqual(view.page, "unknown")
-        self.assertTrue(view.errors)
-
-
-class ScanEvidenceTests(FrameEvidenceTests):
-    def setUp(self):
-        super().setUp()
-        self.context.responses["GiftCategoryOCR"] = text(
-            "当前分类:全部礼物", [685, 246, 180, 25]
-        )
-        self.cells = [[680, 280, 76, 78], [770, 280, 76, 78]]
-        self.track = [864, 275, 10, 240]
-        self.thumb = [866, 277, 6, 90]
-        self.rectangles = patch.object(
-            vision, "_rectangles", return_value=self.cells + [self.track, self.thumb]
-        )
-        self.rectangles.start()
-        self.addCleanup(self.rectangles.stop)
-
-        def visible(override):
-            roi = override["GiftVisibleNameOCR"]["recognition"]["param"]["roi"]
-            return text("时令寿司船", [roi[0] + 5, roi[1] + 48, roi[2] - 10, 20])
-
-        self.context.responses["GiftVisibleNameOCR"] = visible
-        self.context.responses["GiftVisibleCountOCR"] = text(
-            "当前显示2件礼物", [740, 518, 160, 24]
-        )
-        self.image_boxes["B"] = [[685, 285, 50, 40]]
-        self.reader._candidates.side_effect = lambda frame, identifier, kind, roi: (
-            [[roi[0] + 5, roi[1] + 5, 50, 40]]
-            if identifier == "B" and roi in self.cells
-            else self.image_boxes[identifier]
-        )
-
-    def test_explicit_scroll_track_thumb_and_all_names_prove_page_absence(self):
-        info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertTrue(info.category_verified)
-        self.assertTrue(info.start_verified)
-        self.assertFalse(info.end_verified)
-        self.assertTrue(info.absence_verified)
-        self.assertEqual(info.scroll_box, [680, 280, 166, 78])
-        self.assertEqual(info.visible_ids, ("B", "B"))
-        self.assertTrue(info.progress_evidence)
-        self.assertEqual(info.errors, ())
-
-    def test_unchanged_frame_or_missing_thumb_never_implies_end(self):
-        first = self.reader.scan_info(self.frame, target_id="A")
-        second = self.reader.scan_info(self.frame, target_id="A")
-        self.assertEqual(first.page_key, second.page_key)
-        self.assertFalse(second.end_verified)
-        self.rectangles.stop()
-        with patch.object(
-            vision, "_rectangles", return_value=self.cells + [self.track]
-        ):
-            info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertFalse(info.end_verified)
-        self.assertFalse(info.single_page_verified)
-        self.assertIsNone(info.scroll_box)
-        self.assertIn("scrollbar_boundaries_unverified", info.errors)
-
-    def test_partial_ocr_never_proves_target_absence(self):
-        self.context.responses.pop("GiftVisibleNameOCR")
-        info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertFalse(info.absence_verified)
-        self.assertIn("not_all_visible_cells_positively_identified", info.errors)
-
-    def test_unselected_all_tab_is_not_verified_category(self):
-        self.context.responses["GiftCategoryOCR"] = text(
-            "全部礼物", [685, 246, 180, 25]
-        )
-        info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertFalse(info.category_verified)
-        self.assertFalse(info.absence_verified)
-        self.assertIsNone(info.scroll_box)
-
-    def test_target_on_page_disables_absence_and_unknown_target_never_gets_absence(
-        self,
-    ):
+        moved = np.roll(frame, 40, axis=0)
         self.assertFalse(
-            self.reader.scan_info(self.frame, target_id="B").absence_verified
+            reader.same(reader.grid_signature(frame), reader.grid_signature(moved))
         )
-        self.assertFalse(self.reader.scan_info(self.frame).absence_verified)
+        self.assertFalse(reader.same(None, reader.grid_signature(frame)))
+        blank = np.full((720, 1280, 3), 40, dtype=np.uint8)
+        self.assertIsNone(reader.slot_signature(blank, 0))
+        self.assertIsNone(reader.cell_signature(blank, 0))
+        self.assertIsNotNone(reader.slot_signature(frame, 0))
+        self.assertIsNotNone(reader.cell_signature(frame, 3))
 
-    def test_verified_empty_category_is_explicit_single_page(self):
-        self.context.responses["GiftEmptyListOCR"] = text(
-            "暂无礼物", [730, 350, 120, 30]
+    def test_every_recognition_node_used_by_vision_exists(self):
+        source = (ROOT / "agent/custom/action/Gift/vision.py").read_text(
+            encoding="utf-8"
         )
-        self.context.responses["GiftVisibleCountOCR"] = text(
-            "当前显示0件礼物", [740, 518, 160, 24]
-        )
-        with patch.object(vision, "_rectangles", return_value=[]):
-            info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertTrue(info.single_page_verified)
-        self.assertTrue(info.start_verified)
-        self.assertTrue(info.end_verified)
-        self.assertTrue(info.absence_verified)
-        self.assertIsNone(info.scroll_box)
-
-    def test_explicit_complete_page_number_not_missing_scrollbar_proves_one_page(self):
-        self.context.responses["GiftPaginationOCR"] = text(
-            "第1页/共1页", [740, 550, 140, 25]
-        )
-        with patch.object(vision, "_rectangles", return_value=self.cells):
-            info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertTrue(info.single_page_verified)
-        self.assertTrue(info.start_verified)
-        self.assertTrue(info.end_verified)
-        self.assertTrue(info.absence_verified)
-
-    def test_missing_or_mismatched_visible_count_does_not_certify_detected_subset(self):
-        for count in (None, "当前显示3件礼物", "2"):
-            with self.subTest(count=count):
-                self.context.responses["GiftVisibleCountOCR"] = (
-                    text(count, [740, 518, 160, 24]) if count is not None else None
-                )
-                info = self.reader.scan_info(self.frame, target_id="A")
-                self.assertFalse(info.absence_verified)
-                self.assertIn("visible_count_or_complete_grid_unverified", info.errors)
-
-    def test_empty_text_conflicting_with_visible_cells_is_not_absent(self):
-        self.context.responses["GiftEmptyListOCR"] = text(
-            "暂无礼物", [730, 350, 120, 30]
-        )
-        info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertFalse(info.absence_verified)
-        self.assertFalse(info.single_page_verified)
-        self.assertIn("empty_list_conflicts_with_visible_cells", info.errors)
-
-    def test_pagination_conflicting_with_scroll_thumb_rejects_boundary(self):
-        self.context.responses["GiftPaginationOCR"] = text(
-            "第1页/共1页", [740, 550, 140, 25]
-        )
-        info = self.reader.scan_info(self.frame, target_id="A")
-        self.assertFalse(info.absence_verified)
-        self.assertFalse(info.end_verified)
-        self.assertFalse(info.single_page_verified)
-        self.assertIsNone(info.scroll_box)
-        self.assertIn("pagination_scrollbar_conflict", info.errors)
-
-    def test_unknown_target_and_image_outside_card_cannot_prove_absence(self):
-        self.assertFalse(
-            self.reader.scan_info(self.frame, target_id="missing").absence_verified
-        )
-        self.reader._candidates.side_effect = lambda frame, identifier, kind, roi: [
-            [680, 280, 50, 40]
-        ]
-        self.assertFalse(
-            self.reader.scan_info(self.frame, target_id="A").absence_verified
-        )
+        used = set(re.findall(r'"(Gift[A-Za-z]+(?:OCR|Marker))"', source))
+        nodes = jsonc(BASE / "pipeline/Gift/GiftRecognition.json")
+        self.assertTrue(used)
+        self.assertFalse(used - set(nodes), used - set(nodes))
 
 
 class ImageAndResourceContractTests(unittest.TestCase):
@@ -507,16 +431,6 @@ class ImageAndResourceContractTests(unittest.TestCase):
         self.assertEqual(len(reader.gift_candidates(frame, "A")), 2)
         blank = np.zeros_like(frame)
         self.assertEqual(reader.gift_candidates(blank, "A"), [])
-
-    def test_real_rectangle_detector_requires_track_and_thumb(self):
-        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
-        cells = [[680, 280, 76, 78], [770, 280, 76, 78]]
-        for x, y, w, h in cells + [[864, 270, 12, 240], [867, 273, 6, 90]]:
-            cv2.rectangle(frame, (x, y), (x + w - 1, y + h - 1), (220, 220, 220), 1)
-        rectangles = vision._rectangles(frame, vision.GIFT_ROI)
-        self.assertTrue(any(box[3] >= 235 and box[2] < 20 for box in rectangles))
-        self.assertIsNotNone(vision._scrollbar(rectangles, cells))
-        self.assertIsNone(vision._scrollbar([], cells))
 
     def test_ui_sources_are_small_exact_crops_and_do_not_claim_game_art_license(self):
         source = json.loads(

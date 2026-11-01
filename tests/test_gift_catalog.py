@@ -38,6 +38,47 @@ def source(title, pageid):
     }
 
 
+def game_snapshot():
+    """最小游戏表快照：两件礼物，白藏对冰点冷萃有特殊喜好。"""
+    return {
+        "repository": sync.GAME_REPOSITORY,
+        "commit": sync.GAME_COMMIT,
+        "version": sync.GAME_VERSION,
+        "files": [
+            {"path": path, "sha256": "a" * 64, "url": sync._game_url(path)}
+            for path in sync.GAME_FILES.values()
+        ],
+        "daily_limits": {"per_character": 3, "total": 10},
+        "roles": [{"role_id": "1023", "name": "白藏", "character_id": "char_240"}],
+        "rows": [
+            {
+                "id": "Food_003",
+                "name": "冰点冷萃",
+                "name_table": "ST_Item",
+                "name_key": "food_003_name",
+                "item_type": "ITEM_TYPE_COOK_FOOD",
+                "default_likeability": 50,
+                "special": [{"role_id": "1023", "likeability": 100}],
+                "unlimited": False,
+                "exclusive_role": None,
+            },
+            {
+                "id": "Furniture_draw_004",
+                "name": "9331",
+                "name_table": "ST_Item",
+                "name_key": "Furniture_draw_004_name",
+                "item_type": "ITEM_TYPE_FURNITURE",
+                "default_likeability": 100,
+                "special": [],
+                "unlimited": False,
+                "exclusive_role": None,
+            },
+        ],
+        "unreleased": [],
+        "excluded": [],
+    }
+
+
 def fixture(base, color=(64, 128, 192, 200)):
     """生成可重放的微型来源快照，测试不依赖 Wiki 或运行时 Maa。"""
     image_stream = io.BytesIO()
@@ -74,6 +115,8 @@ def fixture(base, color=(64, 128, 192, 200)):
             "portrait_reference": portrait,
         }
         characters[record["id"]] = record
+    game = game_snapshot()
+    expected, _ = sync.derive_gift_records(game, characters)
     gifts = []
     gift_seeds = [
         (
@@ -86,9 +129,10 @@ def fixture(base, color=(64, 128, 192, 200)):
         ),
     ]
     for pageid, raw in gift_seeds:
-        record, template, image_file = sync.parse_gift(raw, characters)
+        identifier, title, template, image_file = sync.parse_wiki_gift(raw)
+        record = {"id": identifier, **copy.deepcopy(expected[identifier])}
         record["source"] = {
-            **source(record["names"]["zh_cn"], pageid),
+            **source(title, pageid),
             "template": template.raw,
             "template_sha256": sync.sha256(template.raw.encode()),
             "image_file": image_file,
@@ -155,6 +199,8 @@ def fixture(base, color=(64, 128, 192, 200)):
             },
             kind: rows,
         }
+    documents["gifts"]["schema_version"] = sync._catalog.GIFT_SCHEMA
+    documents["gifts"]["source"].update(game=game, wiki_lookups=[], wiki_excluded=[])
     documents["characters"]["source"]["portrait_gallery"] = {
         "url": "https://www.ntestation.com" + sync.GALLERY_PATH,
         "rows": gallery_rows,
@@ -482,12 +528,63 @@ class CatalogTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(CatalogError):
                 catalog.parse_priority(value)
 
-    def test_empty_preferences_remain_none(self):
-        self.documents["gifts"]["gifts"][1]["default_likeability"] = None
+    def test_record_fields_must_match_game_snapshot(self):
+        for key, value in (
+            ("default_likeability", None),
+            ("special_gifts", None),
+            ("unlimited", True),
+            ("exclusive_character", "char_240"),
+            ("kind", "furniture"),
+        ):
+            record = self.documents["gifts"]["gifts"][0]
+            original = record[key]
+            record[key] = value
+            self.write()
+            with self.subTest(key=key), self.assertRaisesRegex(
+                CatalogError, "游戏表快照"
+            ):
+                Catalog.load(self.base)
+            record[key] = original
         self.write()
         record = Catalog.load(self.base).gifts["Furniture_draw_004"]
-        self.assertIsNone(record["default_likeability"])
-        self.assertIsNone(record["special_gifts"])
+        self.assertEqual(record["special_gifts"], [])
+        self.assertFalse(record["unlimited"])
+
+    def test_game_rows_without_name_or_marked_unreleased_are_excluded(self):
+        game = self.documents["gifts"]["source"]["game"]
+        game["rows"][1]["name"] = None
+        game["excluded"] = [{"id": "Furniture_draw_004", "reason": "name_missing"}]
+        self.documents["gifts"]["gifts"].pop()
+        self.documents["gifts"]["source"]["categories"][0]["members"].pop()
+        self.documents["gifts"]["source"]["categories"][0]["page_count"] = 1
+        self.write()
+        self.assertEqual(list(Catalog.load(self.base).gifts), ["Food_003"])
+        game["rows"][1]["name"] = "9331"
+        game["unreleased"] = ["Furniture_draw_004"]
+        self.write()
+        with self.assertRaisesRegex(CatalogError, "排除清单"):
+            Catalog.load(self.base)
+        game["excluded"][0]["reason"] = "unreleased"
+        self.write()
+        self.assertEqual(list(Catalog.load(self.base).gifts), ["Food_003"])
+
+    def test_exclusive_gift_only_allowed_for_its_character(self):
+        game = self.documents["gifts"]["source"]["game"]
+        game["rows"][0]["exclusive_role"] = "1023"
+        game["rows"][0]["unlimited"] = True
+        record = self.documents["gifts"]["gifts"][0]
+        record.update(exclusive_character="char_240", unlimited=True)
+        self.write()
+        catalog = Catalog.load(self.base)
+        self.assertTrue(catalog.gift_allowed("Food_003", "char_240"))
+        self.assertFalse(catalog.gift_allowed("Food_003", "char_142"))
+        self.assertTrue(catalog.gift_allowed("Furniture_draw_004", "char_142"))
+        game["roles"].append({"role_id": "1052", "name": None, "character_id": None})
+        game["rows"][0]["exclusive_role"] = "1052"
+        game["excluded"] = [{"id": "Food_003", "reason": "exclusive_role_unmapped"}]
+        self.write()
+        with self.assertRaisesRegex(CatalogError, "已被排除"):
+            Catalog.load(self.base)
 
     def test_duplicate_ids_and_json_keys_are_rejected(self):
         self.documents["gifts"]["gifts"].append(
@@ -503,6 +600,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_ambiguous_names_require_stable_ids(self):
         self.documents["gifts"]["gifts"][1]["names"]["zh_cn"] = "冰 点冷萃"
+        self.documents["gifts"]["source"]["game"]["rows"][1]["name"] = "冰 点冷萃"
         self.write()
         catalog = Catalog.load(self.base)
         with self.assertRaisesRegex(CatalogError, "歧义"):
@@ -614,11 +712,20 @@ class CatalogTests(unittest.TestCase):
 
     def test_check_replays_templates_and_does_not_trust_changed_fields(self):
         record = self.documents["gifts"]["gifts"][0]
-        record["default_likeability"] = 999
+        record["source"]["template"] = record["source"]["template"].replace(
+            "Food_003", "Food_999"
+        )
+        record["source"]["template_sha256"] = sync.sha256(
+            record["source"]["template"].encode()
+        )
         self.write()
         with self.assertRaisesRegex(sync.SyncError, "重现"):
             sync.check_catalog(self.base)
-        record["default_likeability"] = 50
+        record["source"] = copy.deepcopy(
+            fixture(Path(self.temporary.name) / "again")[0]["gifts"]["gifts"][0][
+                "source"
+            ]
+        )
         record["source"]["template_sha256"] = "b" * 64
         self.write()
         with self.assertRaisesRegex(sync.SyncError, "模板快照"):
@@ -696,7 +803,7 @@ class CatalogTests(unittest.TestCase):
         documents["gifts"]["gifts"][0]["default_likeability"] = 999
         write_documents(stage, documents)
         before = fingerprint(self.base)
-        with self.assertRaises(sync.SyncError):
+        with self.assertRaises((sync.SyncError, CatalogError)):
             sync.publish_stage(stage, self.base, documents)
         self.assertEqual(fingerprint(self.base), before)
 
@@ -723,7 +830,7 @@ class CatalogTests(unittest.TestCase):
         def update(project, *, characters, gifts):
             self.assertEqual(project, root)
             self.assertEqual(characters["schema_version"], 1)
-            self.assertEqual(gifts["schema_version"], 1)
+            self.assertEqual(gifts["schema_version"], 2)
             sync.check_catalog(base, check_generated=False)
             return []
 
@@ -805,25 +912,48 @@ class CompleteLibraryTests(unittest.TestCase):
         base = ROOT / "assets" / "resource" / "base"
         with patch("socket.socket", side_effect=AssertionError("全库检查不得联网")):
             catalog = sync.check_catalog(base)
-        self.assertGreaterEqual(len(catalog.gifts), 214)
+        gifts = catalog.gifts
+        self.assertEqual(len(gifts), 256)
         self.assertGreaterEqual(len(catalog.characters), 24)
         self.assertFalse(catalog.characters["char_14"]["giftable"])
-        self.assertEqual(catalog.gifts["Food_003"]["names"]["zh_cn"], "冰点冷萃")
+        self.assertEqual(gifts["Food_003"]["names"]["zh_cn"], "冰点冷萃")
         self.assertEqual(catalog.characters["char_129"]["names"]["en_us"], "Lacrimosa")
-        self.assertTrue(
-            any(record["special_gifts"] is None for record in catalog.gifts.values())
-        )
+        source = catalog.documents["gifts"]["source"]
+        self.assertEqual(source["game"]["commit"], sync.GAME_COMMIT)
+        # 9 个 Wiki 非礼物页被排除，并记录原因。
+        wiki_skipped = {page["id"] for page in source["wiki_excluded"]}
         self.assertEqual(
-            sum(
-                category["page_count"]
-                for category in catalog.documents["gifts"]["source"]["categories"]
-            ),
-            len(catalog.gifts),
+            wiki_skipped,
+            {
+                "Food_100_sp",
+                "Furniture_Light_009",
+                "Furniture_Light_010",
+                "Furniture_Light_011",
+                "Furniture_Light_013",
+                "Furniture_Light_014",
+                "Furniture_Ornament_039",
+                "Furniture_Ornament_040",
+                "Furniture_draw_009",
+            },
         )
+        self.assertFalse(wiki_skipped & set(gifts))
+        excluded = {row["id"]: row["reason"] for row in source["game"]["excluded"]}
+        self.assertEqual(excluded["SpecialGift_1052"], "exclusive_role_unmapped")
+        self.assertEqual(excluded["SpecialGift_1074"], "name_missing")
+        self.assertEqual(excluded["Food_128"], "unreleased")
+        for identifier in ("Furniture_Gacha_eri_001", "SpecialGift_letter", "Food_120"):
+            self.assertIn(identifier, gifts)
+        self.assertEqual(gifts["SpecialGift_1004"]["exclusive_character"], "char_129")
+        self.assertTrue(gifts["SpecialGift_letter"]["unlimited"])
+        self.assertEqual(
+            gifts["Furniture_Ornament_038"]["names"]["zh_cn"], "「九百九十九夜」"
+        )
+        self.assertIsNone(gifts["SpecialGift_letter"]["image"])
         self.assertTrue(
             all(
                 record["image"]["can_authorize_gift"] is False
-                for record in [*catalog.gifts.values(), *catalog.characters.values()]
+                for record in [*gifts.values(), *catalog.characters.values()]
+                if record["image"] is not None
             )
         )
 

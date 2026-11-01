@@ -63,6 +63,10 @@ class Evidence:
     selected: bool = False
     infinite: bool = False
     global_limit: bool = False
+    # 目录标记的不占每日次数礼物；回执改用好感提示，而非计数减 1。
+    unlimited: bool = False
+    # 同帧识别到「【角色】的好感度提升了N点。」。
+    affection: bool = False
 
 
 @dataclass(frozen=True)
@@ -208,9 +212,10 @@ class Pending:
     frame_id: int
     remaining: int
     total: int
-    inventory: int
-    quantity: int
+    inventory: int | None
+    quantity: int | None
     attempt: int
+    unlimited: bool = False
 
 
 @dataclass(frozen=True)
@@ -222,6 +227,8 @@ class RecipientState:
     status: str = "ready"
     reason: str | None = None
     last_remaining: int | None = None
+    # 本次运行已确认的不占次数礼物件数；计入当日目标，避免同一次运行无限赠送。
+    bonus: int = 0
 
     @property
     def character_id(self) -> str:
@@ -335,7 +342,8 @@ class GiftSession:
     def remaining_target(self, remaining: int, total: int) -> int:
         _require(self.current is not None, "no_recipient")
         _counter(remaining, total)
-        return max(0, self.current.limit - (total - remaining))
+        # 不占次数礼物不改变 n/3，用本次运行的 bonus 计入当日目标。
+        return max(0, self.current.limit - (total - remaining) - self.current.bonus)
 
     def check_quota(self, evidence: Evidence) -> int:
         """未选礼物时也可核验当日目标；页面/身份必须是全新正面证据。"""
@@ -362,11 +370,18 @@ class GiftSession:
         self._flags(evidence)
         self._identity(evidence, selected=True)
         _counter(evidence.remaining, evidence.total)
+        # 游戏界面没有库存/数量文字：格子可见即持有，每次点「赠送」固定 1 件。
+        # 若识别到这两个值则仍须合法，不能是 0、负数或其他数量。
         _require(
-            type(evidence.quantity) is int and evidence.quantity == 1,
+            evidence.quantity is None
+            or (type(evidence.quantity) is int and evidence.quantity == 1),
             "invalid_quantity",
         )
-        _require(_integer(evidence.inventory, 1), "invalid_inventory")
+        _require(
+            evidence.inventory is None or _integer(evidence.inventory, 1),
+            "invalid_inventory",
+        )
+        _require(type(evidence.unlimited) is bool, "invalid_unlimited")
         if not self._known_counter(evidence.remaining, evidence.total):
             self._replace_current(status="completed", reason="target_reached")
             raise GiftSafetyError("target_reached")
@@ -384,6 +399,7 @@ class GiftSession:
             inventory=evidence.inventory,
             quantity=evidence.quantity,
             attempt=self._attempts,
+            unlimited=evidence.unlimited,
         )
         self._replace_current(status="pending", attempts=current.attempts + 1)
         return self._pending
@@ -425,8 +441,8 @@ class GiftSession:
             and evidence.character_id != pending.character_id
         ):
             return self._uncertain("identity_changed")
-        if evidence.gift_id is not None and evidence.gift_id != pending.gift_id:
-            return self._uncertain("gift_changed")
+        # 礼物送完一件后格子可能消失、「当前选择」随之变化；赠送按钮只提交
+        # 授权时已核对的选中项，所以回执不再要求同一礼物仍被选中。
         if evidence.infinite:
             return self._uncertain("infinite_quantity")
         if evidence.total is not None and (
@@ -448,27 +464,38 @@ class GiftSession:
         )
         if decrement is not None and decrement not in (0, 1):
             return self._uncertain("counter_jump")
-        if evidence.inventory is not None:
+        if pending.unlimited and decrement == 1:
+            # 不占次数礼物却扣了次数：与目录不符，结果不明，不重发。
+            return self._uncertain("counter_jump")
+        if evidence.inventory is not None and pending.inventory is not None:
             expected = (
                 (pending.inventory, pending.inventory - 1)
-                if decrement is None
+                if decrement is None or pending.unlimited
                 else (pending.inventory - decrement,)
             )
             if evidence.inventory not in expected:
                 return self._uncertain("inventory_conflict")
+        if type(evidence.affection) is not bool:
+            return self._uncertain("invalid_affection")
         if not (
             evidence.page_verified
             and evidence.identity_verified
-            and evidence.gift_verified
             and evidence.character_id == pending.character_id
-            and evidence.gift_id == pending.gift_id
             and evidence.remaining is not None
             and evidence.total is not None
         ):
             return "waiting"
-        if decrement == 0:
-            return "waiting"
+        if pending.unlimited:
+            # 计数不变，且同帧出现「【角色】的好感度提升了N点。」才算成功。
+            if not evidence.affection:
+                return "waiting"
+            bonus = self.current.bonus + 1
+        else:
+            if decrement == 0:
+                return "waiting"
+            bonus = self.current.bonus
         self._pending = None
+        self._replace_current(bonus=bonus)
         done = self.remaining_target(evidence.remaining, evidence.total) == 0
         self._replace_current(
             confirmed=self.current.confirmed + 1,
@@ -478,6 +505,14 @@ class GiftSession:
         )
         self._enforce_budget()
         return "confirmed"
+
+    def refuse_pending(self, reason: str) -> None:
+        """游戏明确拒收（对方今日无法接受/需提升羁遇等级）：未消耗，跳过该角色。"""
+        _require(_identifier(reason), "invalid_reason")
+        _require(self._pending is not None, "no_pending")
+        self._pending = None
+        self._replace_current(status="skipped", reason=reason)
+        self._enforce_budget()
 
     def timeout_pending(self) -> str:
         _require(self._pending is not None, "no_pending")
@@ -547,6 +582,19 @@ class GiftSession:
                 )
                 _require(evidence.progress_verified is True, "scan_progress_unverified")
             self._frame(evidence.last_frame_id)
+        index = current.gift_index + 1
+        exhausted = index == len(current.recipient.gifts)
+        self._replace_current(
+            gift_index=index,
+            status="skipped" if exhausted else "ready",
+            reason="gifts_exhausted" if exhausted else None,
+        )
+        return self.current
+
+    def exhaust_unavailable(self, frame_id: int) -> RecipientState:
+        """礼物格已从顶部遍历到底、逐格核对名称后仍未找到：当前礼物视为未持有。"""
+        current = self._ready()
+        self._frame(frame_id)
         index = current.gift_index + 1
         exhausted = index == len(current.recipient.gifts)
         self._replace_current(

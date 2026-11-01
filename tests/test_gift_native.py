@@ -24,8 +24,10 @@ from test_gift_actions import (
     C,
     C1,
     C2,
+    C3,
     ACTIONS,
     CONFIG,
+    ICON_GIFTS,
     PIPELINE,
     ROOT,
     GiftWorld,
@@ -57,8 +59,11 @@ class VirtualGiftController(CustomController):
     def click(self, x, y):
         return self.world.click(x, y)
 
-    def swipe(self, x1, y1, x2, y2, duration):
-        return self.world.swipe(x1, y1, x2, y2, duration)
+    def touch_move(self, contact, x, y, pressure):
+        return self.world.touch_move(x, y)
+
+    def scroll(self, dx, dy):
+        return self.world.scroll(dx, dy)
 
 
 class SyntheticBondRecognition(CustomRecognition):
@@ -67,11 +72,7 @@ class SyntheticBondRecognition(CustomRecognition):
         super().__init__()
 
     def analyze(self, context, argv):
-        if self.vision.snapshot(argv.image).view.page in {
-            "characters",
-            "bond",
-            "gifts",
-        }:
+        if self.vision.snapshot(argv.image).view.page in {"bond", "gifts"}:
             return self.AnalyzeResult(box=[10, 10, 20, 20], detail={})
         return None
 
@@ -83,6 +84,13 @@ class VirtualEnterBond(CustomAction):
 
     def run(self, context, argv):
         return self.RunResult(success=self.world.enter_bond())
+
+
+class FailTask(CustomAction):
+    """与 Common/task_result.py 的 fail_task 相同：显示后让任务失败。"""
+
+    def run(self, context, argv):
+        return self.RunResult(success=False)
 
 
 class ObservedAction(CustomAction):
@@ -175,6 +183,8 @@ class NativeGiftFlowTests(unittest.TestCase):
                 for name, cls in ACTIONS.items()
             }
             callbacks["test_enter_bond"] = VirtualEnterBond(world)
+            # GiftFailed 使用公共 fail_task；小资源包只注册与之等价的替身。
+            callbacks["fail_task"] = FailTask()
             recognizer = SyntheticBondRecognition(world)
             try:
                 for name, callback in callbacks.items():
@@ -308,23 +318,26 @@ class NativeGiftFlowTests(unittest.TestCase):
         self.assertEqual(result.world.sends, [(C1, A)])
         self.assertIn("GiftBondReady", result.nodes)
 
-    def test_wrong_identity_uses_on_error_then_continues_next_character(self):
+    def test_unreachable_character_warns_next_one_succeeds_and_task_fails(self):
         world = GiftWorld()
-        world.character_redirect[C1] = C2
+        world.character_id = C2
+        # 点 C1 的头像总打开 C3：C1 永远无法在名称框中确认，不得向别人赠礼。
+        world.slot_alias[C1] = C3
         result = self.run_flow(world, make_config([(C1, (A,), 1), (C2, (B,), 1)]))
-        self.assertTrue(result.succeeded)
-        self.assertIn(("GiftWaitCharacter", False), result.results)
+        self.assertTrue(result.done)
+        self.assertFalse(result.succeeded)
         self.assertIn("GiftWarnCurrent", result.nodes)
         self.assertIn("GiftRecoverCurrent", result.nodes)
         self.assertEqual(world.sends, [(C2, B)])
         self.assertEqual([state.confirmed for state in result.states], [0, 1])
+        self.assertEqual(result.states[0].reason, "character_not_found")
         self.assertEqual(self.summary(result), (1, 0, 0, 1, 0))
 
     def test_receipt_timeout_uses_real_on_error_and_never_resubmits(self):
         world = GiftWorld()
         world.receipt = "none"
         result = self.run_flow(world)
-        self.assertTrue(result.succeeded)
+        self.assertFalse(result.succeeded)
         self.assertIn(("GiftWaitReceipt", False), result.results)
         self.assertIn("GiftReceiptFailed", result.nodes)
         self.assertIn("GiftWarnCurrent", result.nodes)
@@ -332,14 +345,14 @@ class NativeGiftFlowTests(unittest.TestCase):
         self.assertEqual(result.states[0].confirmed, 0)
         self.assertEqual(result.states[0].status, "uncertain")
         self.assertIsNone(result.pending)
-        self.assertLess(world.captures, 200)
+        self.assertLess(world.captures, 400)
         self.assertEqual(self.summary(result), (0, 0, 0, 0, 1))
 
     def test_send_input_failure_uses_receipt_error_path_without_replay(self):
         world = GiftWorld()
         world.fail_inputs.add("send")
         result = self.run_flow(world)
-        self.assertTrue(result.succeeded)
+        self.assertFalse(result.succeeded)
         self.assertIn(("GiftSendOne", False), result.results)
         self.assertIn("GiftReceiptFailed", result.nodes)
         self.assertEqual(world.sends, [(C1, A)])
@@ -350,20 +363,18 @@ class NativeGiftFlowTests(unittest.TestCase):
     def test_global_limit_before_send_blocks_all_remaining_characters(self):
         def before(node, world):
             if node == "GiftSendOne":
-                world.view_overrides["global_limit"] = True
+                world.global_limit = True
 
         result = self.run_flow(
             config=make_config([(C1, (A,), 3), (C2, (B,), 3)]), before_node=before
         )
-        self.assertTrue(result.succeeded)
+        self.assertFalse(result.succeeded)
         self.assertIn(("GiftSendOne", False), result.results)
         self.assertIn("GiftReceiptFailed", result.nodes)
         self.assertEqual(result.world.sends, [])
         self.assertEqual([state.confirmed for state in result.states], [0, 0])
         self.assertEqual(self.summary(result), (0, 0, 0, 2, 0))
-        self.assertEqual(
-            sum(kind == "characters" for _, kind, _ in result.world.inputs), 1
-        )
+        self.assertNotIn("slot", [kind for _, kind, _ in result.world.inputs])
 
     def test_unknown_popup_before_send_stops_recovery_input_and_warns_others(self):
         def before(node, world):
@@ -373,22 +384,39 @@ class NativeGiftFlowTests(unittest.TestCase):
         result = self.run_flow(
             config=make_config([(C1, (A,), 3), (C2, (B,), 3)]), before_node=before
         )
-        self.assertTrue(result.succeeded)
+        self.assertFalse(result.succeeded)
         self.assertEqual(result.world.sends, [])
         self.assertIn("GiftRecoverCurrent", result.nodes)
         self.assertEqual(self.summary(result), (0, 0, 0, 2, 0))
-        self.assertEqual(
-            sum(kind == "characters" for _, kind, _ in result.world.inputs), 1
-        )
+        self.assertNotIn("slot", [kind for _, kind, _ in result.world.inputs])
 
-    def test_multiframe_missing_preferred_gift_falls_back_through_scroll_nodes(self):
-        world = GiftWorld(gift_pages=((B,), (C,)))
+    def test_missing_preferred_gift_falls_back_through_scroll_nodes(self):
+        world = GiftWorld(items=(B, C, *ICON_GIFTS[3:13]))
         result = self.run_flow(world)
         self.assertTrue(result.succeeded)
         self.assertEqual(world.sends, [(C1, B)] * 3)
-        self.assertIn("GiftScrollList", result.nodes)
+        self.assertIn("GiftScroll", result.nodes)
         self.assertIn("GiftWaitScroll", result.nodes)
         self.assertFalse(any(not ok for _, ok in result.results))
+
+    def test_navigation_failure_for_everyone_makes_native_task_fail(self):
+        world = GiftWorld()
+        world.tab_switches = False
+        result = self.run_flow(world, make_config([(C1, (A,), 1), (C2, (B,), 1)]))
+        self.assertTrue(result.done)
+        self.assertFalse(result.succeeded)
+        self.assertEqual(world.sends, [])
+        self.assertIn("GiftNavigationFailed", result.nodes)
+        self.assertEqual(self.summary(result), (0, 0, 0, 2, 0))
+
+    def test_dry_run_and_already_done_finish_as_native_success(self):
+        result = self.run_flow(config=make_config(dry_run=True))
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.world.sends, [])
+        self.assertEqual(self.summary(result), (0, 0, 1, 0, 0))
+        result = self.run_flow(GiftWorld(remaining=0))
+        self.assertTrue(result.succeeded)
+        self.assertEqual(self.summary(result), (0, 1, 0, 0, 0))
 
     def test_stop_before_send_or_during_receipt_finishes_native_task_and_threads(self):
         for boundary, expected in (("GiftSendOne", []), ("GiftWaitReceipt", [(C1, A)])):

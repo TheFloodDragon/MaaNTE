@@ -225,5 +225,6 @@
     "cloud_web.wrong_controller": "此任務僅支援「雲遊戲 - 網頁」控制器",
     "cloud_web.invalid_config": "網頁雲啟動設定無效（登入 1–120 分鐘、排隊 1–1440 分鐘）",
     "cloud_web.stopped": "雲異環（網頁）任務已停止",
-    "cloud_web.failed": "雲異環（網頁）啟動異常，請查看日誌"
+    "cloud_web.failed": "雲異環（網頁）啟動異常，請查看日誌",
+    "gift.reason.character_limit": "遊戲提示該角色今日無法接受更多禮物或需提升羈遇等級，已跳過該角色。"
 }

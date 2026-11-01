@@ -509,7 +509,8 @@ class AuthorizationTests(GiftTestCase):
                     self.assert_no_intent(run)
 
     def test_inventory_must_be_known_positive_integer(self):
-        for value in (None, 0, -1, True, False, 1.0, "1", "∞"):
+        # 游戏界面没有库存文字：None 表示未读到（格子可见即持有），允许授权。
+        for value in (0, -1, True, False, 1.0, "1", "∞"):
             with self.subTest(value=value):
                 run = session()
                 self.denied(
@@ -518,7 +519,8 @@ class AuthorizationTests(GiftTestCase):
                 self.assert_no_intent(run)
 
     def test_quantity_must_be_exactly_integer_one(self):
-        for value in (None, 0, -1, 2, 3, True, False, 1.0, "1", "∞"):
+        # 每次点「赠送」固定 1 件：None 表示界面没有数量控件，允许授权。
+        for value in (0, -1, 2, 3, True, False, 1.0, "1", "∞"):
             with self.subTest(value=value):
                 run = session()
                 self.denied(
@@ -625,7 +627,8 @@ class ReceiptAndIsolationTests(GiftTestCase):
         self.assertEqual(run.current.confirmed, 0)
 
     def test_partial_recognition_is_waiting_not_success(self):
-        for field in ("page_verified", "identity_verified", "gift_verified"):
+        # 礼物送出后格子可能消失，回执不再要求礼物仍被选中；页面和身份仍必须确认。
+        for field in ("page_verified", "identity_verified"):
             run = session()
             run.authorize(observation())
             self.assertEqual(
@@ -634,7 +637,7 @@ class ReceiptAndIsolationTests(GiftTestCase):
             )
             self.assertEqual(run.current.confirmed, 0)
             self.assertIsNotNone(run.pending)
-        for field in ("character_id", "gift_id", "remaining", "total"):
+        for field in ("character_id", "remaining", "total"):
             run = session()
             run.authorize(observation())
             self.assertEqual(run.confirm(observation(2, **{field: None})), "waiting")
@@ -647,6 +650,55 @@ class ReceiptAndIsolationTests(GiftTestCase):
             run.confirm(observation(2, remaining=2, inventory=None)), "confirmed"
         )
         self.assertEqual(run.current.confirmed, 1)
+
+    def test_missing_inventory_and_quantity_still_authorize_one_send(self):
+        run = session()
+        pending = run.authorize(observation(inventory=None, quantity=None))
+        self.assertIsNone(pending.inventory)
+        self.assertIsNone(pending.quantity)
+        self.assertEqual(
+            run.confirm(observation(2, remaining=2, inventory=None, quantity=None)),
+            "confirmed",
+        )
+
+    def test_unlimited_gift_needs_unchanged_counter_and_affection_prompt(self):
+        run = session()
+        run.authorize(observation(unlimited=True))
+        # 计数不变但没有好感提示：继续等待，绝不算成功。
+        self.assertEqual(run.confirm(observation(2, remaining=3)), "waiting")
+        self.assertIsNotNone(run.pending)
+        self.assertEqual(
+            run.confirm(observation(3, remaining=3, affection=True)), "confirmed"
+        )
+        self.assertEqual(run.current.confirmed, 1)
+        self.assertEqual(run.current.bonus, 1)
+        # 不占次数礼物计入当日目标：3 - 0 - 1 = 2。
+        self.assertEqual(run.remaining_target(3, 3), 2)
+
+    def test_unlimited_gift_without_prompt_times_out_uncertain_without_resend(self):
+        run = session()
+        run.authorize(observation(unlimited=True))
+        self.assertEqual(run.confirm(observation(2, remaining=3)), "waiting")
+        self.assertEqual(run.timeout_pending(), "uncertain")
+        self.assertEqual(run.current.confirmed, 0)
+        self.assertEqual(run.attempts, 1)
+        self.assertIsNone(run.pending)
+
+    def test_unlimited_gift_that_consumes_quota_is_uncertain(self):
+        run = session()
+        run.authorize(observation(unlimited=True))
+        self.assertEqual(
+            run.confirm(observation(2, remaining=2, affection=True)), "uncertain"
+        )
+        self.assertEqual(run.current.reason, "counter_jump")
+
+    def test_regular_gift_does_not_count_affection_prompt_without_decrement(self):
+        run = session()
+        run.authorize(observation())
+        self.assertEqual(
+            run.confirm(observation(2, remaining=3, affection=True)), "waiting"
+        )
+        self.assertEqual(run.current.confirmed, 0)
 
     def test_depleted_gift_still_confirms_from_recognizable_details(self):
         run = session()
@@ -683,16 +735,37 @@ class ReceiptAndIsolationTests(GiftTestCase):
             self.assertEqual(run.current.reason, "inventory_conflict")
             self.assertEqual(run.current.confirmed, 0)
 
-    def test_identity_or_gift_change_locks_current(self):
-        for field, value in (("character_id", "bob"), ("gift_id", "B")):
+    def test_identity_change_locks_current(self):
+        run = session()
+        run.authorize(observation())
+        self.assertEqual(
+            run.confirm(observation(2, remaining=2, inventory=2, character_id="bob")),
+            "uncertain",
+        )
+        self.assertEqual(run.current.confirmed, 0)
+        self.assertIsNone(run.pending)
+
+    def test_selection_moving_after_last_item_still_confirms_exact_decrement(self):
+        # 送完最后一件后格子消失，「当前选择」可能变成别的礼物或清空；
+        # 赠送按钮只提交授权时已核对的选中项，计数恰好减 1 即为送达。
+        for gift_id in ("B", None):
             run = session()
-            run.authorize(observation())
+            run.authorize(observation(inventory=1))
             self.assertEqual(
-                run.confirm(observation(2, remaining=2, inventory=2, **{field: value})),
-                "uncertain",
+                run.confirm(
+                    observation(
+                        2,
+                        remaining=2,
+                        inventory=None,
+                        gift_id=gift_id,
+                        gift_verified=gift_id is not None,
+                        selected=gift_id is not None,
+                    )
+                ),
+                "confirmed",
             )
-            self.assertEqual(run.current.confirmed, 0)
-            self.assertIsNone(run.pending)
+            self.assertEqual(run.current.confirmed, 1)
+            self.assertEqual(run.current.gift_id, "A")
 
     def test_invalid_receipt_values_never_count_as_confirmation(self):
         mutations = (

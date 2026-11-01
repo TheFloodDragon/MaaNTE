@@ -225,5 +225,6 @@
     "cloud_web.wrong_controller": "このタスクは「クラウドゲーム - Web」コントローラー専用です",
     "cloud_web.invalid_config": "設定が無効です（ログイン 1〜120 分、待機列 1〜1440 分）",
     "cloud_web.stopped": "クラウド異環（Web）タスクを停止しました",
-    "cloud_web.failed": "クラウド異環（Web）の起動で異常が発生しました。ログを確認してください"
+    "cloud_web.failed": "クラウド異環（Web）の起動で異常が発生しました。ログを確認してください",
+    "gift.reason.character_limit": "このキャラクターは本日これ以上ギフトを受け取れないか、絆レベルの上昇が必要とゲームに表示されました。スキップしました。"
 }

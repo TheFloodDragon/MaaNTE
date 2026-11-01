@@ -225,5 +225,6 @@
     "cloud_web.wrong_controller": "This task requires the Cloud Game - Web controller",
     "cloud_web.invalid_config": "Invalid settings (login 1–120 min, queue 1–1440 min)",
     "cloud_web.stopped": "Cloud NTE (Web) task stopped",
-    "cloud_web.failed": "Cloud NTE (Web) startup error; see the log"
+    "cloud_web.failed": "Cloud NTE (Web) startup error; see the log",
+    "gift.reason.character_limit": "The game says this character cannot accept more gifts today or needs a higher bond level. Character skipped."
 }

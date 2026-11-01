@@ -1,14 +1,13 @@
 """赠礼的单帧视觉证据；不截图、不点击、不等待，也不隐式导航。
 
-Wiki 美术只定位候选。完整名称、独立的显式选中标记、数量、额度必须在
-同一帧各自得到正面证据。上游仅提供羁遇/无限徽记小图，没有完整详情、
-选中边框或无数量控件布局；因此不猜高亮颜色，也不把缺少数量控件当作 1。
-识别 ROI 是校准起点，不是可点击的固定坐标。详见 Gift/UI/source.json。
+按游戏真实界面识别：计数按钮「赠送n/3」（合并或拆分 OCR 均可）、名称框里的
+完整角色名、点选礼物后「当前选择」处的完整礼物名、选中格左上角的 ∞ 徽记。
+Wiki 图标只用于定位礼物格候选，礼物身份以「当前选择」名称为准。
+布局常量取自 ok-nte 实机跑通的版本，待本项目实机复核。
 """
 
 from __future__ import annotations
 
-import hashlib
 import math
 import re
 import unicodedata
@@ -24,9 +23,29 @@ from utils.logger import logger
 Box = list[int]
 OCR_MIN_SCORE = 0.90
 IMAGE_MIN_SCORE = 0.94
-CHARACTER_ROI = [1120, 75, 155, 535]
-GIFT_ROI = [650, 250, 475, 285]
-DETAIL_ROI = [560, 165, 565, 365]
+# 以下布局取自 ok-nte 实机跑通的 GiftTask/layout（换算到 1280x720），待本项目实机复核。
+GRID_FIRST = [682, 345, 66, 27]
+GRID_COLUMNS, GRID_ROWS = 5, 2
+GRID_STEP_X, GRID_STEP_Y = 83.3, 97.3
+GRID_ROI = [660, 280, 450, 215]
+GRID_SCROLL_POINT = (880, 410)
+SIDEBAR_X = 1211
+SIDEBAR_SLOTS_Y = (127, 235, 340, 449, 556)
+SIDEBAR_COMPARE = [1198, 105, 45, 43]
+SIDEBAR_SCROLL_POINT = (1212, 360)
+# 灰度小图逐像素平均差低于该值视为“画面未变化”（滚动到底）。
+REGION_SAME_THRESHOLD = 4.0
+# 灰度标准差低于该值视为空槽位/空格子。
+BLANK_STD = 6.0
+
+
+def grid_cells() -> list[Box]:
+    x, y, w, h = GRID_FIRST
+    return [
+        [x + round(column * GRID_STEP_X), y + round(row * GRID_STEP_Y), w, h]
+        for row in range(GRID_ROWS)
+        for column in range(GRID_COLUMNS)
+    ]
 
 
 @dataclass(frozen=True)
@@ -43,22 +62,12 @@ class FrameView:
     quantity: int | None = None
     infinite: bool = False
     global_limit: bool = False
+    # 同帧提示「【角色】的好感度提升了N点。」中点名的角色 ID（不占次数礼物的回执证据）。
+    affection: str | None = None
+    # 游戏限制提示："character"＝对方今日无法接受更多/需提升羁遇等级。
+    limit_prompt: str | None = None
     send_box: Box | None = None
     controls: dict[str, Box] = field(default_factory=dict)
-    errors: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class ScanInfo:
-    category_verified: bool = False
-    start_verified: bool = False
-    end_verified: bool = False
-    page_key: str | None = None
-    progress_evidence: tuple[str, ...] = ()
-    single_page_verified: bool = False
-    absence_verified: bool = False
-    scroll_box: Box | None = None
-    visible_ids: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
 
 
@@ -79,24 +88,49 @@ def normalize_text(text: str) -> str:
 
 
 def parse_quota(text: str) -> tuple[int, int] | None:
-    match = re.fullmatch(r"([0-3])/3", normalize_text(text))
+    # 游戏按钮文字为「赠送{n}/{3}」（ST_Common:ui_likeability_gift_times）；
+    # OCR 可能整串返回，也可能只返回 n/3。仍拒绝 13/3、3/4 等截断或越界值。
+    match = re.fullmatch(r"(?:赠送|贈送)?([0-3])/3", normalize_text(text))
     return (int(match[1]), 3) if match else None
 
 
-def parse_inventory(text: str) -> int | None:
-    match = re.fullmatch(
-        r"(?:(?:持有数量|拥有数量|库存)[:：]?|[xX×])?(0|[1-9][0-9]{0,8})",
-        normalize_text(text),
-    )
-    return int(match[1]) if match else None
+def quota_hit(hits: list[TextHit]) -> tuple[tuple[int, int], Box] | None:
+    """计数区：合并「赠送n/3」或拆分「赠送」+「n/3」都接受，返回额度与按钮框。"""
+    parsed = [
+        (parse_quota(hit.text), hit)
+        for hit in hits
+        if math.isfinite(hit.score) and hit.score >= OCR_MIN_SCORE
+    ]
+    parsed = [(quota, hit) for quota, hit in parsed if quota is not None]
+    if len(parsed) != 1:
+        return None
+    quota, hit = parsed[0]
+    boxes = [hit.box] + [
+        other.box
+        for other in hits
+        if normalize_text(other.text) in {"赠送", "贈送"}
+        and math.isfinite(other.score)
+        and other.score >= OCR_MIN_SCORE
+    ]
+    x = min(box[0] for box in boxes)
+    y = min(box[1] for box in boxes)
+    right = max(box[0] + box[2] for box in boxes)
+    bottom = max(box[1] + box[3] for box in boxes)
+    return quota, [x, y, right - x, bottom - y]
 
 
-def parse_quantity(text: str) -> int | None:
-    # 必须有数量语义；任意位置出现的 1 可能是库存、等级或额度。
-    match = re.fullmatch(
-        r"(?:赠送数量|贈送數量|数量|數量)[:：]?([1-9][0-9]{0,3})", normalize_text(text)
-    )
-    return int(match[1]) if match else None
+def name_in_box(
+    hits: list[TextHit], records: dict[str, dict]
+) -> tuple[str, Box] | None:
+    """名称框里可能还有等级、称号等文字：恰好一个高分结果是完整目录名才算识别。"""
+    found = {}
+    for hit in hits:
+        if not math.isfinite(hit.score) or hit.score < OCR_MIN_SCORE:
+            continue
+        result = unique_name([hit], records)
+        if result is not None:
+            found.setdefault(result[0], result[1])
+    return next(iter(found.items())) if len(found) == 1 else None
 
 
 def _box(value: Any) -> Box | None:
@@ -203,14 +237,6 @@ def _overlap(a: Box, b: Box) -> float:
     return intersection / max(1, min(a[2] * a[3], b[2] * b[3]))
 
 
-def _selected_box(marker: TextHit | None, candidates: list[Box]) -> Box | None:
-    if marker is None:
-        return None
-    # 标记必须落在同一卡片之内或紧贴其下方，不接受另一行的“已选择”。
-    nearby = [box for box in candidates if _inside(marker.box, box, margin=18)]
-    return nearby[0] if len(nearby) == 1 else None
-
-
 def _validate_frame(frame: np.ndarray) -> None:
     if (
         not isinstance(frame, np.ndarray)
@@ -218,61 +244,6 @@ def _validate_frame(frame: np.ndarray) -> None:
         or frame.shape not in ((720, 1280, 3), (720, 1280, 4))
     ):
         raise VisionError("unsupported_frame_size_or_format")
-
-
-def _rectangles(frame: np.ndarray, roi: Box) -> list[Box]:
-    """只返回画面中实际闭合的矩形，不由槽位常量构造按钮/边界。"""
-    x, y, w, h = roi
-    gray = cv2.cvtColor(frame[y : y + h, x : x + w, :3], cv2.COLOR_BGR2GRAY)
-    contours, _ = cv2.findContours(
-        cv2.Canny(gray, 60, 150), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
-    )
-    boxes = []
-    for contour in contours:
-        hull = cv2.convexHull(contour)
-        approximation = cv2.approxPolyDP(
-            hull, min(1.0, 0.02 * cv2.arcLength(hull, True)), True
-        )
-        if len(approximation) != 4 or not cv2.isContourConvex(approximation):
-            continue
-        a, b, c, d = cv2.boundingRect(approximation)
-        corners = {(a, b), (a + c - 1, b), (a, b + d - 1), (a + c - 1, b + d - 1)}
-        if any(
-            not any(
-                abs(int(point[0][0]) - p) <= 2 and abs(int(point[0][1]) - q) <= 2
-                for p, q in corners
-            )
-            for point in approximation
-        ):
-            continue
-        box = [x + a, y + b, c, d]
-        if c < 2 or d < 8 or a <= 1 or b <= 1 or a + c >= w - 1 or b + d >= h - 1:
-            continue
-        if any(
-            all(abs(v - u) <= 3 for v, u in zip(box, existing)) for existing in boxes
-        ):
-            continue
-        boxes.append(box)
-    return boxes
-
-
-def _scrollbar(rectangles: list[Box], cells: list[Box]) -> tuple[Box, Box] | None:
-    """正面检测嵌套的轨道和滑块；没有滑块/轨道绝不意味着单页或到底。"""
-    if not cells:
-        return None
-    right = max(box[0] + box[2] for box in cells)
-    pairs = []
-    for track in rectangles:
-        if not (
-            3 <= track[2] <= 18 and track[3] >= 70 and right < track[0] <= right + 40
-        ):
-            continue
-        for thumb in rectangles:
-            if thumb == track or not _inside(thumb, track, margin=1):
-                continue
-            if 2 <= thumb[2] <= track[2] and 8 <= thumb[3] < track[3] - 5:
-                pairs.append((track, thumb))
-    return pairs[0] if len(pairs) == 1 else None
 
 
 class GiftVision:
@@ -411,11 +382,7 @@ class GiftVision:
         global_limit = self._control(
             "GiftGlobalLimitOCR",
             frame,
-            {
-                "今日赠礼总次数已达上限",
-                "今日所有角色赠礼次数已达上限",
-                "今日已达到赠礼总次数上限",
-            },
+            {"今日赠礼次数已用完", "今日贈禮次數已用完"},
         )
         if global_limit:
             return "global_limit", {}
@@ -448,26 +415,13 @@ class GiftVision:
             return "unknown", {}
         controls = {}
         gift_tab = self._control("GiftTabOCR", frame, {"赠礼", "贈禮"})
-        if gift_tab:
-            controls["gift_tab"] = gift_tab
-        list_title = self._control(
-            "GiftCharacterListTitleOCR", frame, {"角色列表", "羁遇列表", "羈遇列表"}
-        )
-        if list_title:
-            close = self._template_box("GiftCloseButton", frame)
-            if close:
-                controls["close_list"] = close
-            return "characters", controls
         if gift_tab is None:
             return "unknown", {}
-        list_button = self._template_box("GiftListButton", frame)
-        if list_button:
-            controls["list_button"] = list_button
-        send = self._control("GiftSendOCR", frame, {"赠送", "贈送", "送礼", "送禮"})
-        counter = _one_text(self._texts("GiftQuotaOCR", frame))
-        if gift_tab and (
-            send is not None or (counter and parse_quota(counter.text) is not None)
-        ):
+        controls["gift_tab"] = gift_tab
+        # 赠礼页签内只有一个「赠送n/3」按钮：合并或拆分 OCR 都能判成 gifts。
+        quota = quota_hit(self._texts("GiftQuotaOCR", frame))
+        if quota is not None:
+            controls["send"] = quota[1]
             return "gifts", controls
         return "bond", controls
 
@@ -484,298 +438,190 @@ class GiftVision:
         if page in {"unknown", "loading", "global_limit"}:
             return FrameView(page=page, global_limit=page == "global_limit")
         errors = []
-        identity = unique_name(
+        # 游戏没有「已选择」侧栏标记：名称框里恰好一个完整角色名即为当前角色。
+        identity = name_in_box(
             self._texts("GiftCharacterNameOCR", frame), self.catalog.characters
         )
         character_id = identity[0] if identity else None
-        identity_verified = False
-        if character_id:
-            marker = _one_text(
-                self._texts("GiftCharacterSelectedOCR", frame),
-                {"已选择", "已選擇", "当前角色", "當前角色"},
-            )
-            selected_avatar = _selected_box(
-                marker,
-                self._candidates(frame, character_id, "characters", CHARACTER_ROI),
-            )
-            if selected_avatar:
-                conflicts = [
-                    identifier
-                    for identifier in self.catalog.characters
-                    if identifier != character_id
-                    and any(
-                        _overlap(candidate, selected_avatar) > 0.55
-                        for candidate in self._candidates(
-                            frame, identifier, "characters", CHARACTER_ROI
-                        )
-                    )
-                ]
-                identity_verified = not conflicts
-        if not identity_verified:
-            errors.append("character_identity_or_selection_unverified")
+        if character_id is None:
+            errors.append("character_identity_unverified")
+        limit_prompt = self._limit_prompt(frame)
         if page != "gifts":
             return FrameView(
                 page=page,
                 character_id=character_id,
-                identity_verified=identity_verified,
+                identity_verified=character_id is not None,
+                limit_prompt=limit_prompt,
                 controls=controls,
                 errors=tuple(errors),
             )
-
-        quota_hit = _one_text(self._texts("GiftQuotaOCR", frame))
-        quota = parse_quota(quota_hit.text) if quota_hit else None
+        quota = quota_hit(self._texts("GiftQuotaOCR", frame))
         if quota is None:
             errors.append("quota_unverified")
-        detail_name = unique_name(
-            self._texts("GiftDetailNameOCR", frame), self.catalog.gifts
+        # 点选礼物后「当前选择」处显示完整名称；这是礼物身份的唯一授权证据。
+        selection = name_in_box(
+            self._texts("GiftCurrentSelectionOCR", frame), self.catalog.gifts
         )
-        gift_id = detail_name[0] if detail_name else None
-        selected = False
-        gift_verified = False
-        inventory = None
-        quantity = None
-        detail_title = self._control(
-            "GiftDetailTitleOCR",
-            frame,
-            {"礼物详情", "禮物詳情", "道具详情", "道具詳情"},
-        )
-        if gift_id and detail_title:
-            art = self._candidates(frame, gift_id, "gifts", DETAIL_ROI)
-            selected_marker = _one_text(
-                self._texts("GiftSelectedOCR", frame),
-                {"已选择", "已選擇", "已选中", "已選中"},
-            )
-            selected_gift = _selected_box(selected_marker, art)
-            selected = selected_gift is not None and len(art) == 1
-            gift_verified = selected and _inside(detail_name[1], DETAIL_ROI)
-            inventory_hit = _one_text(self._texts("GiftInventoryOCR", frame))
-            quantity_hit = _one_text(self._texts("GiftQuantityOCR", frame))
-            if gift_verified:
-                inventory = (
-                    parse_inventory(inventory_hit.text) if inventory_hit else None
-                )
-                quantity = parse_quantity(quantity_hit.text) if quantity_hit else None
-            close = self._template_box("GiftCloseButton", frame)
-            cancel = self._control("GiftCancelOCR", frame, {"取消"})
-            if close:
-                controls["close_detail"] = close
-            if cancel:
-                controls["cancel"] = cancel
-        if not gift_verified:
-            errors.append("gift_detail_or_selection_unverified")
-        if inventory is None:
-            errors.append("inventory_unverified")
-        if quantity is None:
-            errors.append("quantity_unverified_no_single_item_layout_evidence")
-        infinite_ocr = self._texts("GiftInfiniteOCR", frame)
-        # 任一通道可靠命中即拒绝消耗；OCR 缺失绝不折算成库存 0。
-        infinite = bool(self._template_boxes("GiftInfiniteMarker", frame)) or any(
-            math.isfinite(hit.score)
-            and hit.score >= OCR_MIN_SCORE
-            and normalize_text(hit.text) == "∞"
-            for hit in infinite_ocr
-        )
-        send_box = self._control("GiftSendOCR", frame, {"赠送", "贈送", "送礼", "送禮"})
+        gift_id = selection[0] if selection else None
+        if gift_id is None:
+            errors.append("gift_selection_unverified")
+        # ∞ 徽记只对选中格检测（infinite_at），整片礼物格里有别的不限量礼物不影响。
+        infinite = False
+        affection = self._affection(frame)
         return FrameView(
             page=page,
             character_id=character_id,
-            identity_verified=identity_verified,
+            identity_verified=character_id is not None,
             gift_id=gift_id,
-            gift_verified=gift_verified,
-            selected=selected,
-            remaining=quota[0] if quota else None,
-            total=quota[1] if quota else None,
-            inventory=inventory,
-            quantity=quantity,
+            gift_verified=gift_id is not None,
+            selected=gift_id is not None,
+            remaining=quota[0][0] if quota else None,
+            total=quota[0][1] if quota else None,
             infinite=infinite,
-            send_box=send_box,
+            affection=affection,
+            limit_prompt=limit_prompt,
+            send_box=quota[1] if quota else None,
             controls=controls,
             errors=tuple(errors),
         )
 
-    def character_candidates(self, frame: np.ndarray, character_id: str) -> list[Box]:
-        _validate_frame(frame)
-        page, _ = self._page(frame)
-        if page not in {"bond", "gifts", "characters"}:
-            return []
-        if page == "characters":
-            # 列表完整名字是可点击候选，不会因一次 OCR 就授予身份。
-            candidates = []
-            for hit in self._texts("GiftVisibleNameOCR", frame, [70, 95, 1150, 510]):
-                result = unique_name([hit], self.catalog.characters)
-                if result and result[0] == character_id:
-                    candidates.append(hit.box)
-            return candidates
-        return self._candidates(frame, character_id, "characters", CHARACTER_ROI)
+    def _affection(self, frame: np.ndarray) -> str | None:
+        """提示「【{角色}】的好感度提升了{n}点。」；返回其中点名的唯一角色 ID。"""
+        named = set()
+        for hit in self._texts("GiftAffectionOCR", frame):
+            if not math.isfinite(hit.score) or hit.score < OCR_MIN_SCORE:
+                continue
+            match = re.fullmatch(
+                r"【(.+)】的好感度提升了[1-9][0-9]*点。?", normalize_text(hit.text)
+            )
+            if match is None:
+                continue
+            result = unique_name(
+                [TextHit(match[1], hit.score, hit.box)], self.catalog.characters
+            )
+            named.add(result[0] if result else None)
+        return next(iter(named)) if len(named) == 1 else None
+
+    def _limit_prompt(self, frame: np.ndarray) -> str | None:
+        """单角色/羁遇等级限制提示返回 character；全角色次数用完由 _page 判为 global_limit。"""
+        texts = {
+            normalize_text(hit.text)
+            for hit in self._texts("GiftLimitPromptOCR", frame)
+            if math.isfinite(hit.score) and hit.score >= OCR_MIN_SCORE
+        }
+        if texts & {
+            "对方今日无法接受更多的礼物",
+            "對方今日無法接受更多的禮物",
+            "提升羁遇等级后才能继续赠送礼物",
+            "提升羈遇等級後才能繼續贈送禮物",
+        }:
+            return "character"
+        return None
 
     def gift_candidates(self, frame: np.ndarray, gift_id: str) -> list[Box]:
+        """有 Wiki 图标的礼物在礼物格区域内做多尺度匹配；无图标返回空列表。"""
         _validate_frame(frame)
-        page, _ = self._page(frame)
-        return (
-            self._candidates(frame, gift_id, "gifts", GIFT_ROI)
-            if page == "gifts"
-            else []
-        )
+        record = self.catalog.gifts.get(gift_id)
+        if record is None or not record.get("image"):
+            return []
+        return self._candidates(frame, gift_id, "gifts", GRID_ROI)
 
-    def scan_info(
-        self, frame: np.ndarray, kind: str = "gifts", target_id: str | None = None
-    ) -> ScanInfo:
-        try:
-            _validate_frame(frame)
-            if kind not in {"gifts", "characters"}:
-                raise VisionError("unknown_scan_kind")
-            return self._scan_info(frame, kind, target_id)
-        except (VisionError, cv2.error) as exc:
-            return ScanInfo(errors=(str(exc),))
+    def infinite_at(self, frame: np.ndarray, cell: Box) -> bool:
+        """只在指定礼物格左上角的徽记区检测 ∞，不受其他格子影响。"""
+        _validate_frame(frame)
+        detail = self._recognize("GiftInfiniteMarker", frame, badge_box(cell))
+        return bool(detail is not None and _get(detail, "hit", False))
 
-    def _scan_info(
-        self, frame: np.ndarray, kind: str, target_id: str | None
-    ) -> ScanInfo:
-        page, _ = self._page(frame)
-        if page != kind:
-            return ScanInfo(errors=("wrong_scan_page",))
-        roi = GIFT_ROI if kind == "gifts" else [70, 95, 1150, 510]
-        category_text = (
-            {"当前分类:全部礼物", "当前分类:全部", "當前分類:全部禮物", "當前分類:全部"}
-            if kind == "gifts"
-            else {
-                "当前分类:全部角色",
-                "当前分类:全部",
-                "當前分類:全部角色",
-                "當前分類:全部",
-            }
-        )
-        category = self._control("GiftCategoryOCR", frame, category_text)
-        if category is None:
-            return ScanInfo(errors=("selected_list_category_unverified",))
-        records = self.catalog.gifts if kind == "gifts" else self.catalog.characters
-        if target_id is not None and target_id not in records:
-            return ScanInfo(errors=("unknown_scan_target",))
-        x, y, w, h = roi
-        crop = frame[y : y + h, x : x + w, :3]
-        page_key = hashlib.sha256(
-            cv2.resize(
-                crop, (min(w, 128), min(h, 72)), interpolation=cv2.INTER_AREA
-            ).tobytes()
-        ).hexdigest()
-        rectangles = _rectangles(frame, roi)
-        cells = [
-            box for box in rectangles if 40 <= box[2] <= 160 and 40 <= box[3] <= 180
-        ]
-        # 包含关系表示内框/图标，而非两个可见槽位。只保留外层卡片。
-        cells = [
-            box
-            for box in cells
-            if not any(
-                box != other and _inside(box, other, margin=1) for other in cells
-            )
-        ]
-        count_hit = _one_text(self._texts("GiftVisibleCountOCR", frame))
-        count_pattern = (
-            r"(?:当前显示|當前顯示)(0|[1-9][0-9]{0,2})(?:件礼物|件禮物)"
-            if kind == "gifts"
-            else r"(?:当前显示|當前顯示)(0|[1-9][0-9]{0,2})名角色"
-        )
-        count_match = (
-            re.fullmatch(count_pattern, normalize_text(count_hit.text))
-            if count_hit
-            else None
-        )
-        visible_count = int(count_match[1]) if count_match else None
-        empty = _one_text(
-            self._texts("GiftEmptyListOCR", frame, roi),
-            {"暂无礼物", "暫無禮物"} if kind == "gifts" else {"暂无角色", "暫無角色"},
-        )
-        if empty:
-            if cells or visible_count not in (None, 0):
-                return ScanInfo(
-                    category_verified=True,
-                    page_key=page_key,
-                    errors=("empty_list_conflicts_with_visible_cells",),
-                )
-            return ScanInfo(
-                category_verified=True,
-                start_verified=True,
-                end_verified=True,
-                page_key=page_key,
-                progress_evidence=("explicit_empty_list",),
-                single_page_verified=True,
-                absence_verified=target_id is not None,
-            )
-        if not cells:
-            return ScanInfo(
-                category_verified=True,
-                page_key=page_key,
-                errors=("visible_list_bounds_unverified",),
-            )
-        # 局部轮廓检测会漏格；只有显式当前可见数量与完整卡片数相等才证明覆盖。
-        # 这个标签同样未实机校准，缺失时拒绝给出完整缺货证明。
-        coverage_verified = visible_count == len(cells)
-        errors = (
-            [] if coverage_verified else ["visible_count_or_complete_grid_unverified"]
-        )
-        visible = []
-        all_identified = True
-        for cell in cells:
-            name = unique_name(self._texts("GiftVisibleNameOCR", frame, cell), records)
-            art = self._candidates(frame, name[0], kind, cell) if name else []
-            if name is None or len(art) != 1 or not _inside(art[0], cell):
-                all_identified = False
-            else:
-                visible.append(name[0])
-        pair = _scrollbar(rectangles, cells)
-        start = end = single_page = False
-        scroll_box = None
-        progress = []
-        if pair:
-            track, thumb = pair
-            start = abs(thumb[1] - track[1]) <= 3
-            end = abs(thumb[1] + thumb[3] - track[1] - track[3]) <= 3
-            progress.append(
-                "scrollbar:%d:%d:%d:%d" % (track[1], track[3], thumb[1], thumb[3])
-            )
-            a, b = min(box[0] for box in cells), min(box[1] for box in cells)
-            c, d = max(box[0] + box[2] for box in cells), max(
-                box[1] + box[3] for box in cells
-            )
-            scroll_box = [a, b, c - a, d - b]
-        pagination = _one_text(self._texts("GiftPaginationOCR", frame))
-        # 无滚动条不是“仅一页”；只有完整页码才可提供额外的边界证据。
-        if pagination:
-            match = re.fullmatch(
-                r"第([1-9][0-9]{0,3})页/共([1-9][0-9]{0,3})页",
-                normalize_text(pagination.text),
-            )
-            if match and int(match[1]) <= int(match[2]):
-                page_start, page_end = int(match[1]) == 1, match[1] == match[2]
-                if pair and (start != page_start or end != page_end):
-                    errors.append("pagination_scrollbar_conflict")
-                    start = end = False
-                    scroll_box = None
-                else:
-                    start, end = page_start, page_end
-                    single_page = start and end
-                progress.append("page:" + normalize_text(pagination.text))
-        if not all_identified:
-            errors.append("not_all_visible_cells_positively_identified")
-        if not pair and not single_page:
-            errors.append("scrollbar_boundaries_unverified")
-        return ScanInfo(
-            category_verified=True,
-            start_verified=start,
-            end_verified=end,
-            page_key=page_key,
-            progress_evidence=tuple(progress),
-            single_page_verified=single_page,
-            absence_verified=bool(
-                target_id is not None
-                and coverage_verified
-                and not errors
-                and all_identified
-                and len(visible) == len(cells)
-                and target_id not in visible
-            ),
-            scroll_box=scroll_box,
-            visible_ids=tuple(visible),
-            errors=tuple(errors),
-        )
+    # —— 侧栏与礼物格几何；签名只回答“两帧同一区域是否相同”，不授权任何身份。——
+    @staticmethod
+    def sidebar_slots() -> list[Box]:
+        return [slot_box(y) for y in SIDEBAR_SLOTS_Y]
+
+    @staticmethod
+    def sidebar_scroll_point() -> tuple[int, int]:
+        return SIDEBAR_SCROLL_POINT
+
+    @staticmethod
+    def sidebar_signature(frame: np.ndarray) -> np.ndarray:
+        return region(frame, SIDEBAR_COMPARE)
+
+    @staticmethod
+    def slot_signature(frame: np.ndarray, index: int) -> np.ndarray | None:
+        signature = region(frame, slot_box(SIDEBAR_SLOTS_Y[index]))
+        return None if blank(signature) else signature
+
+    @staticmethod
+    def grid_cells() -> list[Box]:
+        return grid_cells()
+
+    @staticmethod
+    def grid_columns() -> int:
+        return GRID_COLUMNS
+
+    @staticmethod
+    def cell_index(box: Box) -> int | None:
+        return cell_at(box)
+
+    @staticmethod
+    def grid_scroll_point() -> tuple[int, int]:
+        return GRID_SCROLL_POINT
+
+    @staticmethod
+    def grid_signature(frame: np.ndarray) -> np.ndarray:
+        return region(frame, GRID_ROI)
+
+    @staticmethod
+    def cell_signature(frame: np.ndarray, index: int) -> np.ndarray | None:
+        signature = region(frame, grid_cells()[index])
+        return None if blank(signature) else signature
+
+    @staticmethod
+    def same(before: np.ndarray | None, after: np.ndarray | None) -> bool:
+        return same_region(before, after)
+
+
+def slot_box(y: int) -> Box:
+    """侧栏头像比较区；与 ok-nte 侧栏比较框同尺寸，按槽位纵坐标平移。"""
+    x, top, w, h = SIDEBAR_COMPARE
+    return [x, y - (SIDEBAR_SLOTS_Y[0] - top), w, h]
+
+
+def cell_at(box: Box) -> int | None:
+    """把图标匹配框映射到礼物格序号；中心离任何格子超过半个步长则不映射。"""
+    cx, cy = box[0] + box[2] / 2, box[1] + box[3] / 2
+    best = None
+    for index, (x, y, w, h) in enumerate(grid_cells()):
+        dx, dy = abs(cx - (x + w / 2)), abs(cy - (y + h / 2))
+        if dx <= GRID_STEP_X / 2 and dy <= GRID_STEP_Y / 2:
+            if best is None or dx + dy < best[0]:
+                best = (dx + dy, index)
+    return None if best is None else best[1]
+
+
+def badge_box(cell: Box) -> Box:
+    """ok-nte 实测：徽记区 = 格子左移 10% 宽、上移 74% 高、宽度减 45%。"""
+    x, y, w, h = cell
+    left = max(0, x - round(w * 0.10))
+    top = max(0, y - round(h * 0.74))
+    return [left, top, max(2, w - round(w * 0.45)), h]
+
+
+def region(frame: np.ndarray, box: Box) -> np.ndarray:
+    """取灰度小图用于“滚动后画面是否变化”的比较；JPEG 噪声下不能用哈希。"""
+    _validate_frame(frame)
+    x, y, w, h = box
+    gray = cv2.cvtColor(frame[y : y + h, x : x + w, :3], cv2.COLOR_BGR2GRAY)
+    size = (max(8, w // 4), max(8, h // 4))
+    return cv2.resize(gray, size, interpolation=cv2.INTER_AREA)
+
+
+def blank(signature: np.ndarray) -> bool:
+    """近乎单色的格子/槽位视为空位，不点击。"""
+    return float(np.std(signature)) < BLANK_STD
+
+
+def same_region(before: np.ndarray | None, after: np.ndarray | None) -> bool:
+    if before is None or after is None or before.shape != after.shape:
+        return False
+    diff = np.abs(before.astype(np.int16) - after.astype(np.int16))
+    return float(np.mean(diff)) < REGION_SAME_THRESHOLD

@@ -1,6 +1,8 @@
 """离线赠礼目录：只解析已随资源分发的数据，不访问网络或注册 Maa 动作。
 
-Wiki 图标只能展示或定位候选；目录、名称、图片均不能独立授权送礼。
+礼物清单、名称、好感值、不占次数与专属角色以 gifts.json 内嵌的游戏表快照
+（NTEData 固定提交）为唯一依据；Wiki 只补图标，按游戏 ID 对齐。
+目录、名称、图片均不能独立授权送礼。
 """
 
 from __future__ import annotations
@@ -16,6 +18,23 @@ from urllib.parse import urlsplit
 
 class CatalogError(ValueError):
     """目录缺失、损坏、名称未知或不唯一。"""
+
+
+GIFT_SCHEMA = 2
+CHARACTER_SCHEMA = 1
+# 游戏 EItemType → 目录 kind；出现未知类型时拒绝猜测，需维护者确认。
+GAME_KINDS = {
+    "ITEM_TYPE_COOK_FOOD": "food",
+    "ITEM_TYPE_FURNITURE": "furniture",
+    "ITEM_TYPE_FIGURES": "figure",
+    "ITEM_TYPE_FLOWER": "flower",
+    "ITEM_TYPE_CONSUMABLE": "consumable",
+    "ITEM_TYPE_SHOWCASE": "showcase",
+    "ITEM_TYPE_LIKEABILITY_GIFT": "gift",
+}
+GAME_EXCLUSIONS = ("name_missing", "exclusive_role_unmapped", "unreleased")
+WIKI_EXCLUSIONS = ("not_in_game_gift_table",) + GAME_EXCLUSIONS
+DAILY_LIMITS = {"per_character": 3, "total": 10}
 
 
 def normalize_name(value: str) -> str:
@@ -52,7 +71,7 @@ def _object(pairs: list[tuple[str, object]]) -> dict:
     return result
 
 
-def _read_document(path: Path) -> dict:
+def _read_document(path: Path, version: int) -> dict:
     try:
         with path.open("r", encoding="utf-8") as stream:
             document = json.load(stream, object_pairs_hook=_object)
@@ -62,7 +81,7 @@ def _read_document(path: Path) -> dict:
         raise CatalogError("%s 的根节点必须为对象" % path.name)
     if (
         type(document.get("schema_version")) is not int
-        or document["schema_version"] != 1
+        or document["schema_version"] != version
     ):
         raise CatalogError("不支持的目录 schema_version")
     return document
@@ -169,7 +188,7 @@ def _validate_image(base: Path, record: dict, kind: str, seen: dict) -> None:
     seen[actual] = expected
 
 
-def _validate_coverage(source: dict, records: dict) -> None:
+def _category_members(source: dict) -> dict[int, str]:
     _url(source.get("url"), "source.url")
     _text(source.get("collected_at"), "source.collected_at")
     license_info = source.get("license")
@@ -203,6 +222,12 @@ def _validate_coverage(source: dict, records: dict) -> None:
                 raise CatalogError("分类 pageid 对应不同标题")
             category_ids.add(pageid)
             members[pageid] = title
+    return members
+
+
+def _validate_coverage(source: dict, records: dict) -> None:
+    """角色库：分类快照必须与条目一一对应。"""
+    members = _category_members(source)
     actual = {
         record["source"]["pageid"]: record["source"]["title"]
         for record in records.values()
@@ -211,6 +236,219 @@ def _validate_coverage(source: dict, records: dict) -> None:
         raise CatalogError("多个目录条目重复使用同一 Wiki 页面")
     if members != actual:
         raise CatalogError("目录未完整收录分类快照，或包含未列入分类的条目")
+
+
+def _page_list(value: object, label: str, *, reason: bool) -> dict[int, dict]:
+    if not isinstance(value, list):
+        raise CatalogError("%s 必须为数组" % label)
+    pages = {}
+    for page in value:
+        if not isinstance(page, dict):
+            raise CatalogError("%s 条目必须为对象" % label)
+        pageid = _integer(page.get("pageid"), label + ".pageid", 1)
+        _text(page.get("title"), label + ".title")
+        _text(page.get("id"), label + ".id")
+        if reason and page.get("reason") not in WIKI_EXCLUSIONS:
+            raise CatalogError("%s 缺少已知排除原因" % label)
+        if pageid in pages:
+            raise CatalogError("%s 存在重复 pageid" % label)
+        pages[pageid] = page
+    return pages
+
+
+def _validate_gift_coverage(source: dict, records: dict, excluded: dict) -> None:
+    """礼物库：Wiki 分类每页要么补了某个游戏礼物的图标，要么写明排除原因。"""
+    members = _category_members(source)
+    lookups = _page_list(source.get("wiki_lookups"), "wiki_lookups", reason=False)
+    skipped = _page_list(source.get("wiki_excluded"), "wiki_excluded", reason=True)
+    for pageid, page in lookups.items():
+        if pageid in members:
+            raise CatalogError("按标题补查的页面不能同时属于分类快照")
+    used = {}
+    for identifier, record in records.items():
+        wiki = record["source"]
+        if wiki is None:
+            continue
+        pageid = wiki["pageid"]
+        if pageid in used:
+            raise CatalogError("多个目录条目重复使用同一 Wiki 页面")
+        title = members.get(pageid)
+        if title is None and pageid in lookups:
+            if lookups[pageid]["id"] != identifier:
+                raise CatalogError("补查页面与礼物 ID 不一致: %s" % identifier)
+            title = lookups[pageid]["title"]
+        if title is None or title != wiki["title"]:
+            raise CatalogError("Wiki 来源不在分类快照或补查记录中: %s" % identifier)
+        used[pageid] = identifier
+    for pageid, page in skipped.items():
+        if members.get(pageid) != page["title"]:
+            raise CatalogError("排除页面不在分类快照中: %s" % page["title"])
+        if pageid in used or page["id"] in records:
+            raise CatalogError("被排除的 Wiki 页面不能同时作为礼物来源")
+        if page["reason"] != excluded.get(page["id"], "not_in_game_gift_table"):
+            raise CatalogError("Wiki 排除原因与游戏表快照不符: %s" % page["id"])
+    if set(members) != set(used) - set(lookups) | set(skipped):
+        raise CatalogError("目录未完整处理分类快照，或包含未列入分类的条目")
+    if set(lookups) - set(used):
+        raise CatalogError("补查页面未被任何礼物使用")
+
+
+def _role_id(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_]+", value):
+        raise CatalogError("%s 不是有效的游戏角色 ID" % label)
+    return value
+
+
+def _game_snapshot(game: object) -> dict:
+    """结构校验；派生关系由 derive_gift_records 统一判定。"""
+    if not isinstance(game, dict):
+        raise CatalogError("礼物库缺少游戏表快照 source.game")
+    _url(game.get("repository"), "game.repository")
+    _hash(game.get("commit"), 40, "game.commit")
+    _text(game.get("version"), "game.version")
+    files = game.get("files")
+    if not isinstance(files, list) or not files:
+        raise CatalogError("游戏表快照缺少文件清单")
+    paths = set()
+    for item in files:
+        if not isinstance(item, dict):
+            raise CatalogError("游戏表文件记录必须为对象")
+        path = _text(item.get("path"), "game.files.path")
+        if path in paths:
+            raise CatalogError("游戏表文件重复: %s" % path)
+        paths.add(path)
+        _hash(item.get("sha256"), 64, "game.files.sha256")
+        _url(item.get("url"), "game.files.url")
+    if game.get("daily_limits") != DAILY_LIMITS:
+        raise CatalogError("游戏每日赠礼次数与流程假设（单角色 3、合计 10）不一致")
+    roles = game.get("roles")
+    if not isinstance(roles, list):
+        raise CatalogError("游戏表快照缺少角色映射")
+    seen_roles = set()
+    for role in roles:
+        if not isinstance(role, dict):
+            raise CatalogError("游戏角色映射必须为对象")
+        role_id = _role_id(role.get("role_id"), "game.roles.role_id")
+        if role_id in seen_roles:
+            raise CatalogError("游戏角色映射重复: %s" % role_id)
+        seen_roles.add(role_id)
+        # name 为 null 表示该 RoleId 不在 DT_LikeabilityRoleData 中。
+        if role.get("name") is not None:
+            _text(role["name"], "game.roles.name")
+        if role.get("character_id") is not None:
+            _text(role["character_id"], "game.roles.character_id")
+    rows = game.get("rows")
+    if not isinstance(rows, list) or not rows:
+        raise CatalogError("游戏表快照缺少礼物行")
+    seen_rows = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise CatalogError("游戏礼物行必须为对象")
+        identifier = _text(row.get("id"), "game.rows.id")
+        if not re.fullmatch(r"[A-Za-z0-9_]+", identifier) or identifier in seen_rows:
+            raise CatalogError("游戏礼物 ID 无效或重复: %s" % identifier)
+        seen_rows.add(identifier)
+        if row.get("name") is not None:
+            _text(row["name"], "game.rows.name")
+        _text(row.get("name_table"), "game.rows.name_table")
+        _text(row.get("name_key"), "game.rows.name_key")
+        if row.get("item_type") not in GAME_KINDS:
+            raise CatalogError("未知的游戏物品类型: %s" % row.get("item_type"))
+        _integer(row.get("default_likeability"), "game.rows.default_likeability")
+        if type(row.get("unlimited")) is not bool:
+            raise CatalogError("game.rows.unlimited 必须为布尔值")
+        if row.get("exclusive_role") is not None:
+            _role_id(row["exclusive_role"], "game.rows.exclusive_role")
+        special = row.get("special")
+        if not isinstance(special, list):
+            raise CatalogError("game.rows.special 必须为数组")
+        for item in special:
+            if not isinstance(item, dict):
+                raise CatalogError("game.rows.special 条目必须为对象")
+            _role_id(item.get("role_id"), "game.rows.special.role_id")
+            _integer(item.get("likeability"), "game.rows.special.likeability")
+    unreleased = game.get("unreleased")
+    if (
+        not isinstance(unreleased, list)
+        or len(set(unreleased)) != len(unreleased)
+        or any(item not in seen_rows for item in unreleased)
+    ):
+        raise CatalogError("game.unreleased 必须是游戏礼物行 ID 的无重复数组")
+    return game
+
+
+def role_character(name: str | None, characters: dict[str, dict]) -> str | None:
+    """游戏角色名与角色库可赠礼角色的中文全名严格一一对应时才映射。"""
+    if name is None:
+        return None
+    matches = [
+        identifier
+        for identifier, record in characters.items()
+        if record.get("giftable") is True
+        and normalize_name(record["names"]["zh_cn"]) == normalize_name(name)
+    ]
+    if len(matches) > 1:
+        raise CatalogError("多个可赠礼角色同名: %s" % name)
+    return matches[0] if matches else None
+
+
+def derive_gift_records(
+    game: dict, characters: dict[str, dict], *, verify_excluded: bool = True
+) -> tuple[dict[str, dict], dict[str, str]]:
+    """由游戏表快照推导应收录的礼物字段与排除原因；sync 与运行时共用。
+
+    sync 首次生成快照时传 verify_excluded=False，再把返回的排除原因写回快照。
+    """
+    _game_snapshot(game)
+    roles = {}
+    for role in game["roles"]:
+        expected = role_character(role.get("name"), characters)
+        if role.get("character_id") != expected:
+            raise CatalogError("游戏角色映射与角色库不一致: %s" % role["role_id"])
+        roles[role["role_id"]] = expected
+    records, excluded = {}, {}
+    for row in game["rows"]:
+        identifier = row["id"]
+        exclusive = row.get("exclusive_role")
+        referenced = [item["role_id"] for item in row["special"]]
+        if exclusive is not None:
+            referenced.append(exclusive)
+        for role_id in referenced:
+            if role_id not in roles:
+                raise CatalogError("礼物引用了未快照的游戏角色: %s" % role_id)
+        if row.get("name") is None:
+            excluded[identifier] = "name_missing"
+            continue
+        if identifier in game["unreleased"]:
+            # 游戏表里有正式名称、但维护者确认尚未上线的礼物。
+            excluded[identifier] = "unreleased"
+            continue
+        if exclusive is not None and roles[exclusive] is None:
+            excluded[identifier] = "exclusive_role_unmapped"
+            continue
+        special = []
+        for item in row["special"]:
+            character = roles[item["role_id"]]
+            if character is None or character in {x["character_id"] for x in special}:
+                raise CatalogError("礼物喜好引用未知或重复的角色: %s" % identifier)
+            special.append(
+                {"character_id": character, "likeability": item["likeability"]}
+            )
+        records[identifier] = {
+            "names": {"zh_cn": row["name"]},
+            "kind": GAME_KINDS[row["item_type"]],
+            "default_likeability": row["default_likeability"],
+            "special_gifts": special,
+            "unlimited": row["unlimited"],
+            "exclusive_character": None if exclusive is None else roles[exclusive],
+        }
+    if verify_excluded and game.get("excluded") != excluded_list(excluded):
+        raise CatalogError("游戏表快照的排除清单与派生结果不一致")
+    return records, excluded
+
+
+def excluded_list(excluded: dict[str, str]) -> list[dict]:
+    return [{"id": key, "reason": value} for key, value in excluded.items()]
 
 
 class Catalog:
@@ -222,84 +460,109 @@ class Catalog:
         self.gifts: dict[str, dict] = {}
         self.characters: dict[str, dict] = {}
         seen_images: dict = {}
-        for kind, records in (("characters", self.characters), ("gifts", self.gifts)):
-            document = documents[kind]
-            rows = document.get(kind)
-            if not isinstance(rows, list) or not rows:
-                raise CatalogError("%s 必须为非空数组" % kind)
-            for record in rows:
-                if not isinstance(record, dict):
-                    raise CatalogError("目录条目必须为对象")
-                identifier = _text(record.get("id"), "id")
-                if identifier in records:
-                    raise CatalogError("重复的 %s ID: %s" % (kind, identifier))
-                names = record.get("names")
-                if not isinstance(names, dict) or "zh_cn" not in names:
-                    raise CatalogError("每个条目必须包含 names.zh_cn")
-                for language, name in names.items():
-                    _text(language, "语言")
-                    if not normalize_name(_text(name, "名称")):
-                        raise CatalogError("名称不能只有空白")
-                source = _record_source(record)
-                if kind == "characters":
-                    if identifier != "char_%d" % source["pageid"]:
-                        raise CatalogError(
-                            "角色必须使用独立的 char_<Wiki pageid> 库 ID"
-                        )
-                    if type(record.get("giftable")) is not bool:
-                        raise CatalogError("角色 giftable 必须为布尔值")
-                    if source["title"] == "异能者·零" and record["giftable"]:
-                        raise CatalogError("主角不能标为可赠礼角色")
-                    if record["giftable"] and not source.get("giftability_evidence"):
-                        raise CatalogError("可赠礼角色缺少 Wiki 证据")
-                else:
-                    value = record.get("default_likeability")
-                    if "default_likeability" not in record:
-                        raise CatalogError(
-                            "礼物缺少 default_likeability；未知应为 null"
-                        )
-                    if value is not None:
-                        _integer(value, "default_likeability")
-                    if "special_gifts" not in record:
-                        raise CatalogError("礼物缺少 special_gifts；未知应为 null")
-                    special = record["special_gifts"]
-                    if special is not None:
-                        if not isinstance(special, list):
-                            raise CatalogError("special_gifts 必须为数组或 null")
-                        seen_characters = set()
-                        for preference in special:
-                            if not isinstance(preference, dict):
-                                raise CatalogError("特殊喜好必须为对象")
-                            character = preference.get("character_id")
-                            if (
-                                not isinstance(character, str)
-                                or character not in self.characters
-                            ):
-                                raise CatalogError("特殊喜好引用未知角色")
-                            if character in seen_characters:
-                                raise CatalogError("同一礼物重复记录角色喜好")
-                            seen_characters.add(character)
-                            _integer(preference.get("likeability"), "likeability")
-                _validate_image(base, record, kind, seen_images)
-                records[identifier] = record
-            source = document.get("source")
-            if not isinstance(source, dict):
-                raise CatalogError("目录缺少 source")
-            _validate_coverage(source, records)
+        self._load_characters(documents["characters"], seen_images)
+        self._load_gifts(documents["gifts"], seen_images)
         snapshots = [doc["source"].get("snapshot_id") for doc in documents.values()]
         if any(snapshots) and (not all(snapshots) or len(set(snapshots)) != 1):
             raise CatalogError("礼物库与角色库不属于同一个完整同步快照")
         self._gift_index = self._name_index(self.gifts)
         self._character_index = self._name_index(self.characters)
 
+    @staticmethod
+    def _rows(document: dict, kind: str) -> list:
+        rows = document.get(kind)
+        if not isinstance(rows, list) or not rows:
+            raise CatalogError("%s 必须为非空数组" % kind)
+        source = document.get("source")
+        if not isinstance(source, dict):
+            raise CatalogError("目录缺少 source")
+        return rows
+
+    @staticmethod
+    def _identity(record: object, records: dict, kind: str) -> str:
+        if not isinstance(record, dict):
+            raise CatalogError("目录条目必须为对象")
+        identifier = _text(record.get("id"), "id")
+        if identifier in records:
+            raise CatalogError("重复的 %s ID: %s" % (kind, identifier))
+        names = record.get("names")
+        if not isinstance(names, dict) or "zh_cn" not in names:
+            raise CatalogError("每个条目必须包含 names.zh_cn")
+        for language, name in names.items():
+            _text(language, "语言")
+            if not normalize_name(_text(name, "名称")):
+                raise CatalogError("名称不能只有空白")
+        return identifier
+
+    def _load_characters(self, document: dict, seen_images: dict) -> None:
+        for record in self._rows(document, "characters"):
+            identifier = self._identity(record, self.characters, "characters")
+            source = _record_source(record)
+            if identifier != "char_%d" % source["pageid"]:
+                raise CatalogError("角色必须使用独立的 char_<Wiki pageid> 库 ID")
+            if type(record.get("giftable")) is not bool:
+                raise CatalogError("角色 giftable 必须为布尔值")
+            if source["title"] == "异能者·零" and record["giftable"]:
+                raise CatalogError("主角不能标为可赠礼角色")
+            if record["giftable"] and not source.get("giftability_evidence"):
+                raise CatalogError("可赠礼角色缺少 Wiki 证据")
+            _validate_image(self.base, record, "characters", seen_images)
+            self.characters[identifier] = record
+        _validate_coverage(document["source"], self.characters)
+
+    def _load_gifts(self, document: dict, seen_images: dict) -> None:
+        rows = self._rows(document, "gifts")
+        expected, excluded = derive_gift_records(
+            document["source"].get("game"), self.characters
+        )
+        for record in rows:
+            identifier = self._identity(record, self.gifts, "gifts")
+            derived = expected.get(identifier)
+            if derived is None:
+                raise CatalogError(
+                    "礼物不在游戏礼物表快照中或已被排除: %s" % identifier
+                )
+            for key, value in derived.items():
+                if key not in record or record[key] != value:
+                    raise CatalogError(
+                        "%s 的 %s 与游戏表快照不一致" % (identifier, key)
+                    )
+            if "source" not in record or "image" not in record:
+                raise CatalogError("礼物缺少 source/image；没有 Wiki 图标时应为 null")
+            if record["source"] is None:
+                if record["image"] is not None:
+                    raise CatalogError(
+                        "没有 Wiki 来源的礼物不能携带图标: %s" % identifier
+                    )
+            else:
+                _record_source(record)
+                _validate_image(self.base, record, "gifts", seen_images)
+            self.gifts[identifier] = record
+        if set(self.gifts) != set(expected):
+            missing = sorted(set(expected) - set(self.gifts))
+            raise CatalogError(
+                "礼物库未完整收录游戏礼物表: %s" % ", ".join(missing[:5])
+            )
+        _validate_gift_coverage(document["source"], self.gifts, excluded)
+
     @classmethod
     def load(cls, base: Path | None = None) -> Catalog:
         location = Path(base) if base is not None else default_base()
         documents = {
-            kind: _read_document(location / "data" / (kind + ".json"))
-            for kind in ("gifts", "characters")
+            kind: _read_document(location / "data" / (kind + ".json"), version)
+            for kind, version in (
+                ("gifts", GIFT_SCHEMA),
+                ("characters", CHARACTER_SCHEMA),
+            )
         }
         return cls(location.resolve(), documents)
+
+    def gift_allowed(self, gift_id: str, character_id: str) -> bool:
+        """专属礼物只能配给对应角色；其他礼物不限角色。"""
+        if gift_id not in self.gifts:
+            raise CatalogError("未知目录 ID: %s" % gift_id)
+        exclusive = self.gifts[gift_id]["exclusive_character"]
+        return exclusive is None or exclusive == character_id
 
     @staticmethod
     def _name_index(records: dict[str, dict]) -> dict[str, list[str]]:

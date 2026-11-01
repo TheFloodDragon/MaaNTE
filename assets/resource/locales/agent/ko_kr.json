@@ -225,5 +225,6 @@
     "cloud_web.wrong_controller": "이 작업은 ‘클라우드 게임 - 웹’ 컨트롤러 전용입니다",
     "cloud_web.invalid_config": "설정이 잘못되었습니다(로그인 1–120분, 대기열 1–1440분)",
     "cloud_web.stopped": "클라우드 이환(웹) 작업을 중지했습니다",
-    "cloud_web.failed": "클라우드 이환(웹) 시작 오류, 로그를 확인하세요"
+    "cloud_web.failed": "클라우드 이환(웹) 시작 오류, 로그를 확인하세요",
+    "gift.reason.character_limit": "게임에서 이 캐릭터는 오늘 더 이상 선물을 받을 수 없거나 인연 레벨을 올려야 한다고 표시했습니다. 건너뛰었습니다."
 }

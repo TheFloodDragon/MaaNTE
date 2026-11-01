@@ -223,5 +223,6 @@
     "cloud_web.wrong_controller": "该任务仅支持“云游戏 - 网页”控制器",
     "cloud_web.invalid_config": "网页云启动配置无效（登录 1–120 分钟、排队 1–1440 分钟）",
     "cloud_web.stopped": "云异环（网页）任务已停止",
-    "cloud_web.failed": "云异环（网页）启动异常，请查看日志"
+    "cloud_web.failed": "云异环（网页）启动异常，请查看日志",
+    "gift.reason.character_limit": "游戏提示该角色今日无法接受更多礼物或需提升羁遇等级，已跳过该角色。"
 }

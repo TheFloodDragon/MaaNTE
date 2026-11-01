@@ -43,14 +43,50 @@
             }
         },
         "next": [
-            "GiftChooseCharacter"
+            "GiftOpenTab"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftOpenTab": {
+        "desc": "切到「赠礼」页签；之后在页签内切换角色",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_open_tab"
+            }
+        },
+        "next": [
+            "GiftWaitGiftPage"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftWaitGiftPage": {
+        "desc": "只观察直到出现「赠送n/3」按钮",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_wait_gift_page"
+            }
+        },
+        "next": [
+            "GiftWaitGiftPage"
+        ],
+        "on_error": [
+            "GiftNavigationFailed"
         ],
         "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0
     },
     "GiftChooseCharacter": {
-        "desc": "新截图定位角色；头像仅为候选，点击后进入独立身份验证",
+        "desc": "依次点侧栏头像，名称框显示目标角色才继续；侧栏到底仍未找到则跳过该角色",
         "action": {
             "type": "Custom",
             "param": {
@@ -68,7 +104,7 @@
         "post_delay": 0
     },
     "GiftWaitCharacter": {
-        "desc": "只观察直到完整名称与独立选中头像证据一致；绝不重放点击",
+        "desc": "只观察名称框直到稳定；绝不重放点击",
         "action": {
             "type": "Custom",
             "param": {
@@ -85,99 +121,12 @@
         "pre_delay": 0,
         "post_delay": 0
     },
-    "GiftWaitCharacterList": {
+    "GiftScroll": {
+        "desc": "在侧栏或礼物格滚轮一次；只以滚动前后画面不变判定到顶/到底",
         "action": {
             "type": "Custom",
             "param": {
-                "custom_action": "gift_wait_character_list"
-            }
-        },
-        "next": [
-            "GiftWaitCharacterList"
-        ],
-        "on_error": [
-            "GiftWarnCurrent"
-        ],
-        "rate_limit": 0,
-        "pre_delay": 0,
-        "post_delay": 0
-    },
-    "GiftOpenTab": {
-        "action": {
-            "type": "Custom",
-            "param": {
-                "custom_action": "gift_open_tab"
-            }
-        },
-        "next": [
-            "GiftWaitGiftPage"
-        ],
-        "on_error": [
-            "GiftWarnCurrent"
-        ],
-        "rate_limit": 0,
-        "pre_delay": 0,
-        "post_delay": 0
-    },
-    "GiftWaitGiftPage": {
-        "action": {
-            "type": "Custom",
-            "param": {
-                "custom_action": "gift_wait_gift_page"
-            }
-        },
-        "next": [
-            "GiftWaitGiftPage"
-        ],
-        "on_error": [
-            "GiftWarnCurrent"
-        ],
-        "rate_limit": 0,
-        "pre_delay": 0,
-        "post_delay": 0
-    },
-    "GiftCheckQuota": {
-        "desc": "以游戏n/3换算当日已送，不将每次启动视为额外配额",
-        "action": {
-            "type": "Custom",
-            "param": {
-                "custom_action": "gift_check_quota"
-            }
-        },
-        "next": [
-            "GiftFindGift"
-        ],
-        "on_error": [
-            "GiftWarnCurrent"
-        ],
-        "rate_limit": 0,
-        "pre_delay": 0,
-        "post_delay": 0
-    },
-    "GiftFindGift": {
-        "desc": "仅搜索当前优先礼物；明确库存0或完整可信扫描缺失才推进",
-        "action": {
-            "type": "Custom",
-            "param": {
-                "custom_action": "gift_find_gift"
-            }
-        },
-        "next": [
-            "GiftVerifyGift"
-        ],
-        "on_error": [
-            "GiftWarnCurrent"
-        ],
-        "rate_limit": 0,
-        "pre_delay": 0,
-        "post_delay": 0
-    },
-    "GiftScrollList": {
-        "desc": "仅在已验证列表区域内单次拖动；不以画面不动推断到底",
-        "action": {
-            "type": "Custom",
-            "param": {
-                "custom_action": "gift_scroll_list"
+                "custom_action": "gift_scroll"
             }
         },
         "next": [
@@ -207,8 +156,44 @@
         "pre_delay": 0,
         "post_delay": 0
     },
+    "GiftCheckQuota": {
+        "desc": "以游戏「赠送n/3」换算当日已送，不将每次启动视为额外配额",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_check_quota"
+            }
+        },
+        "next": [
+            "GiftFindGift"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftFindGift": {
+        "desc": "仅找当前优先礼物；礼物格从顶到底逐格核对仍没有才换备选",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "gift_find_gift"
+            }
+        },
+        "next": [
+            "GiftVerifyGift"
+        ],
+        "on_error": [
+            "GiftWarnCurrent"
+        ],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
     "GiftVerifyGift": {
-        "desc": "完整礼物名称、图像与选中状态三者复核；不凭图标相似发送",
+        "desc": "点选后只观察「当前选择」名称直到稳定；不凭图标相似发送",
         "action": {
             "type": "Custom",
             "param": {
@@ -226,7 +211,7 @@
         "post_delay": 0
     },
     "GiftSendOne": {
-        "desc": "新截图通过所有安全门后先建立pending，再且仅再提交一次；失败只能进回执失败分支",
+        "desc": "新截图通过所有安全门后先建立pending，再且仅再点一次「赠送」；失败只能进回执失败分支",
         "action": {
             "type": "Custom",
             "param": {
@@ -244,7 +229,7 @@
         "post_delay": 0
     },
     "GiftWaitReceipt": {
-        "desc": "只观察，不发送；同角色同礼物额度恰好减1且库存不冲突才计为成功",
+        "desc": "只观察，不发送；常规礼物计数恰好减1、不占次数礼物出现好感提示才计为成功",
         "action": {
             "type": "Custom",
             "param": {
@@ -332,7 +317,7 @@
         "post_delay": 0
     },
     "GiftNavigationFailed": {
-        "desc": "停止一切输入，为剩余角色记无法执行警告；预期跳过不使用StopTask",
+        "desc": "停止一切输入，为剩余角色记无法执行警告，并让任务以失败结束",
         "action": {
             "type": "Custom",
             "param": {
@@ -343,13 +328,14 @@
             "GiftSummary"
         ],
         "on_error": [
-            "GiftSummary"
+            "GiftFailed"
         ],
         "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0
     },
     "GiftSummary": {
+        "desc": "汇总结果；有角色无法完成或结果不明时转到 GiftFailed",
         "action": {
             "type": "Custom",
             "param": {
@@ -360,5 +346,41 @@
         "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0
+    },
+    "GiftScrollWheel": {
+        "desc": "供 gift_scroll 调用：光标先移到 target 再滚轮一次；target/dy 由代码按区域覆盖，不在任何 next 中",
+        "recognition": {
+            "type": "DirectHit"
+        },
+        "action": {
+            "type": "Scroll",
+            "param": {
+                "target": [
+                    0,
+                    0,
+                    1,
+                    1
+                ],
+                "dy": 0
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "GiftFailed": {
+        "desc": "让 MXU 显示任务失败；警告与汇总已在前面输出",
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "fail_task"
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "focus": {
+            "Node.Action.Failed": "羁遇赠礼未全部完成，请查看上方警告"
+        }
     }
 }
