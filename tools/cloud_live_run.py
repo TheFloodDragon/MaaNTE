@@ -34,6 +34,8 @@ FINGERPRINT_CODE_FILES = (
     "agent/custom/__init__.py",
     "agent/custom/action/__init__.py",
     "agent/custom/action/cloud_game.py",
+    "agent/custom/action/enter_game.py",
+    "agent/game_entry.py",
     "agent/cloud_start.py",
     "agent/utils/__init__.py",
     "agent/utils/cloud_window.py",
@@ -51,6 +53,7 @@ FINGERPRINT_CODE_FILES = (
 FINGERPRINT_RESOURCE_FILES = (
     "assets/interface.json",
     "assets/resource/tasks/CloudGame.json",
+    "assets/resource/base/pipeline/EnterGame.json",
 ) + tuple(
     "assets/resource/locales/%s/%s.json" % (group, language)
     for group in ("agent", "interface")

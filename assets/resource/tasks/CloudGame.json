@@ -3,9 +3,12 @@
         {
             "name": "CloudGameStart",
             "label": "$task_cloud_game_label",
-            "entry": "CloudGameStartEntrance",
+            "entry": "EnterGameEntrance",
             "description": "$task_cloud_game_desc",
             "controller": [
+                "Win32",
+                "Win32-Front",
+                "Win32-Background",
                 "CloudGame-Front"
             ],
             "group": [
@@ -13,7 +16,8 @@
             ],
             "option": [
                 "CloudGameAutoQueue",
-                "CloudGameQueueTimeout"
+                "CloudGameQueueTimeout",
+                "CloudWebLoginTimeout"
             ]
         }
     ],
@@ -113,7 +117,7 @@
                 }
             ],
             "pipeline_override": {
-                "CloudWebLoginTimeoutConfig": {
+                "EnterGameLoginTimeoutConfig": {
                     "attach": {
                         "minutes": "{minutes}"
                     }

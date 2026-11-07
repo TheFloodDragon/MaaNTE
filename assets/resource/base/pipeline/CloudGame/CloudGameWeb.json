@@ -10,7 +10,7 @@
         "post_delay": 0
     },
     "CloudWebLoginTimeoutConfig": {
-        "desc": "网页端等待登录上限，单位分钟",
+        "desc": "仅供旧资源单节点调试兼容；统一入口和任务选项只使用 EnterGameLoginTimeoutConfig 的账号登录时限",
         "enabled": false,
         "attach": {
             "minutes": 10
@@ -97,7 +97,7 @@
         ]
     },
     "CloudWebQueue": {
-        "desc": "排队播报与超时退出；串流首帧就绪后可选全屏；回到首页则交回大厅重试",
+        "desc": "接管已有队列并播报、超时验证退出；排队结束后另等串流首帧并可选全屏；退出或断流明确失败，不重新排队",
         "action": {
             "type": "Custom",
             "param": {
@@ -133,22 +133,16 @@
         ]
     },
     "CloudWebManualEnterNotice": {
-        "desc": "自动排队关闭：登录并确认时长后结束，交由用户手动进入",
+        "desc": "自动排队关闭时有界等待手动开始，已有队列或串流继续进入世界，不能提前结束",
         "action": {
             "type": "Custom",
-            "param": {
-                "custom_action": "cloud_web_finish"
-            }
+            "param": {"custom_action": "cloud_web_lobby"}
         },
+        "next": ["CloudWebQueue"],
+        "on_error": ["CloudWebStartFailed"],
         "rate_limit": 0,
         "pre_delay": 0,
-        "post_delay": 0,
-        "on_error": [
-            "CloudWebStartFailed"
-        ],
-        "focus": {
-            "Node.Action.Succeeded": "$cloud_web_focus_manual"
-        }
+        "post_delay": 0
     },
     "CloudWebStartDone": {
         "action": {
@@ -231,6 +225,36 @@
                     }
                 ],
                 "box_index": 1
+            }
+        },
+        "attach": {
+            "web_action": "click",
+            "report": "login_enter"
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "CloudWebWorldClickEnter": {
+        "desc": "云端无图标进入页兜底：页面只有中下“进入游戏”文字（无左下退出图标），实机取证得分 0.999；置于 WORLD_NODES 末尾，仅在其它节点全部未命中时生效",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    400,
+                    550,
+                    600,
+                    140
+                ],
+                "expected": [
+                    "进入游戏",
+                    "進入遊戲",
+                    "(?i)Start",
+                    "ゲーム開始",
+                    "点击进入",
+                    "點擊進入",
+                    "게임"
+                ]
             }
         },
         "attach": {

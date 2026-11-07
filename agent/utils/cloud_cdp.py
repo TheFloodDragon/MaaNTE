@@ -213,7 +213,21 @@ class CloudSession:
 
     def window_state(self, state):
         window = self.call("Browser.getWindowForTarget", {"targetId": self.target_id})
+        current = (window.get("bounds") or {}).get("windowState")
+        if current == state:
+            return
+        if current == "minimized" and state != "normal":
+            # Chromium 拒绝把最小化窗口直接切到全屏/最大化，必须先还原。
+            self.call("Browser.setWindowBounds", {"windowId": window["windowId"], "bounds": {"windowState": "normal"}})
         self.call("Browser.setWindowBounds", {"windowId": window["windowId"], "bounds": {"windowState": state}})
+
+    def ensure_not_minimized(self):
+        """最小化窗口不产出合成帧，Page.captureScreenshot 会一直挂起，截图前先还原。"""
+        window = self.call("Browser.getWindowForTarget", {"targetId": self.target_id})
+        if (window.get("bounds") or {}).get("windowState") == "minimized":
+            self.call("Browser.setWindowBounds", {"windowId": window["windowId"], "bounds": {"windowState": "normal"}})
+            return True
+        return False
 
     def bring_to_front(self):
         self.call("Page.bringToFront")

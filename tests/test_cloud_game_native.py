@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -22,7 +23,10 @@ from maa.resource import Resource
 from maa.tasker import Tasker
 from PIL import Image
 
-from test_cloud_game import PIPELINE, ROOT, TASK, cloud
+from test_cloud_game import PIPELINE, ROOT, TASK, Clock, cloud
+
+# cloud 模块可能由隔离加载器导入；按函数 globals 找到它实际复用的共用引擎。
+WORLD_GLOBALS = cloud.run_world_entry.__globals__
 
 # 导入 maa.agent 会选择 AgentServer 库；此测试需要真实调度器而不是 IPC 代理。
 Library.open(
@@ -30,21 +34,89 @@ Library.open(
     agent_server=False,
 )
 
+WORLD_LEAVES = {"EscMenuButton", "TasksMenuButton"}
 STATES = {
     1: {"CloudGameLoginScreen"},
     2: {"CloudGameHomeScreen", "CloudGameEnterText"},
     # 客户端没有队列选择页：确认启动后直接进入排队。
     4: {"CloudGameQueueScreen"},
     5: {"CloudGameLoading"},
-    6: {"InWorld"},
+    6: WORLD_LEAVES,
     7: {"CloudGameDailyLoginTitle", "CloudGameDailyLoginCloseButton"},
     8: {"CloudGameErrorState"},
-    9: {"CloudGameGameLogin"},
+    9: {
+        "CloudGameGameLogin",
+        "CloudWebWorldLoginEnter/1",
+        "CloudWebWorldClickEnter",
+    },
     # 任何识别节点都不命中的云外壳画面，用于验证未知状态会安全超时。
     10: set(),
     # 启动确认弹窗是独立顶层窗口：主窗口仍停留在首页，弹窗画面单独取帧。
     12: {"CloudGameStartConfirmNotice", "CloudGameStartConfirmEnter"},
+    # 无退出图标的进入文字，以及覆盖在大世界上的公告、月卡和凭据表单。
+    13: {"CloudWebWorldClickEnter", "CloudWebWorldLoginEnter/1"},
+    14: WORLD_LEAVES | {"CloudWebWorldAnnouncement/0", "CloudWebWorldAnnouncement/1"},
+    15: WORLD_LEAVES | {"CloudWebWorldMonthlyPass"},
+    16: WORLD_LEAVES | {"EnterGameAccountLogin"},
+    17: WORLD_LEAVES | {"SceneLoadingType1"},
+    18: WORLD_LEAVES | {"SceneClickBlankToExit"},
+    19: WORLD_LEAVES | {"__CloseButtonType1"},
+    20: WORLD_LEAVES | {"SceneLoadingType2"},
 }
+WORLD_BOXES = {
+    # 奇数宽度检查真实 controller.post_click 的 round 坐标契约。
+    "CloudWebWorldLoginEnter/1": [560, 610, 161, 40],
+    "CloudWebWorldClickEnter": [560, 610, 161, 40],
+    "CloudWebWorldAnnouncement/0": [1100, 95, 45, 40],
+    "CloudWebWorldAnnouncement/1": [450, 100, 300, 40],
+    "EnterGameAccountLogin": [300, 150, 240, 40],
+    "__CloseButtonType1": [1200, 30, 40, 40],
+}
+
+
+def load_jsonc(relative_path):
+    """仅去注释，保留字符串内容；资源本身的复合识别和引用不作降级。"""
+    source = (ROOT / relative_path).read_text(encoding="utf-8")
+    return json.loads(
+        re.sub(
+            r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/',
+            lambda match: match[0] if match[0].startswith('"') else "",
+            source,
+        )
+    )
+
+
+def native_flow_nodes():
+    """真实云图和共用世界图，仅外部公共接口裁出其识别部分。"""
+    nodes = copy.deepcopy(PIPELINE)
+    for path in (
+        "assets/resource/base/pipeline/CloudGame/CloudGameWeb.json",
+        "assets/resource/base/pipeline/EnterGame.json",
+    ):
+        nodes.update(load_jsonc(path))
+    public = {
+        "Interface/Scene/Status.json": ("InWorld",),
+        "Interface/Scene/Scene.json": (
+            "SceneLoadingType1",
+            "SceneLoadingType2",
+            "SceneClickBlankToExit",
+            "SceneClickCloseButton",
+        ),
+        "Common/Button/InWorld/EscMenuButton.json": ("EscMenuButton",),
+        "Common/Button/InWorld/TasksMenuButton.json": ("TasksMenuButton",),
+        "Common/Button/CloseButton.json": ("CloseButton", "__CloseButtonType1"),
+    }
+    for path, names in public.items():
+        source = load_jsonc("assets/resource/base/pipeline/" + path)
+        for name in names:
+            # 共用引擎只 run_recognition，不执行公共 Scene 节点的 action/next。
+            nodes[name] = {
+                key: value
+                for key, value in source[name].items()
+                if key not in ("action", "next", "on_error", "key", "post_delay")
+            }
+    return nodes
+
 
 # 主窗口画面之外的 owned 弹窗画面标记，必须与主窗口状态区分开。
 
@@ -52,8 +124,9 @@ STATES = {
 def _configure_maa_once():
     """MaaFramework 5.10.4 的日志是异步线程；在用例之间反复 set_log_dir 会与
     尚未退出的工作线程竞争，导致随机的原生 abort。因此全局选项只设置一次，
-    日志目录固定在 .narrafork，不放入待删除的临时资源目录。"""
-    Tasker.set_log_dir(ROOT / ".narrafork")
+    日志目录按进程隔离且固定在 .narrafork，避免并行原生测试抢占同一滚动日志，
+    也不放入待删除的临时资源目录。"""
+    Tasker.set_log_dir(ROOT / ".narrafork" / f"cloud-native-logs-{os.getpid()}")
     Tasker.set_stdout_level(LoggingLevelEnum.Off)
     Tasker.set_save_draw(False)
     Tasker.set_save_on_error(False)
@@ -62,14 +135,6 @@ def _configure_maa_once():
 
 _configure_maa_once()
 DIALOG_MARKER = 12
-LOGIN_NODES = (
-    "CloudGameLoginForm",
-    "CloudGameVerification",
-    "CloudGameAuthorization",
-    "CloudGameLoginFailure",
-    "CloudGameLoginOtherMethods",
-    "CloudGameLoginSubmit",
-)
 HOME_TEMPLATE_LAYOUTS = {
     # 新版客户端 720p 首页（实机 1280x720 重拍）；测试只拼入无账号信息的模板。
     "current_720p": {
@@ -98,14 +163,32 @@ CONFIRM_FIXTURES = {
 class VirtualCloudController(CustomController):
     """主窗口与 owned 弹窗分开建模，复现云客户端 1.0.0.1 的真实窗口结构。"""
 
-    def __init__(self, stage=7, game_login=False):
+    def __init__(
+        self,
+        stage=7,
+        game_login=False,
+        *,
+        clock=None,
+        timed_stages=(),
+        world_next=None,
+        input_succeeds=True,
+        unchanged_input=False,
+    ):
         self.stage = stage
         self.game_login = game_login
+        self.clock = clock
+        self.timed_stages = list(timed_stages)
+        self.world_next = world_next or {}
+        self.input_succeeds = input_succeeds
+        self.unchanged_input = unchanged_input
         self.dialog = stage == DIALOG_MARKER
         if self.dialog:
             self.stage = 2
         self.queue_frames = 0
         self.clicks = []
+        self.keys = []
+        self.frames = []
+        self.world_inputs = []
         self.world_navigation = 0
         self.image = np.zeros((720, 1280, 3), dtype=np.uint8)
         super().__init__()
@@ -128,12 +211,27 @@ class VirtualCloudController(CustomController):
         return self._frame(DIALOG_MARKER) if self.dialog else None
 
     def screencap(self):
+        while self.timed_stages and self.clock.now >= self.timed_stages[0][0]:
+            _, self.stage = self.timed_stages.pop(0)
+            self.dialog = self.stage == DIALOG_MARKER
+            if self.dialog:
+                self.stage = 2
         if self.stage == 4:
             self.queue_frames += 1
             if self.queue_frames >= 4:
                 self.stage = 9 if self.game_login else 6
         # 弹窗弹出时主窗口仍显示首页，控制器截图看不到弹窗。
+        self.frames.append((self.clock.now if self.clock else None, self.stage))
         return self._frame(self.stage)
+
+    def _world_input(self, kind, value):
+        self.world_navigation += 1
+        self.world_inputs.append((kind, self.stage, value))
+        if not self.input_succeeds:
+            return False
+        if not self.unchanged_input:
+            self.stage = self.world_next.get(self.stage, 6)
+        return True
 
     def click(self, x, y):
         self.clicks.append((DIALOG_MARKER if self.dialog else self.stage, x, y))
@@ -146,33 +244,72 @@ class VirtualCloudController(CustomController):
             # 首页点击只弹出独立确认窗口，主窗口不变。
             self.dialog = True
             return True
+        if self.stage in (9, 13, 14, 19):
+            return self._world_input("click", (x, y))
         # 真实流程：每日弹窗 -> 首页 -> (确认弹窗) -> 排队
         self.stage = {7: 2}.get(self.stage, self.stage)
         return True
 
+    def click_key(self, keycode):
+        self.keys.append((self.stage, keycode))
+        if self.stage not in (15, 18) or keycode != 27:
+            return False
+        return self._world_input("key", keycode)
+
 
 class SyntheticCloudRecognition(CustomRecognition):
+    """仅替代 OCR/模板叶子，复合算法、box_index、节点引用由真实 Maa 调度。"""
+
+    def __init__(self, after_hit=None):
+        self.calls = []
+        self.after_hit = after_hit
+        super().__init__()
+
     def analyze(self, context, argv):
         state = int(argv.image[0, 0, 0])
-        node = json.loads(argv.custom_recognition_param)["node"]
+        params = json.loads(argv.custom_recognition_param)
+        node = params["node"]
+        self.calls.append((state, node))
         if node in STATES.get(state, set()):
-            return self.AnalyzeResult(box=[100, 200, 80, 30], detail={})
+            if self.after_hit is not None:
+                self.after_hit(node)
+            return self.AnalyzeResult(
+                box=params["box"], detail={"source_algorithm": params["algorithm"]}
+            )
         return None
 
 
-class VirtualEnterWorld(CustomAction):
-    """仅验证公开接口被调用及返回状态传播，不模拟真实 SceneManager/Seize 输入。"""
-
-    def __init__(self, controller, succeeds=True):
-        self.controller = controller
-        self.succeeds = succeeds
-        super().__init__()
-
-    def run(self, context, argv):
-        self.controller.world_navigation += 1
-        if self.succeeds:
-            self.controller.stage = 6
-        return self.succeeds
+def synthesize_recognition_leaves(node, name, nodes):
+    """拒绝未建模的算法/缺失引用，不把共用节点改成无条件成功。"""
+    recognition = node.get("recognition")
+    if recognition is None:
+        return
+    algorithm = recognition if isinstance(recognition, str) else recognition["type"]
+    params = node if isinstance(recognition, str) else recognition.get("param", {})
+    if algorithm in ("And", "Or"):
+        key = "all_of" if algorithm == "And" else "any_of"
+        for index, child in enumerate(params[key]):
+            if isinstance(child, str):
+                if child not in nodes:
+                    raise AssertionError(f"缺少真实公共识别资源: {child}")
+            else:
+                synthesize_recognition_leaves(child, f"{name}/{index}", nodes)
+        return
+    if algorithm in ("Custom", "DirectHit"):
+        return
+    if algorithm not in ("OCR", "TemplateMatch"):
+        raise AssertionError(f"未建模的识别算法: {name}: {algorithm}")
+    node["recognition"] = {
+        "type": "Custom",
+        "param": {
+            "custom_recognition": "synthetic_cloud_scene",
+            "custom_recognition_param": {
+                "node": name,
+                "algorithm": algorithm,
+                "box": WORLD_BOXES.get(name, [100, 200, 80, 30]),
+            },
+        },
+    }
 
 
 class NativeCloudFlowTests(unittest.TestCase):
@@ -197,47 +334,48 @@ class NativeCloudFlowTests(unittest.TestCase):
         interactive=True,
         branch=None,
         expired_queue=False,
-        navigation_succeeds=True,
+        input_succeeds=True,
+        unchanged_input=False,
+        timed_stages=(),
+        world_next=None,
+        queue_remaining=None,
+        poll_interval=0.25,
+        identity_change_after=None,
+        owned_after=None,
+        after_hits=None,
+        desktop_change_after=None,
     ):
-        """真实调度云节点；窗口、桌面能力及公开场景子任务均为离线替身。
+        """真实调度云节点和共用世界引擎；只替换窗口 API、输入设备和识别叶子。
 
-        branch 仅用于将入口重置后的流程指向待测安全边界，不修改其生产动作。
-        SceneAnyEnterWorld 的替身只能证明交接契约，不能证明真实游戏内输入可用。
+        branch 仅将入口重置后的流程指向待测安全边界，不修改其生产动作。
+        合成帧不能证明实机 OCR，但复合识别、目标选择、单次输入和预算真实执行。
         """
-        data = copy.deepcopy(PIPELINE)
+        data = native_flow_nodes()
         data["CloudGameProfile"]["attach"]["calibrated"] = calibrated
-        # 登录障碍节点也改为合成识别，避免在没有 OCR 模型的 bundle 中真实运行 OCR。
-        raw_nodes = set().union(*STATES.values()) | set(LOGIN_NODES)
-        for name in raw_nodes:
-            data.setdefault(name, {})
-            data[name]["recognition"] = {
-                "type": "Custom",
-                "param": {
-                    "custom_recognition": "synthetic_cloud_scene",
-                    "custom_recognition_param": {"node": name},
-                },
-            }
-            data[name]["inverse"] = False
-        data["SceneAnyEnterWorld"] = {
-            "action": {
-                "type": "Custom",
-                "param": {"custom_action": "test_enter_world"},
-            },
-            "pre_delay": 0,
-            "post_delay": 0,
-            "rate_limit": 0,
-        }
+        data["EnterGameLoginTimeoutConfig"]["attach"]["minutes"] = 1
+        for name, node in data.items():
+            synthesize_recognition_leaves(node, name, data)
         if branch is not None:
             data["CloudGameStartEntrance"]["next"] = [branch]
             data[branch]["recognition"] = {"type": "DirectHit"}
         params = data["CloudGameStartEntrance"]["action"]["param"][
             "custom_action_param"
         ]
-        params["poll_interval_seconds"] = 0.01
+        params["poll_interval_seconds"] = poll_interval
         params["transition_timeout_seconds"] = 1
+        # 旧参数留作对照：当前登录预算必须取共用配置的 1 分钟，而不是这里的 1 秒。
         params["login_timeout_seconds"] = 1
         bundle = self.make_bundle(data)
-        controller = VirtualCloudController(stage, game_login)
+        clock = Clock()
+        controller = VirtualCloudController(
+            stage,
+            game_login,
+            clock=clock,
+            timed_stages=timed_stages,
+            world_next=world_next,
+            input_succeeds=input_succeeds,
+            unchanged_input=unchanged_input,
+        )
         confirm_target = cloud._ConfirmTarget(
             hwnd=1001,
             owner=1000,
@@ -267,7 +405,7 @@ class NativeCloudFlowTests(unittest.TestCase):
 
         def owned_candidates():
             candidates = [known_dialog] if controller.dialog else []
-            if unknown_owned:
+            if unknown_owned or (owned_after is not None and clock.now >= owned_after):
                 candidates.append(unknown_dialog)
             return candidates
 
@@ -275,7 +413,7 @@ class NativeCloudFlowTests(unittest.TestCase):
             # 与生产签名保持一致；绝不调用 capture_window 或真实桌面截图。
             if item.hwnd == known_dialog.hwnd and controller.dialog:
                 return controller.dialog_frame()
-            if item.hwnd == unknown_dialog.hwnd and unknown_owned:
+            if item.hwnd == unknown_dialog.hwnd:
                 return controller._frame(10)
             return None
 
@@ -297,9 +435,13 @@ class NativeCloudFlowTests(unittest.TestCase):
             state.main_pid = 4242
             if expired_queue:
                 state.queue_deadline = cloud.time.monotonic() - 1
+            elif queue_remaining is not None:
+                state.queue_deadline = cloud.time.monotonic() + queue_remaining
 
         def main_window(hwnd):
             if cloud._hwnd_value(hwnd) != 1000:
+                return None
+            if identity_change_after is not None and clock.now >= identity_change_after:
                 return None
             return cloud._WindowInfo(
                 hwnd=1000,
@@ -327,12 +469,18 @@ class NativeCloudFlowTests(unittest.TestCase):
             "cloud_game_handoff": cloud.CloudGameHandoff(),
             "cloud_game_fail": cloud.CloudGameFail(),
             "cloud_game_finish": cloud.CloudGameFinish(),
-            "test_enter_world": VirtualEnterWorld(controller, navigation_succeeds),
         }
         for name, action in callbacks.items():
             self.assertTrue(resource.register_custom_action(name, action))
+        pending_hits = dict(after_hits or {})
+
+        def after_hit(node):
+            if node in pending_hits:
+                controller.stage = pending_hits.pop(node)
+
+        synthetic = SyntheticCloudRecognition(after_hit)
         recognizers = {
-            "synthetic_cloud_scene": SyntheticCloudRecognition(),
+            "synthetic_cloud_scene": synthetic,
             # 用真实的 owned 弹窗识别，验证它能从独立窗口拿到可点击坐标。
             "cloud_game_owned_dialog": cloud.CloudGameOwnedDialog(),
         }
@@ -352,8 +500,14 @@ class NativeCloudFlowTests(unittest.TestCase):
         )
         overrides.update(time_override)
         desktop = ModuleType("cloud_start")
-        desktop.desktop_interactive = Mock(return_value=interactive)
+        desktop.desktop_interactive = Mock(
+            side_effect=lambda: interactive
+            and (desktop_change_after is None or clock.now < desktop_change_after)
+        )
         with ExitStack() as stack:
+            # 不修改全局 time 模块；两个生产模块必须共用同一个虚拟单调时钟。
+            stack.enter_context(patch.object(cloud, "time", clock))
+            stack.enter_context(patch.dict(WORLD_GLOBALS, {"time": clock}))
             # 源码在交接动作内部导入桌面检查；模块替身避免任何真实 Windows API。
             stack.enter_context(patch.dict(sys.modules, {"cloud_start": desktop}))
             # 真实调度器下同样没有本地云窗口；入口的本地就绪检查由 test_cloud_start 覆盖。
@@ -390,6 +544,11 @@ class NativeCloudFlowTests(unittest.TestCase):
         result = (job.succeeded, list(controller.clicks), controller.world_navigation)
         self.executed_nodes = [node.name for node in job.get().nodes]
         self.desktop_checks = desktop.desktop_interactive.call_count
+        self.recognition_calls = list(synthetic.calls)
+        self.world_inputs = list(controller.world_inputs)
+        self.keys = list(controller.keys)
+        self.frames = list(controller.frames)
+        self.elapsed = clock.now
         self.session = cloud._session
         self.last_params = resource.get_node_data("CloudGameStartEntrance")
         tasker.post_stop().wait()
@@ -406,14 +565,68 @@ class NativeCloudFlowTests(unittest.TestCase):
         self.assertEqual([stage for stage, _, _ in clicks], [7, 2, DIALOG_MARKER])
         self.assertEqual(navigation, 0)
         self.assertEqual(cloud._session.timeout_minutes, 7)
-        self.assertEqual(cloud._session.poll_interval, 0.01)
+        self.assertEqual(cloud._session.poll_interval, 0.25)
         self.assertTrue(cloud._session.auto_queue)
 
-    def test_auto_queue_off_does_not_enter(self):
-        success, clicks, _ = self.run_flow(stage=2, auto_queue=False)
-        self.assertTrue(success)
+    def test_auto_queue_off_waits_for_manual_start_and_times_out_without_input(self):
+        success, clicks, navigation = self.run_flow(
+            stage=2, auto_queue=False, poll_interval=1
+        )
+        self.assertFalse(success)
         self.assertEqual(clicks, [])
-        self.assertFalse(cloud._session.auto_queue)
+        self.assertEqual(navigation, 0)
+        self.assertFalse(self.session.auto_queue)
+        self.assertEqual(self.session.login_timeout, 60)
+        self.assertGreaterEqual(self.elapsed, 60)
+        self.assertEqual(self.elapsed, self.session.manual_deadline)
+        self.assertIn("CloudGameManualEnterNotice", self.executed_nodes)
+        self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+        notices = [call.args[1] for call in cloud.PrintT.call_args_list]
+        self.assertEqual(notices.count("enter_game.manual_enter"), 1)
+        self.assertIn("enter_game.manual_timeout", notices)
+
+    def test_auto_queue_off_accepts_user_manual_start_without_shell_input(self):
+        success, clicks, navigation = self.run_flow(
+            stage=2,
+            auto_queue=False,
+            game_login=True,
+            timed_stages=[(2, 4)],
+            poll_interval=0.5,
+        )
+        self.assertTrue(success)
+        self.assertEqual(clicks, [(9, 640, 630)])
+        self.assertEqual(navigation, 1)
+        self.assertGreaterEqual(self.elapsed, 2)
+        self.assertIn("CloudGameManualEnterNotice", self.executed_nodes)
+        self.assertIn("CloudGameStartDone", self.executed_nodes)
+        self.assertIsNone(self.session.queue_deadline)
+
+    def test_auto_queue_off_continues_existing_queue_and_game_start(self):
+        for stage in (4, 9, 13):
+            with self.subTest(stage=stage):
+                success, clicks, navigation = self.run_flow(
+                    stage=stage, auto_queue=False, game_login=True
+                )
+                self.assertTrue(success)
+                self.assertEqual(clicks, [(13 if stage == 13 else 9, 640, 630)])
+                self.assertEqual(navigation, 1)
+                self.assertNotIn("CloudGameManualEnterNotice", self.executed_nodes)
+                self.assertNotIn("CloudGameEnterButton", self.executed_nodes)
+                self.assertNotIn("CloudGameStartConfirm", self.executed_nodes)
+                self.assertIn("CloudGameEnterWorld", self.executed_nodes)
+
+    def test_auto_queue_off_waits_for_user_to_confirm_existing_dialog(self):
+        success, clicks, navigation = self.run_flow(
+            stage=DIALOG_MARKER,
+            auto_queue=False,
+            game_login=True,
+            timed_stages=[(2, 4)],
+            poll_interval=0.5,
+        )
+        self.assertTrue(success)
+        self.assertEqual(clicks, [(9, 640, 630)])
+        self.assertEqual(navigation, 1)
+        self.assertNotIn("CloudGameStartConfirm", self.executed_nodes)
 
     def test_uncalibrated_profile_is_a_failed_task(self):
         success, clicks, _ = self.run_flow(calibrated=False)
@@ -422,7 +635,7 @@ class NativeCloudFlowTests(unittest.TestCase):
 
     def test_unknown_shell_screen_is_a_failed_task(self):
         # 未取证的云外壳画面不能触发任何点击，只能在过渡超时后安全失败。
-        success, clicks, _ = self.run_flow(stage=10)
+        success, clicks, _ = self.run_flow(stage=10, poll_interval=5)
         self.assertFalse(success)
         self.assertEqual(clicks, [])
 
@@ -431,11 +644,24 @@ class NativeCloudFlowTests(unittest.TestCase):
         self.assertTrue(success)
         self.assertEqual(clicks, [])
 
-    def test_game_login_hands_off_to_public_scene_interface(self):
+    def test_game_login_hands_off_to_shared_world_engine(self):
         success, clicks, navigation = self.run_flow(stage=2, game_login=True)
         self.assertTrue(success)
-        self.assertEqual([stage for stage, _, _ in clicks], [2, DIALOG_MARKER])
+        self.assertEqual([stage for stage, _, _ in clicks], [2, DIALOG_MARKER, 9])
         self.assertEqual(navigation, 1)
+        self.assertEqual(self.world_inputs, [("click", 9, (640, 630))])
+        self.assertIn((9, "CloudWebWorldLoginEnter/1"), self.recognition_calls)
+        self.assertNotIn("SceneAnyEnterWorld", self.executed_nodes)
+        self.assertGreaterEqual(sum(stage == 6 for _, stage in self.frames), 2)
+
+    def test_enter_text_without_exit_icon_uses_shared_fallback(self):
+        success, clicks, navigation = self.run_flow(stage=13)
+        self.assertTrue(success)
+        self.assertEqual(clicks, [(13, 640, 630)])
+        self.assertEqual(navigation, 1)
+        self.assertIn((13, "CloudWebWorldClickEnter"), self.recognition_calls)
+        self.assertIn("CloudGameEnterWorld", self.executed_nodes)
+        self.assertNotIn("CloudGameEnterButton", self.executed_nodes)
 
     def test_existing_confirm_bypasses_dispatch_and_clicks_only_confirm(self):
         success, clicks, navigation = self.run_flow(stage=DIALOG_MARKER)
@@ -459,7 +685,7 @@ class NativeCloudFlowTests(unittest.TestCase):
         for stage in (2, 6, 7):
             with self.subTest(stage=stage):
                 success, clicks, navigation = self.run_flow(
-                    stage=stage, unknown_owned=True
+                    stage=stage, unknown_owned=True, poll_interval=5
                 )
                 self.assertFalse(success)
                 self.assertEqual(clicks, [])
@@ -484,15 +710,14 @@ class NativeCloudFlowTests(unittest.TestCase):
         self.assertEqual(navigation, 0)
         self.assertNotIn("CloudGameStartDone", self.executed_nodes)
 
-    def test_handoff_checks_interactive_desktop_before_virtual_public_scene(self):
-        # 只验真实云包装动作与公开节点的调用契约；不是游戏内交接的实机验收。
+    def test_handoff_checks_interactive_desktop_before_shared_world_input(self):
         for interactive in (True, False):
             with self.subTest(interactive=interactive):
                 success, clicks, navigation = self.run_flow(
                     stage=9, branch="CloudGameEnterWorld", interactive=interactive
                 )
                 self.assertEqual(success, interactive)
-                self.assertEqual(clicks, [])
+                self.assertEqual(clicks, [(9, 640, 630)] if interactive else [])
                 self.assertEqual(navigation, int(interactive))
                 self.assertGreater(self.desktop_checks, 0)
 
@@ -509,17 +734,225 @@ class NativeCloudFlowTests(unittest.TestCase):
                 self.assertEqual(clicks, [])
                 self.assertEqual(navigation, 0)
 
-    def test_handoff_propagates_virtual_public_scene_failure(self):
-        success, clicks, navigation = self.run_flow(
-            stage=9,
-            branch="CloudGameEnterWorld",
-            interactive=True,
-            navigation_succeeds=False,
-        )
+    def test_handoff_propagates_real_controller_input_failure(self):
+        for stage in (9, 15):
+            with self.subTest(stage=stage):
+                success, clicks, navigation = self.run_flow(
+                    stage=stage,
+                    branch="CloudGameEnterWorld",
+                    input_succeeds=False,
+                )
+                self.assertFalse(success)
+                self.assertEqual(clicks, [(9, 640, 630)] if stage == 9 else [])
+                self.assertEqual(self.keys, [(15, 27)] if stage == 15 else [])
+                self.assertEqual(navigation, 1)
+                self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+                self.assertIn(
+                    "enter_game.input_rejected",
+                    [call.args[1] for call in cloud.PrintT.call_args_list],
+                )
+
+    def test_handoff_unchanged_target_times_out_after_only_one_input(self):
+        success, clicks, navigation = self.run_flow(stage=9, unchanged_input=True)
+        self.assertFalse(success)
+        self.assertEqual(clicks, [(9, 640, 630)])
+        self.assertEqual(navigation, 1)
+        self.assertGreaterEqual(self.elapsed, 1)
+        self.assertLess(self.elapsed, 2)
+        self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_game_modals_over_world_are_processed_before_success(self):
+        for stage, expected in (
+            (14, [("click", 14, (1122, 115))]),
+            (15, [("key", 15, 27)]),
+        ):
+            with self.subTest(stage=stage):
+                success, _, navigation = self.run_flow(stage=stage)
+                self.assertTrue(success)
+                self.assertEqual(navigation, 1)
+                self.assertEqual(self.world_inputs, expected)
+                self.assertIn("CloudGameEnterWorld", self.executed_nodes)
+                self.assertGreaterEqual(sum(frame == 6 for _, frame in self.frames), 2)
+
+    def test_account_form_over_world_waits_and_cannot_report_success(self):
+        success, clicks, navigation = self.run_flow(stage=16)
         self.assertFalse(success)
         self.assertEqual(clicks, [])
-        self.assertEqual(navigation, 1)
+        self.assertEqual(self.keys, [])
+        self.assertEqual(navigation, 0)
+        self.assertGreaterEqual(self.elapsed, 60)
+        self.assertLess(self.elapsed, 61)
         self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+        self.assertIn(
+            "enter_game.login_timeout",
+            [call.args[1] for call in cloud.PrintT.call_args_list],
+        )
+
+    def test_manual_account_login_then_announcement_monthly_pass_and_world(self):
+        success, clicks, navigation = self.run_flow(
+            stage=16,
+            timed_stages=[(2, 9)],
+            world_next={9: 14, 14: 15},
+        )
+        self.assertTrue(success)
+        self.assertEqual(clicks, [(9, 640, 630), (14, 1122, 115)])
+        self.assertEqual(self.keys, [(15, 27)])
+        self.assertEqual(navigation, 3)
+        self.assertGreater(self.elapsed, 2)
+        self.assertEqual(self.session.login_timeout, 60)
+
+    def test_ready_branch_routes_game_modals_before_success(self):
+        for stage in (14, 15, 16):
+            with self.subTest(stage=stage):
+                success, clicks, navigation = self.run_flow(
+                    stage=stage, branch="CloudGameReady", interactive=False
+                )
+                self.assertFalse(success)
+                self.assertEqual(clicks, [])
+                self.assertEqual(navigation, 0)
+                ready_index = self.executed_nodes.index("CloudGameReady")
+                self.assertEqual(
+                    self.executed_nodes[ready_index + 1], "CloudGameEnterWorld"
+                )
+                self.assertGreater(self.desktop_checks, 0)
+                self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_handoff_without_desktop_rejects_game_modals_over_world(self):
+        for stage in (14, 15, 16):
+            with self.subTest(stage=stage):
+                success, clicks, navigation = self.run_flow(
+                    stage=stage, branch="CloudGameEnterWorld", interactive=False
+                )
+                self.assertFalse(success)
+                self.assertEqual(clicks, [])
+                self.assertEqual(navigation, 0)
+                self.assertGreater(self.desktop_checks, 0)
+                self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_queue_budget_ends_before_independent_world_and_account_waits(self):
+        for stage in (9, 16):
+            with self.subTest(stage=stage):
+                success, clicks, navigation = self.run_flow(
+                    stage=stage,
+                    queue_remaining=0.6,
+                    timed_stages=[(2, 6)],
+                    world_next={9: 17},
+                )
+                self.assertTrue(success)
+                self.assertEqual(clicks, [(9, 640, 630)] if stage == 9 else [])
+                self.assertEqual(navigation, int(stage == 9))
+                self.assertGreater(self.elapsed, 2)
+                self.assertIsNone(self.session.queue_deadline)
+                self.assertIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_public_loading_and_popup_nodes_are_interpreted_by_shared_engine(self):
+        for stage in (17, 18, 19, 20):
+            with self.subTest(stage=stage):
+                success, _, navigation = self.run_flow(
+                    stage=9,
+                    world_next={9: stage},
+                    timed_stages=[(2, 6)] if stage in (17, 20) else (),
+                )
+                self.assertTrue(success)
+                self.assertEqual(navigation, 1 if stage in (17, 20) else 2)
+                self.assertEqual(self.keys, [(18, 27)] if stage == 18 else [])
+                if stage in (17, 20):
+                    self.assertGreaterEqual(self.elapsed, 2)
+                self.assertGreaterEqual(sum(frame == 6 for _, frame in self.frames), 2)
+
+    def test_world_entry_rechecks_window_identity_and_owned_overlays(self):
+        for change in ("identity_change_after", "owned_after"):
+            with self.subTest(change=change):
+                success, clicks, navigation = self.run_flow(
+                    stage=9, world_next={9: 17}, **{change: 0.6}
+                )
+                self.assertFalse(success)
+                self.assertEqual(clicks, [(9, 640, 630)])
+                self.assertEqual(navigation, 1)
+                self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_fresh_account_form_prevents_input_selected_from_an_older_frame(self):
+        success, clicks, navigation = self.run_flow(
+            stage=9,
+            after_hits={"CloudWebWorldLoginEnter/1": 16},
+            timed_stages=[(2, 6)],
+        )
+        self.assertTrue(success)
+        self.assertEqual(clicks, [])
+        self.assertEqual(self.keys, [])
+        self.assertEqual(navigation, 0)
+        stages = [stage for _, stage in self.frames]
+        self.assertLess(stages.index(9), stages.index(16))
+        self.assertLess(stages.index(16), stages.index(6))
+        self.assertGreaterEqual(self.elapsed, 2)
+
+    def test_each_world_input_rechecks_interactive_desktop(self):
+        success, clicks, navigation = self.run_flow(
+            stage=9, world_next={9: 14}, desktop_change_after=0.6
+        )
+        self.assertFalse(success)
+        self.assertEqual(clicks, [(9, 640, 630)])
+        self.assertEqual(navigation, 1)
+        self.assertGreaterEqual(self.desktop_checks, 3)
+        self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+
+    def test_out_of_frame_world_target_is_rejected_without_controller_input(self):
+        with patch.dict(
+            WORLD_BOXES, {"CloudWebWorldLoginEnter/1": [1270, 700, 40, 30]}
+        ):
+            success, clicks, navigation = self.run_flow(stage=9)
+        self.assertFalse(success)
+        self.assertEqual(clicks, [])
+        self.assertEqual(navigation, 0)
+        self.assertNotIn("CloudGameStartDone", self.executed_nodes)
+        self.assertIn(
+            "enter_game.input_rejected",
+            [call.args[1] for call in cloud.PrintT.call_args_list],
+        )
+
+    def test_virtual_resources_keep_shared_recognition_and_public_references(self):
+        source = native_flow_nodes()
+        self.assertEqual(source["EnterGameLoginTimeoutConfig"]["attach"]["minutes"], 10)
+        account = source["EnterGameAccountLogin"]["recognition"]
+        self.assertEqual(account["type"], "OCR")
+        self.assertEqual(account["param"]["roi"], [250, 80, 780, 500])
+        for text in ("账号密码登录", "请输入", "手机号", "验证码"):
+            self.assertIn(text, account["param"]["expected"])
+        modeled = copy.deepcopy(source)
+        for name, node in modeled.items():
+            synthesize_recognition_leaves(node, name, modeled)
+        for name in (
+            "EnterGameScreen",
+            "CloudGameEnterWorld",
+            "CloudGameReady",
+            "CloudGameInWorld",
+            "InWorld",
+            "CloudWebWorldReady",
+            "CloudWebWorldClickBlank",
+            "CloudWebWorldCloseButton",
+            "CloudWebWorldLoading",
+            "SceneClickCloseButton",
+        ):
+            self.assertEqual(modeled[name]["recognition"], source[name]["recognition"])
+        for name in ("CloudWebWorldLoginEnter", "CloudWebWorldAnnouncement"):
+            self.assertEqual(modeled[name]["recognition"]["type"], "And")
+            self.assertEqual(
+                modeled[name]["recognition"]["param"]["box_index"],
+                source[name]["recognition"]["param"]["box_index"],
+            )
+            self.assertEqual(modeled[name]["attach"], source[name]["attach"])
+        self.assertNotIn("SceneAnyEnterWorld", modeled)
+
+    def test_virtual_recognition_refuses_missing_references_and_unknown_algorithms(
+        self,
+    ):
+        invalid = (
+            {"recognition": {"type": "And", "param": {"all_of": ["Missing"]}}},
+            {"recognition": {"type": "UnmodeledAlgorithm"}},
+        )
+        for node in invalid:
+            with self.subTest(node=node), self.assertRaises(AssertionError):
+                synthesize_recognition_leaves(node, "Unsupported", {})
 
     def make_bundle(self, nodes):
         """为每次调用建立独立 bundle，便于同一测试内多次识别真实截图。"""

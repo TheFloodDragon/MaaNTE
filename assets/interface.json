@@ -156,7 +156,7 @@
     "import": [
         // group:Daily
         "resource/tasks/ClaimRewards.json",
-        // group:CloudGame
+        // group:CloudGame（统一进入游戏，任务 ID 保持兼容）
         "resource/tasks/CloudGame.json",
         // group:CityTycoon
         "resource/tasks/Furniture.json",

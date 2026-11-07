@@ -12,6 +12,7 @@ from .Common.enable_node import *
 from .Common.resize_game_window import *
 from .cloud_game import *
 from .cloud_game_web import *
+from .enter_game import *
 from .realtime_task import *
 from .Navi import *
 from .MapTeleport import *
@@ -51,6 +52,9 @@ __all__ = [
     "ClickOverride",
     "EnableNode",
     "ResizeGameWindow",
+    "EnterGameDispatch",
+    "EnterGameWorld",
+    "EnterGameFail",
     "CloudGameReset",
     "CloudGameWaitLogin",
     "CloudGameQueueWait",

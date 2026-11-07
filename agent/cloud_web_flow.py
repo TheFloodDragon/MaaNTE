@@ -20,6 +20,13 @@ from maa.context import Context
 from maa.custom_action import CustomAction
 
 from cloud_web_start import WebClientError, safe_reason, start_browser
+from game_entry import (
+    EntryError,
+    WORLD_NODES,
+    WorldProgress,
+    login_timeout_seconds,
+    run_world_entry,
+)
 from utils.cloud_cdp import CloudSession, format_minutes, parse_queue
 from utils.logger import logger
 from utils.maafocus import PrintT
@@ -38,12 +45,8 @@ __all__ = [
 ]
 
 CONTROLLER = "CloudGame-Web"
-MAX_ATTEMPTS = 3  # 与三月七小助手 start_game 的 MAX_RETRY 一致
 PAGE_RETRIES = 3
-WORLD_NODES = (
-    "CloudWebWorldReady", "CloudWebWorldLoginEnter", "CloudWebWorldAnnouncement",
-    "CloudWebWorldMonthlyPass", "CloudWebWorldClickBlank", "CloudWebWorldCloseButton", "CloudWebWorldLoading",
-)
+# WORLD_NODES 由共用模块定义，包含无退出图标的完整进入文字兜底。
 _CLOSE_KINDS = ("setting", "page-setting", "rule", "record", "gift", "mall", "jump-payment", "exitsetting")
 
 
@@ -55,7 +58,8 @@ class _Web:
     queue_timeout: float
     fullscreen: bool
     session: CloudSession | None = None
-    attempts: int = 0
+    login_deadline: float | None = None
+    manual_deadline: float | None = None
     queue_deadline: float | None = None
     last_queue: tuple = ()
     last_queue_log: float = -math.inf
@@ -95,6 +99,10 @@ def _guard(run):
             reason = exc.reason
             if not context.tasker.stopping:
                 PrintT(context, exc.key, *exc.args_)
+        except EntryError as exc:
+            reason = exc.reason
+            if not context.tasker.stopping:
+                PrintT(context, exc.key, *exc.values)
         except WebClientError as exc:
             reason = safe_reason(exc)
             if not context.tasker.stopping:
@@ -152,6 +160,7 @@ def _minutes(context, node, default, maximum):
 def _state(context, web):
     _check_stop(context)
     state = web.session.state()
+    _check_stop(context)
     if state.get("events"):
         web.events.extend(state["events"][-50:])
         for event in state["events"]:
@@ -161,6 +170,34 @@ def _state(context, web):
 
 def _button(pop, *labels):
     return next((b for b in pop["btns"] if b["x"] in labels), None)
+
+
+def _queue_popup(page):
+    return next(
+        (pop for pop in page.get("pops", []) if pop.get("kind") == "queue"), None
+    )
+
+
+def _leave_queue(context, web, queue):
+    leave = _button(queue, "退出排队")
+    if leave is None:
+        return False
+    web.session.click_rect(leave["r"])
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        page = _state(context, web)
+        if _queue_popup(page) is None:
+            # 退出后可能出现节点选择；只有重新识别到关闭按钮才关闭，不重新选队列。
+            for pop in page["pops"]:
+                close = next(
+                    (button for button in pop["btns"] if "close" in button["c"]), None
+                )
+                if pop["kind"] == "nodelist" and close:
+                    web.session.click_rect(close["r"])
+                    break
+            return True
+        _sleep(context, min(0.2, deadline - time.monotonic()))
+    return False
 
 
 def _classify_remind(text):
@@ -221,14 +258,19 @@ def _handle_popup(context, web, pop, clicked):
         if category == "env_unsupported":
             raise _WebError("cloud_web.env_unsupported", "remind_env_unsupported")
         confirm = _button(pop, "确定", "我知道了", "知道了")
-        if confirm:
+        marker = ("remind", category)
+        if confirm and marker not in clicked:
             session.click_rect(confirm["r"])
-        PrintT(context, "cloud_web.page_notice", pop["text"][:60])
-        return "retry" if category == "retry" else "acted"
+            clicked.add(marker)
+            PrintT(context, "cloud_web.page_notice", pop["text"][:60])
+            return "retry" if category == "retry" else "acted"
+        return "retry" if category == "retry" else None
     if kind in _CLOSE_KINDS:
         close = next((b for b in pop["btns"] if "close" in b["c"] or b["x"] in ("关闭", "取消")), None)
-        if close:
+        marker = ("close", kind)
+        if close and marker not in clicked:
             session.click_rect(close["r"])
+            clicked.add(marker)
             PrintT(context, "cloud_web.popup_closed", kind)
             return "acted"
     logger.debug("未处理的网页弹窗 | kind=%s | buttons=%d", kind, len(pop["btns"]))
@@ -247,6 +289,40 @@ def cleanup_cloud_web_session():
         web.session.close()
 
 
+def _stop_stream_on_fail(context):
+    """最终失败止损：云端实例仍在串流时刷新页面断开，避免无人值守消耗时长。
+
+    _guard 失败路径已把旧会话清空（只断 CDP，页面还开着），这里重连后读实时状态：
+    game 为真说明云端实例在运行。尽力而为，任何失败只记日志、不改变流程结果。
+    """
+    try:
+        session = CloudSession.connect()
+    except WebClientError as exc:
+        logger.info("止损未执行：无法连接浏览器 | reason=%s", safe_reason(exc))
+        return
+    try:
+        page = session.state()
+        if not page.get("game"):
+            logger.info("止损检查：云端实例未在运行，无需处理")
+            return
+        PrintT(context, "cloud_web.stream_stop_fail")
+        session.reload()
+        logger.warning("云端实例仍在运行，已刷新页面断开串流")
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            try:
+                if not session.state().get("game"):
+                    return
+            except WebClientError:
+                return  # 页面重载会断开 CDP 会话，视为串流已断
+            time.sleep(0.5)
+        logger.warning("刷新后云端实例疑似仍在运行，请手动确认已退出游戏")
+    except WebClientError as exc:
+        logger.warning("止损检查失败 | reason=%s", safe_reason(exc))
+    finally:
+        session.close()
+
+
 class CloudWebReset(CustomAction):
     @_guard
     def run(self, context: Context, argv: CustomAction.RunArg):
@@ -258,9 +334,14 @@ class CloudWebReset(CustomAction):
         full = _attach(context, "CloudWebFullscreenConfig", "fullscreen", True)
         if not isinstance(auto, bool) or not isinstance(full, bool):
             raise _WebError("cloud_web.invalid_config", "invalid_switch")
-        web = _Web(task_id=argv.task_detail.task_id, auto_queue=auto,
-                   login_timeout=_minutes(context, "CloudWebLoginTimeoutConfig", 10, 120) * 60,
-                   queue_timeout=_minutes(context, "CloudWebQueueTimeoutConfig", 60, 1440) * 60, fullscreen=full)
+        web = _Web(
+            task_id=argv.task_detail.task_id,
+            auto_queue=auto,
+            login_timeout=login_timeout_seconds(context),
+            queue_timeout=_minutes(context, "CloudWebQueueTimeoutConfig", 60, 1440)
+            * 60,
+            fullscreen=full,
+        )
         logger.info("云异环网页配置 | auto_queue=%s | login_timeout_min=%.0f | queue_timeout_min=%.0f | fullscreen=%s",
                     auto, web.login_timeout / 60, web.queue_timeout / 60, full)
         PrintT(context, "cloud_web.browser_starting")
@@ -291,23 +372,39 @@ class CloudWebLogin(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg):
         web = _require()
         page = _state(context, web)
-        if page["game"]:
-            PrintT(context, "cloud_web.already_in_game")
+        if page["game"] or _queue_popup(page):
+            PrintT(
+                context,
+                (
+                    "cloud_web.already_in_game"
+                    if page["game"]
+                    else "cloud_web.queue_started"
+                ),
+            )
             return context.override_next(argv.node_name, ["CloudWebQueue"])
         if not page["logged_in"]:
             _phase(web, "login", "required")
             PrintT(context, "cloud_web.login_required", round(web.login_timeout / 60))
+            if web.login_deadline is None:
+                web.login_deadline = time.monotonic() + web.login_timeout
             try:
                 web.session.window_state("normal")
                 web.session.bring_to_front()
             except WebClientError:
                 logger.debug("无法把云异环窗口切到前台")
-            deadline = time.monotonic() + web.login_timeout
             while not page["logged_in"]:
-                if time.monotonic() >= deadline:
+                if time.monotonic() >= web.login_deadline:
                     raise _WebError("cloud_web.login_timeout", "login_deadline", round(web.login_timeout / 60))
-                _sleep(context, 2)
+                _sleep(context, min(2, web.login_deadline - time.monotonic()))
                 page = _state(context, web)
+                if time.monotonic() >= web.login_deadline:
+                    raise _WebError(
+                        "cloud_web.login_timeout",
+                        "late_login_result",
+                        round(web.login_timeout / 60),
+                    )
+                if page["game"] or _queue_popup(page):
+                    return context.override_next(argv.node_name, ["CloudWebQueue"])
             PrintT(context, "cloud_web.login_detected")
         _phase(web, "login", "logged_in")
         PrintT(context, "cloud_web.duration_checking")
@@ -316,6 +413,8 @@ class CloudWebLogin(CustomAction):
                 break
             _sleep(context, 0.5)
             page = _state(context, web)
+            if page["game"] or _queue_popup(page):
+                return context.override_next(argv.node_name, ["CloudWebQueue"])
         free, paid = page["free_min"], page["paid_min"]
         if free is None and paid is None:
             PrintT(context, "cloud_web.duration_unknown")
@@ -330,25 +429,35 @@ class CloudWebLogin(CustomAction):
 
 
 class CloudWebLobby(CustomAction):
-    """首页 → 进入游戏 → 节点 → 时长确认 → 排队弹窗；每个按钮每轮只点一次。"""
+    """首页只发起一次进入；手动模式等待已有队列/串流，不提前报告成功。"""
 
     @_guard
     def run(self, context: Context, argv: CustomAction.RunArg):
         web = _require()
-        web.attempts += 1
-        if web.attempts > MAX_ATTEMPTS:
-            raise _WebError("cloud_web.stream_failed_final", "max_attempts", MAX_ATTEMPTS)
-        if web.attempts > 1:
-            PrintT(context, "cloud_web.retrying", web.attempts, MAX_ATTEMPTS)
         web.session.set_stream_override()
         web.session.pointer_lock(True)
-        clicked, deadline = set(), time.monotonic() + 60
+        if not web.auto_queue and web.manual_deadline is None:
+            web.manual_deadline = time.monotonic() + web.login_timeout
+        deadline = time.monotonic() + 60 if web.auto_queue else web.manual_deadline
+        clicked, prompted = set(), False
         while time.monotonic() < deadline:
             page = _state(context, web)
+            if time.monotonic() >= deadline:
+                break
             if page["game"]:
                 _phase(web, "lobby", "game_container")
                 PrintT(context, "cloud_web.no_queue")
                 return context.override_next(argv.node_name, ["CloudWebQueue"])
+            if _queue_popup(page):
+                _phase(web, "lobby", "existing_queue")
+                return context.override_next(argv.node_name, ["CloudWebQueue"])
+            if not web.auto_queue:
+                if not prompted:
+                    PrintT(context, "enter_game.manual_enter")
+                    _phase(web, "manual", "waiting_for_start")
+                    prompted = True
+                _sleep(context, min(0.5, deadline - time.monotonic()))
+                continue
             outcome = None
             for pop in page["pops"]:
                 outcome = _handle_popup(context, web, pop, clicked)
@@ -358,7 +467,7 @@ class CloudWebLobby(CustomAction):
                 _phase(web, "lobby", "queue")
                 return True
             if outcome == "retry":
-                clicked.clear()
+                raise _WebError("cloud_web.stream_lost", "lobby_reentry_rejected")
             if not outcome and page["gift"] and "gift" not in clicked:
                 web.session.click_rect(page["gift"]["r"])
                 clicked.add("gift")
@@ -368,6 +477,12 @@ class CloudWebLobby(CustomAction):
                 clicked.add("start")
                 PrintT(context, "cloud_web.entering")
             _sleep(context, 0.2)
+        if not web.auto_queue:
+            raise EntryError(
+                "enter_game.manual_timeout",
+                "manual_deadline",
+                round(web.login_timeout / 60),
+            )
         raise _WebError("cloud_web.lobby_timeout", "lobby_deadline")
 
 
@@ -382,125 +497,158 @@ def _stream_hint(context, web):
 
 
 class CloudWebQueue(CustomAction):
-    """排队等待 + 串流首帧；回到首页视为串流失败，交回大厅重试（最多 3 轮）。"""
+    """接管已有队列与串流；队列结束后另等首帧，退出/断流不回大厅重排。"""
 
     @_guard
     def run(self, context: Context, argv: CustomAction.RunArg):
         web = _require()
-        if web.queue_deadline is None:
-            web.queue_deadline = time.monotonic() + web.queue_timeout
-            logger.info("云异环排队计时开始 | timeout_s=%.0f", web.queue_timeout)
         announced, game_since = False, None
+        transition_deadline = time.monotonic() + 180
         while True:
             page = _state(context, web)
-            queue = next((p for p in page["pops"] if p["kind"] == "queue"), None)
+            queue, now = _queue_popup(page), time.monotonic()
+            if web.queue_deadline is not None and now >= web.queue_deadline:
+                if queue and not _leave_queue(context, web, queue):
+                    raise EntryError("enter_game.failed", "queue_cancel_unconfirmed")
+                raise _WebError(
+                    "cloud_web.queue_timeout",
+                    "queue_deadline",
+                    round(web.queue_timeout / 60),
+                )
             if page["game"]:
                 if game_since is None:
-                    game_since = time.monotonic()
+                    game_since = now
+                    web.queue_deadline = None  # 已确认排队结束，首帧不再占用排队时限。
                     _phase(web, "queue", "game_loading")
                     PrintT(context, "cloud_web.queue_done")
+                if now - game_since >= 180:
+                    raise _WebError("cloud_web.stream_timeout", "first_frame_timeout")
                 video = page["video"] or {}
                 if not page["loading"] and video.get("content") and video.get("rs", 0) >= 2:
-                    PrintT(context, "cloud_web.stream_ready", video.get("w"), video.get("h"),
-                           round(time.monotonic() - game_since, 1))
+                    PrintT(
+                        context,
+                        "cloud_web.stream_ready",
+                        video.get("w"),
+                        video.get("h"),
+                        round(now - game_since, 1),
+                    )
                     if web.fullscreen:
                         try:
                             web.session.window_state("fullscreen")
                         except WebClientError:
-                            logger.warning("切换全屏失败，保持窗口模式")
+                            logger.warning("切换全屏失败，尝试还原窗口")
+                            try:
+                                web.session.window_state("normal")
+                            except WebClientError:
+                                logger.warning("窗口状态无法还原，保持当前模式")
                     return True
-                if time.monotonic() - game_since > 180:
-                    raise _WebError("cloud_web.stream_timeout", "first_frame_timeout")
             elif queue:
+                if web.queue_deadline is None:
+                    web.queue_deadline = now + web.queue_timeout
+                    logger.info(
+                        "云异环排队计时开始 | timeout_s=%.0f", web.queue_timeout
+                    )
+                transition_deadline = now + 180
                 info = parse_queue(queue["text"])
                 if not announced:
                     PrintT(context, "cloud_web.queue_started")
                     announced = True
                 key = (info["position"], info["eta"])
-                now = time.monotonic()
                 eta_changed = not web.last_queue or info["eta"] != web.last_queue[1]
                 if key != web.last_queue and (eta_changed or now - web.last_queue_log >= 30):
                     PrintT(context, "cloud_web.queue_status", info["position"] or "?", info["total"] or "?", info["eta"] or "?")
                     web.last_queue, web.last_queue_log = key, now
-                if now >= web.queue_deadline:
-                    leave = _button(queue, "退出排队")
-                    if leave:
-                        web.session.click_rect(leave["r"])  # 不让无人值守的队列在超时后继续消耗时长
-                        _sleep(context, 1.5)
-                        # 实测退出排队后会重新弹出节点选择，只点“关闭”回到首页。
-                        for pop in _state(context, web)["pops"]:
-                            close = next((b for b in pop["btns"] if "close" in b["c"]), None)
-                            if pop["kind"] == "nodelist" and close:
-                                web.session.click_rect(close["r"])
-                    raise _WebError("cloud_web.queue_timeout", "queue_deadline", round(web.queue_timeout / 60))
             elif page["home"]:
-                if game_since is not None:
-                    _stream_hint(context, web)
-                for pop in page["pops"]:
-                    _handle_popup(context, web, pop, set())
-                _phase(web, "queue", "back_to_home")
-                return context.override_next(argv.node_name, ["CloudWebLobby"])
-            _sleep(context, 0.5 if (page["game"] or not queue) else 2.0)
+                _stream_hint(context, web)
+                raise _WebError("cloud_web.stream_lost", "session_returned_to_home")
+            elif now >= transition_deadline:
+                raise _WebError("cloud_web.stream_timeout", "stream_state_timeout")
+            _sleep(context, 2.0 if queue and not page["game"] else 0.5)
 
 
 class CloudWebWorld(CustomAction):
-    """用 Pipeline 节点识别 CDP 帧，按 attach.web_action 点击/按键，两帧稳定命中大世界即完成。"""
+    """共用世界流程，CDP 提供帧和输入；已有串流不受自动排队开关影响。"""
 
     @_guard
     def run(self, context: Context, argv: CustomAction.RunArg):
         web = _require()
-        PrintT(context, "cloud_web.world_waiting")
-        deadline, stable, last_hit, last_act = time.monotonic() + 300, 0, None, {}
-        while time.monotonic() < deadline:
+        web.queue_deadline = None
+        content, clicked = None, set()
+        progress = WorldProgress(web.login_timeout)
+
+        def live_page():
             page = _state(context, web)
+            progress.check(context)
             if page["home"] or not page["game"]:
                 _stream_hint(context, web)
-                return context.override_next(argv.node_name, ["CloudWebLobby"])
-            content = (page["video"] or {}).get("content")
-            if not content:
-                _sleep(context, 0.5)
-                continue
-            frame = web.session.capture(content)
-            hit = None
-            for node in WORLD_NODES:
-                detail = context.run_recognition(node, frame)
-                if detail is not None and detail.hit:
-                    hit = (node, detail)
-                    break
-            name = hit[0] if hit else "unknown"
-            if name != last_hit:
-                logger.info("云异环游戏画面 | state=%s", name)
-                last_hit = name
-            if name == "CloudWebWorldReady":
-                stable += 1
-                if stable >= 2:
-                    PrintT(context, "cloud_web.world_ready")
-                    return True
-                _sleep(context, 0.6)
-                continue
-            stable = 0
-            if hit:
-                action = _attach(context, name, "web_action", "wait")
-                now = time.monotonic()
-                if action != "wait" and now - last_act.get(name, -math.inf) >= 2.5:
-                    last_act[name] = now
-                    if action == "click":
-                        box = hit[1].box
-                        web.session.click(*web.session.frame_to_css(content, (box[0] + box[2] / 2, box[1] + box[3] / 2)))
-                    elif action == "esc":
-                        web.session.key("Escape")
-                    PrintT(context, "cloud_web.world_" + _attach(context, name, "report", "action"))
-            _sleep(context, 0.4)
-        raise _WebError("cloud_web.world_timeout", "world_deadline")
+                raise _WebError(
+                    "cloud_web.stream_lost", "stream_lost_during_world_entry"
+                )
+            return page
+
+        def capture():
+            nonlocal content
+            page = live_page()
+            if page["pops"]:
+                progress.check(context)
+                for pop in page["pops"]:
+                    if (
+                        pop["kind"] == "remind"
+                        and _classify_remind(pop["text"]) == "retry"
+                    ):
+                        raise _WebError("cloud_web.stream_lost", "stream_error_popup")
+                    if pop["kind"] in _CLOSE_KINDS:
+                        _handle_popup(context, web, pop, clicked)
+                        progress.check(context)
+                        break
+                return None  # 不在网页弹窗遮挡下点击视频里的旧目标。
+            video = page["video"] or {}
+            content = video.get("content")
+            if (
+                page["loading"]
+                or not content
+                or video.get("rs", 0) < 2
+                or video.get("paused", False)
+            ):
+                return None
+            if web.session.ensure_not_minimized():
+                progress.check(context)
+                logger.warning("云异环网页窗口被最小化，已还原以继续截图")
+                return None
+            progress.check(context)
+            return web.session.capture(content)
+
+        def before_input():
+            page = live_page()
+            progress.check(context)
+            if page["pops"]:
+                raise EntryError(
+                    "enter_game.input_rejected", "web_overlay_changed_before_input"
+                )
+
+        def click(x, y):
+            before_input()
+            progress.check(context)
+            web.session.click(*web.session.frame_to_css(content, (x, y)))
+            progress.check(context)
+            return True
+
+        def key(name):
+            before_input()
+            progress.check(context)
+            web.session.key(name)
+            progress.check(context)
+            return True
+
+        return run_world_entry(context, capture, click, key, progress=progress)
 
 
 class CloudWebFinish(CustomAction):
+
     def run(self, context: Context, argv: CustomAction.RunArg):
-        manual = argv.node_name == "CloudWebManualEnterNotice"
         elapsed = time.monotonic() - _web.started_at if _web is not None else 0.0
-        logger.info("云异环网页流程结束 | result=%s | elapsed=%.1fs", "manual" if manual else "succeeded", elapsed)
-        if not manual:
-            PrintT(context, "cloud_web.done", round(elapsed))
+        logger.info("云异环网页流程结束 | result=succeeded | elapsed=%.1fs", elapsed)
+        PrintT(context, "cloud_web.done", round(elapsed))
         cleanup_cloud_web_session()
         return CustomAction.RunResult(success=True)
 
@@ -508,6 +656,8 @@ class CloudWebFinish(CustomAction):
 class CloudWebFail(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg):
         logger.error("云异环网页流程失败 | stopping=%s", context.tasker.stopping)
+        if not context.tasker.stopping:
+            _stop_stream_on_fail(context)
         cleanup_cloud_web_session()
         return CustomAction.RunResult(success=False)
 

@@ -16,6 +16,7 @@ import numpy as np
 from maa.agent.agent_server import AgentServer
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "agent"))
 PIPELINE = json.loads(
     (ROOT / "assets/resource/base/pipeline/CloudGame/CloudGame.json").read_text(
         encoding="utf-8"
@@ -167,6 +168,11 @@ class CloudLogicTests(unittest.TestCase):
         self.timer_patch = patch.object(cloud, "time", self.clock)
         self.timer_patch.start()
         self.addCleanup(self.timer_patch.stop)
+        self.entry_timer_patch = patch.dict(
+            cloud.run_world_entry.__globals__, {"time": self.clock}
+        )
+        self.entry_timer_patch.start()
+        self.addCleanup(self.entry_timer_patch.stop)
         self.message_patch = patch.object(cloud, "PrintT", Mock())
         self.message_patch.start()
         self.addCleanup(self.message_patch.stop)
@@ -609,6 +615,84 @@ class CloudLogicTests(unittest.TestCase):
             cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait")).success
         )
         self.assertEqual(context.clicks, [])
+
+    def test_manual_mode_resumes_existing_queue_without_starting_again(self):
+        context = self.reset(
+            [scene("CloudGameQueueScreen"), scene("CloudGameGameLogin")],
+            auto_queue=False,
+        )
+        self.assertTrue(
+            cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait")).success
+        )
+        self.assertIsNotNone(cloud._session.queue_deadline)
+        self.assertFalse(self.messages("enter_game.manual_enter"))
+        self.assertEqual(context.clicks, [])
+        self.assertEqual(self.native_clicks, [])
+
+    def test_manual_mode_waits_for_user_start_then_uses_queue_budget(self):
+        context = self.reset(
+            [scene(*HOME), scene("CloudGameQueueScreen"), scene("CloudGameGameLogin")],
+            auto_queue=False,
+            login_timeout_seconds=4,
+        )
+        self.assertTrue(
+            cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait")).success
+        )
+        self.assertGreater(
+            cloud._session.queue_deadline, cloud._session.manual_deadline
+        )
+        self.assertEqual(len(self.messages("enter_game.manual_enter")), 1)
+        self.assertEqual(self.native_clicks, [])
+
+    def test_manual_mode_already_at_game_screen_does_not_block_world_entry(self):
+        context = self.reset([scene("EnterGameScreen")], auto_queue=False)
+        self.assertTrue(
+            cloud.CloudGameQueueWait().run(context, arg("CloudGameQueueWait")).success
+        )
+        self.assertIsNone(cloud._session.queue_deadline)
+        self.assertFalse(self.messages("enter_game.manual_enter"))
+        self.assertEqual(self.native_clicks, [])
+
+    def test_manual_mode_home_timeout_is_not_success(self):
+        context = self.reset([scene(*HOME)], auto_queue=False, login_timeout_seconds=2)
+        self.assertFalse(
+            cloud.CloudGameQueueWait()
+            .run(context, arg("CloudGameManualEnterNotice"))
+            .success
+        )
+        self.assertTrue(self.messages("enter_game.manual_timeout"))
+        self.assertEqual(self.native_clicks, [])
+
+    def test_native_login_uses_the_shared_minutes_option(self):
+        context = self.reset([scene(*HOME)])
+        context.nodes["EnterGameLoginTimeoutConfig"] = {"attach": {"minutes": 5}}
+        self.assertTrue(
+            cloud.CloudGameReset()
+            .run(context, arg("CloudGameStartEntrance", {"login_timeout_seconds": 10}))
+            .success
+        )
+        self.assertEqual(cloud._session.login_timeout, 300)
+
+    def test_ready_does_not_accept_world_behind_account_or_game_popup(self):
+        for modal in (
+            "EnterGameAccountLogin",
+            "CloudWebWorldAnnouncement",
+            "CloudWebWorldMonthlyPass",
+            "CloudWebWorldClickBlank",
+            "CloudWebWorldCloseButton",
+            "CloudWebWorldLoading",
+        ):
+            with self.subTest(modal=modal):
+                context = self.reset([scene(*WORLD, modal)])
+                self.assertTrue(
+                    cloud.CloudGameConfirmReady()
+                    .run(context, arg("CloudGameReady"))
+                    .success
+                )
+                self.assertEqual(
+                    context.nodes["CloudGameReady"]["next"], ["CloudGameEnterWorld"]
+                )
+                self.assertEqual(context.clicks, [])
 
     def test_main_window_clicks_go_through_activation_not_the_controller(self):
         """实机取证：未激活的 Qt OpenGL 窗口会丢弃控制器合成输入。
@@ -1096,11 +1180,21 @@ class CloudLogicTests(unittest.TestCase):
                 self.assertIsNotNone(message)
                 self.assertEqual(context.clicks, [])
 
-    def test_ready_honors_existing_queue_deadline(self):
+    def test_ready_ends_queue_budget_after_first_world_frame(self):
         context = self.reset([scene(*WORLD)])
         cloud._session.queue_deadline = self.clock.now + 0.5
+        self.assertTrue(
+            cloud.CloudGameConfirmReady().run(context, arg("CloudGameReady")).success
+        )
+        self.assertIsNone(cloud._session.queue_deadline)
+        self.assertFalse(self.messages("cloud_game.queue_timeout"))
+
+    def test_ready_rejects_expired_queue_before_a_positive_world_frame(self):
+        context = self.reset([scene(*WORLD)])
+        cloud._session.queue_deadline = self.clock.now
         self.assertFalse(cloud.CloudGameConfirmReady().run(context, arg("CloudGameReady")).success)
         self.assertTrue(self.messages("cloud_game.queue_timeout"))
+        self.assertEqual(context.capture_count, 0)
 
     def test_login_existing_confirmation_routes_without_slow_dispatch(self):
         context = self.reset([scene(*HOME, *CONFIRM)])
@@ -1289,7 +1383,7 @@ class ResourceContractTests(unittest.TestCase):
         )
 
     def test_references_and_registrations(self):
-        external = {"InWorld", "SceneAnyEnterWorld"}
+        external = {"InWorld", "EnterGameScreen", "SceneAnyEnterWorld"}
         for name, node in PIPELINE.items():
             refs = node.get("next", []) + node.get("on_error", [])
             rec = node.get("recognition", {})

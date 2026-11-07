@@ -37,7 +37,6 @@
                 "custom_action": "cloud_game_reset",
                 "custom_action_param": {
                     "poll_interval_seconds": 2,
-                    "login_timeout_seconds": 600,
                     "transition_timeout_seconds": 90
                 }
             }
@@ -78,10 +77,10 @@
             "CloudGameCloseDailyLoginPopup",
             "CloudGameDailyLoginUnresolved",
             "CloudGameReady",
+            "CloudGameEnterWorld",
             "CloudGameManualEnterNotice",
             "CloudGameStartConfirm",
             "CloudGameEnterButton",
-            "CloudGameEnterWorld",
             "CloudGameQueueWait"
         ],
         "on_error": [
@@ -266,12 +265,12 @@
         "post_delay": 0
     },
     "CloudGameEnterWorld": {
-        "desc": "确认游戏登录页后检查独立遮挡及交互桌面，再调用SceneManager公共接口；返回后仍需两帧就绪确认",
+        "desc": "确认游戏内状态后结束排队预算；复核独立遮挡、窗口身份和桌面，用共用有界流程点击进入并处理弹窗，最后两帧确认世界",
         "recognition": {
             "type": "And",
             "param": {
                 "all_of": [
-                    "CloudGameGameLogin"
+                    "EnterGameScreen"
                 ]
             }
         },
@@ -320,12 +319,18 @@
         "post_delay": 0
     },
     "CloudGameManualEnterNotice": {
-        "desc": "自动排队关闭时清理任务状态后结束，不把手动模式标记为已经进入游戏",
+        "desc": "关闭自动排队时只在云首页等待用户手动开始；已排队或进入游戏内部仍继续入世界",
         "enabled": false,
-        "action": {"type": "Custom", "param": {"custom_action": "cloud_game_finish"}},
-        "focus": {
-            "Node.Action.Succeeded": "$cloud_game_manual_enter"
+        "recognition": {
+            "type": "And",
+            "param": {"all_of": ["CloudGameHome"]}
         },
+        "action": {
+            "type": "Custom",
+            "param": {"custom_action": "cloud_game_queue_wait"}
+        },
+        "next": ["CloudGameDispatch"],
+        "on_error": ["CloudGameStartFailed"],
         "rate_limit": 0,
         "pre_delay": 0,
         "post_delay": 0
@@ -446,51 +451,142 @@
     },
     "CloudGameLoginForm": {
         "desc": "登录窗口出现输入框、验证码或协议勾选等凭据表单标记时，只提示用户手动登录，不输入或提交凭据、不代为同意协议",
-        "recognition": {"type": "OCR", "param": {
-            "roi": [410, 150, 460, 330],
-            "expected": ["请输入", "账号密码登录", "手机验证码登录", "扫码登录", "密码登录", "验证码", "手机号", "邮箱", "同意", "协议"]
-        }},
-        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    410,
+                    150,
+                    460,
+                    330
+                ],
+                "expected": [
+                    "请输入",
+                    "账号密码登录",
+                    "手机验证码登录",
+                    "扫码登录",
+                    "密码登录",
+                    "验证码",
+                    "手机号",
+                    "邮箱",
+                    "同意",
+                    "协议"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "CloudGameLoginOtherMethods": {
         "desc": "实机取证：客户端已记住账号的登录窗口只有“登录”和“使用其他方式登录”两个按钮，没有任何输入框",
-        "recognition": {"type": "OCR", "param": {
-            "roi": [440, 485, 400, 70],
-            "expected": ["使用其他方式登录"]
-        }},
-        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    440,
+                    485,
+                    400,
+                    70
+                ],
+                "expected": ["使用其他方式登录"]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "CloudGameLoginSubmit": {
         "desc": "记住账号登录窗口的“登录”按钮（实机 y≈422-472），ROI 不含下方“使用其他方式登录”；仅在无凭据表单标记时点击一次",
-        "recognition": {"type": "OCR", "param": {
-            "roi": [445, 418, 390, 58],
-            "expected": ["登录", "登 录"]
-        }},
-        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    445,
+                    418,
+                    390,
+                    58
+                ],
+                "expected": [
+                    "登录",
+                    "登 录"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "CloudGameVerification": {
         "desc": "验证码或安全验证提示，仅等待用户操作，不自动识别或刷新验证码",
-        "recognition": {"type": "OCR", "param": {
-            "roi": [250, 80, 780, 180],
-            "expected": ["安全验证", "请完成验证", "短信验证", "身份验证"]
-        }},
-        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    250,
+                    80,
+                    780,
+                    180
+                ],
+                "expected": [
+                    "安全验证",
+                    "请完成验证",
+                    "短信验证",
+                    "身份验证"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "CloudGameAuthorization": {
         "desc": "授权提示，用户自行阅读条款或在手机端确认，禁止自动同意",
-        "recognition": {"type": "OCR", "param": {
-            "roi": [250, 80, 780, 220],
-            "expected": ["授权登录", "确认授权", "扫码成功", "请在手机上确认登录"]
-        }},
-        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    250,
+                    80,
+                    780,
+                    220
+                ],
+                "expected": [
+                    "授权登录",
+                    "确认授权",
+                    "扫码成功",
+                    "请在手机上确认登录"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "CloudGameLoginFailure": {
         "desc": "登录失败或验证码过期，提示用户在原有超时预算内修正重试，不重复发送验证码",
-        "recognition": {"type": "OCR", "param": {
-            "roi": [250, 80, 780, 180],
-            "expected": ["验证码错误", "验证码已失效", "二维码已过期", "登录失败", "登录已过期", "网络异常"]
-        }},
-        "rate_limit": 0, "pre_delay": 0, "post_delay": 0
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    250,
+                    80,
+                    780,
+                    180
+                ],
+                "expected": [
+                    "验证码错误",
+                    "验证码已失效",
+                    "二维码已过期",
+                    "登录失败",
+                    "登录已过期",
+                    "网络异常"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "CloudGameLoginScreen": {
         "desc": "实机登录入口：点击任意位置登录。覆盖 100% 与 125% 缩放下提示的位置和字号；不代表账号已登录",

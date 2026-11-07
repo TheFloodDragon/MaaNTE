@@ -43,7 +43,7 @@ class OptionTests(unittest.TestCase):
             override,
             {
                 "CloudWebAutoQueueConfig": {"attach": {"auto_queue": True}},
-                "CloudWebLoginTimeoutConfig": {"attach": {"minutes": 10}},
+                "EnterGameLoginTimeoutConfig": {"attach": {"minutes": 10}},
                 "CloudWebQueueTimeoutConfig": {"attach": {"minutes": 60}},
                 "CloudWebFullscreenConfig": {"attach": {"fullscreen": True}},
             },
@@ -61,8 +61,12 @@ class OptionTests(unittest.TestCase):
         )
         override = pretask.build_override(_option_defs(), pretask.parse_options(raw))
         self.assertIs(override["CloudWebAutoQueueConfig"]["attach"]["auto_queue"], False)
-        self.assertEqual(override["CloudWebLoginTimeoutConfig"]["attach"]["minutes"], 5)
-        self.assertIsInstance(override["CloudWebLoginTimeoutConfig"]["attach"]["minutes"], int)
+        self.assertEqual(
+            override["EnterGameLoginTimeoutConfig"]["attach"]["minutes"], 5
+        )
+        self.assertIsInstance(
+            override["EnterGameLoginTimeoutConfig"]["attach"]["minutes"], int
+        )
         self.assertEqual(override["CloudWebQueueTimeoutConfig"]["attach"]["minutes"], 1440)
         self.assertIs(override["CloudWebFullscreenConfig"]["attach"]["fullscreen"], False)
 
@@ -127,7 +131,9 @@ class ContractTests(unittest.TestCase):
         names = [task["name"] for task in self.tasks["task"]]
         self.assertNotIn("CloudGameWebStart", names)
         self.assertNotIn(pretask.ENTRY, [task["entry"] for task in self.tasks["task"]])
-        self.assertEqual(names, ["CloudGameStart"])  # 客户端版云异环任务保持不变
+        self.assertEqual(
+            names, ["CloudGameStart"]
+        )  # 统一入口保留旧任务 ID，避免用户配置丢失
 
     def test_other_controllers_unchanged(self):
         controllers = {c["name"]: c for c in self.interface["controller"]}
@@ -371,7 +377,13 @@ class RuntimeTests(unittest.TestCase):
             import numpy as np
             pipeline = json.loads((Path(sys.argv[1]).parent / 'assets/resource/base/pipeline/CloudGame/CloudGameWeb.json').read_text(encoding='utf-8'))
             pipeline = {name: node for name, node in pipeline.items() if 'action' in node or name.endswith('Config')}
-            pipeline['CloudWebWorldReady'] = {'recognition': 'DirectHit', 'pre_delay': 0, 'post_delay': 0}
+            for name in flow.WORLD_NODES:
+                # DirectHit+inverse 的原始 recognition detail.hit 仍为真，不能用来模拟未命中。
+                pipeline[name] = {'recognition': {'type': 'ColorMatch', 'param': {
+                    'roi': [0, 0, 1, 1], 'lower': [255, 255, 255], 'upper': [255, 255, 255], 'count': 1}},
+                    'rate_limit': 0, 'pre_delay': 0, 'post_delay': 0}
+            pipeline['EnterGameLoginTimeoutConfig'] = {'enabled': False, 'attach': {'minutes': 10}}
+            pipeline['CloudWebWorldReady'] = {'recognition': 'DirectHit', 'rate_limit': 0, 'pre_delay': 0, 'post_delay': 0}
             (root / 'web/pipeline').mkdir(parents=True)
             (root / 'web/pipeline/main.json').write_text(json.dumps(pipeline), encoding='utf-8')
             class Session:
@@ -388,6 +400,7 @@ class RuntimeTests(unittest.TestCase):
                             'video': {'content': [0, 0, 1280, 720], 'rs': 2, 'w': 1280, 'h': 720}}
                 def click_rect(self, rect): self.game = True
                 def window_state(self, state): self.fullscreen = state == 'fullscreen'
+                def ensure_not_minimized(self): return False
                 def capture(self, content): return np.zeros((720, 1280, 3), dtype=np.uint8)
                 def close(self): self.closed = True
             session = Session()

@@ -19,6 +19,7 @@ from maa.context import Context
 from maa.custom_action import CustomAction
 from maa.custom_recognition import CustomRecognition
 
+from game_entry import EntryError, WorldProgress, login_timeout_seconds, run_world_entry
 from utils.logger import logger
 from utils.maafocus import PrintT
 from utils.pienv import controller_name
@@ -80,6 +81,8 @@ class _Session:
     log_states: dict[str, str] = field(default_factory=dict)
     operation_deadline: float | None = None
     operation_timeout_key: str = "cloud_game.transition_failed"
+    operation_timeout_values: tuple = ()
+    manual_deadline: float | None = None
     run_id: str = field(default_factory=lambda: uuid4().hex[:12])
     main_pid: int = 0
 
@@ -92,10 +95,12 @@ _MAX_DIAGNOSTICS = 64
 
 
 class _CloudError(Exception):
-    def __init__(self, key="cloud_game.failed", reason=None):
+
+    def __init__(self, key="cloud_game.failed", reason=None, *values):
         self.key = key
-        # reason 仅使用代码中的固定诊断原因，不接收异常正文或用户参数。
+        # reason 仅使用固定诊断原因，不接收异常正文或用户参数。
         self.reason = reason or key
+        self.values = values
         super().__init__(key)
 
 
@@ -150,7 +155,13 @@ def _guarded(run):
             elif exc.key == "cloud_game.manual_enter":
                 result, log_end = "manual_required", logger.warning
             if not context.tasker.stopping:
-                PrintT(context, exc.key)
+                PrintT(context, exc.key, *exc.values)
+        except EntryError as exc:
+            code, reason = exc.key, exc.reason
+            if exc.key == "enter_game.stopped":
+                result, log_end = "stopped", logger.info
+            if not context.tasker.stopping:
+                PrintT(context, exc.key, *exc.values)
         except Exception as exc:
             # 仅提取类型和代码位置；不输出异常正文、堆栈局部变量或截图。
             code, reason, error_type = "cloud_game.failed", "unexpected_exception", type(exc).__name__
@@ -226,12 +237,17 @@ def _check_budget(context):
     if state.queue_deadline is not None and now >= state.queue_deadline:
         raise _CloudError("cloud_game.queue_timeout", "queue_deadline_reached")
     if state.operation_deadline is not None and now >= state.operation_deadline:
-        raise _CloudError(state.operation_timeout_key, "operation_deadline_reached")
+        raise _CloudError(
+            state.operation_timeout_key,
+            "operation_deadline_reached",
+            *state.operation_timeout_values,
+        )
 
 
-def _operation_deadline(state, deadline, timeout_key):
+def _operation_deadline(state, deadline, timeout_key, *values):
     state.operation_deadline = deadline
     state.operation_timeout_key = timeout_key
+    state.operation_timeout_values = values
     return min(deadline, state.queue_deadline) if state.queue_deadline is not None else deadline
 
 
@@ -291,11 +307,28 @@ def _first_hit(context, nodes, image):
     return next((node for node in nodes if _hit(context, node, image)), None)
 
 
+def _game_modal(context, image):
+    """检查会遮挡大世界的游戏内状态；所有遮挡优先于世界成功判定。"""
+    return _first_hit(
+        context,
+        (
+            "EnterGameAccountLogin",
+            "CloudWebWorldAnnouncement",
+            "CloudWebWorldMonthlyPass",
+            "CloudWebWorldClickBlank",
+            "CloudWebWorldCloseButton",
+            "CloudWebWorldLoading",
+        ),
+        image,
+    )
+
+
 _POST_LOGIN = (
     "CloudGameDailyLoginTitle",
     "CloudGameQueueScreen",
     "CloudGameLoading",
     "CloudGameGameLogin",
+    "EnterGameScreen",
     "CloudGameInWorld",
     "CloudGameHome",
 )
@@ -849,7 +882,9 @@ class CloudGameReset(CustomAction):
                 _params(time_config.get("attach")), "timeout_minutes", 30, 1440
             ),
             poll_interval=_positive(params, "poll_interval_seconds", 2, 5),
-            login_timeout=_positive(params, "login_timeout_seconds", 600, 3600),
+            login_timeout=login_timeout_seconds(
+                context, _positive(params, "login_timeout_seconds", 600, 3600)
+            ),
             transition_timeout=_positive(params, "transition_timeout_seconds", 30, 120),
         )
         profile = context.get_node_data("CloudGameProfile") or {}
@@ -857,7 +892,11 @@ class CloudGameReset(CustomAction):
             raise _CloudError("cloud_game.calibration_required")
         # 分支和参数一起设置，避免仅禁用 action 节点导致登录检测也被禁用。
         if not context.override_pipeline(
-            {"CloudGameManualEnterNotice": {"enabled": not auto_queue}}
+            {
+                "CloudGameManualEnterNotice": {"enabled": not auto_queue},
+                "CloudGameEnterButton": {"enabled": auto_queue},
+                "CloudGameStartConfirm": {"enabled": auto_queue},
+            }
         ):
             raise _CloudError("cloud_game.invalid_config")
         logger.debug(
@@ -949,54 +988,85 @@ class CloudGameQueueWait(CustomAction):
     @_guarded
     def run(self, context: Context, argv: CustomAction.RunArg):
         state = _state(argv)
-        if not state.auto_queue:
-            raise _CloudError("cloud_game.manual_enter", "auto_queue_disabled")
-        _begin_queue(state)
-        _operation_deadline(state, state.queue_deadline, "cloud_game.queue_timeout")
+        if state.auto_queue:
+            _begin_queue(state)
+        elif state.manual_deadline is None:
+            state.manual_deadline = time.monotonic() + state.login_timeout
         if not context.override_next(argv.node_name, ["CloudGameDispatch"]):
             raise _CloudError("cloud_game.invalid_config", "queue_route_failed")
-        logger.debug(
-            "云游戏排队等待参数 | remaining_s=%.1f | poll_interval_s=%.1f | transition_timeout_s=%.1f",
-            max(0.0, state.queue_deadline - time.monotonic()), state.poll_interval, state.transition_timeout,
-        )
         unknown_since = None
-        while time.monotonic() < state.queue_deadline:
+
+        def manual_notice():
+            if "manual_notice" not in state.clicked:
+                PrintT(context, "enter_game.manual_enter")
+                state.clicked.add("manual_notice")
+
+        while True:
+            if state.queue_deadline is not None:
+                deadline = _operation_deadline(
+                    state, state.queue_deadline, "cloud_game.queue_timeout"
+                )
+            else:
+                deadline = _operation_deadline(
+                    state,
+                    state.manual_deadline,
+                    "enter_game.manual_timeout",
+                    round(state.login_timeout / 60),
+                )
             image = _capture(context)
             _error_check(context, image)
-            # 返回 Pipeline 处理弹窗/确认框/游戏登录，不在 Python 内点击或跑整条流程。
+            # 自动排队关闭时也接管已有队列；仅不发起进入或点击启动确认。
             if _hit(context, "CloudGameDailyLoginTitle", image):
                 _log_state(state, "queue", "CloudGameDailyLoginTitle")
                 return True
             if _confirm_dialog(context):
-                _log_state(state, "queue", "CloudGameStartConfirm")
-                return context.override_next(argv.node_name, ["CloudGameStartConfirm"])
+                if state.auto_queue:
+                    _log_state(state, "queue", "CloudGameStartConfirm")
+                    return context.override_next(
+                        argv.node_name, ["CloudGameStartConfirm"]
+                    )
+                manual_notice()
+                _log_state(state, "manual", "waiting_for_confirmation")
+                _pause(context, state.poll_interval, deadline)
+                continue
             if _hit(context, "CloudGameLoginScreen", image):
-                _log_state(state, "queue", "cloud_game.login_required")
                 raise _CloudError("cloud_game.login_required", "login_expired_during_queue")
-            next_state = _first_hit(context, ("CloudGameGameLogin", "CloudGameInWorld"), image)
+            next_state = _first_hit(
+                context,
+                ("CloudGameGameLogin", "EnterGameScreen", "CloudGameInWorld"),
+                image,
+            )
             if next_state:
                 _log_state(state, "queue", next_state)
                 return True
             if _hit(context, "CloudGameQueueScreen", image):
+                _begin_queue(state)
+                _operation_deadline(
+                    state, state.queue_deadline, "cloud_game.queue_timeout"
+                )
                 unknown_since = None
                 _log_state(state, "queue", "CloudGameQueueScreen")
                 _report_queue(context, state, image)
             elif _hit(context, "CloudGameLoading", image):
+                _begin_queue(state)
+                _operation_deadline(
+                    state, state.queue_deadline, "cloud_game.queue_timeout"
+                )
                 unknown_since = None
                 _log_state(state, "queue", "CloudGameLoading")
                 if not state.loading_reported:
                     PrintT(context, "cloud_game.loading")
                     state.loading_reported = True
+            elif not state.auto_queue and state.queue_deadline is None:
+                manual_notice()
+                _log_state(state, "manual", "waiting_for_start")
             else:
                 _log_state(state, "queue", "unknown_or_black_screen")
                 if unknown_since is None:
                     unknown_since = time.monotonic()
-                # 云端启动常有较长黑屏（客户端文案：“游戏启动中，黑屏时间可能较长”），
-                # 属于预期过渡态；容忍时长由 transition_timeout 控制（云入口已放宽）。
                 if time.monotonic() - unknown_since >= state.transition_timeout:
                     raise _CloudError("cloud_game.unknown_state", "unknown_queue_state_timeout")
-            _pause(context, state.poll_interval, state.queue_deadline)
-        raise _CloudError("cloud_game.queue_timeout", "queue_deadline_reached")
+            _pause(context, state.poll_interval, state.queue_deadline or deadline)
 
 
 def _box_center(box):
@@ -1312,6 +1382,23 @@ class CloudGameClick(CustomAction):
         raise _CloudError("cloud_game.transition_failed", "confirmation_transition_timeout")
 
 
+def _validate_world_input(context, state, desktop_interactive):
+    """在每次游戏内输入前复核桌面、窗口身份和独立遮挡。"""
+    _check_stop(context)
+    _check_budget(context)
+    if not desktop_interactive():
+        raise _CloudError(
+            "cloud_game.desktop_required",
+            "interactive_desktop_required_for_world_input",
+        )
+    _current_main_window(state)
+    if _owned_dialog_candidates():
+        raise _CloudError(
+            "cloud_game.overlay_blocked", "owned_overlay_before_world_input"
+        )
+    _check_budget(context)
+
+
 @AgentServer.custom_action("cloud_game_handoff")
 class CloudGameHandoff(CustomAction):
     @_guarded
@@ -1324,24 +1411,77 @@ class CloudGameHandoff(CustomAction):
         _error_check(context, image)
         if _owned_dialog_candidates():
             raise _CloudError("cloud_game.overlay_blocked", "owned_overlay_blocks_handoff")
-        if _hit(context, "CloudGameInWorld", image):
-            _log_state(state, "handoff", "already_in_world")
-            return True  # 仍交给 CloudGameReady 做两帧及遮挡确认。
-        if not _hit(context, "CloudGameGameLogin", image):
-            raise _CloudError("cloud_game.transition_failed", "game_login_changed_before_handoff")
+        in_world = _hit(context, "CloudGameInWorld", image)
+        if in_world and not _game_modal(context, image):
+            return True  # CloudGameReady 仍确认两帧及云端遮挡。
+        if not in_world and not _first_hit(
+            context, ("CloudGameGameLogin", "EnterGameScreen"), image
+        ):
+            raise _CloudError(
+                "cloud_game.transition_failed", "game_screen_changed_before_handoff"
+            )
         if not desktop_interactive():
             raise _CloudError("cloud_game.desktop_required", "interactive_desktop_required_for_scene_input")
         _check_budget(context)
-        _log_state(state, "handoff", "scene_started")
-        # Maa 5.10.4 的同步公共场景调用不能安全地从 Agent 并发取消。
-        # 此处只能拒绝迟到结果；内部加载自循环的硬截止仍需框架/公共场景接口支持。
-        # 不并发 post_stop（会竞争同一 IPC 通道），也不改写私有场景节点。
-        result = context.run_task("SceneAnyEnterWorld")
-        _check_budget(context)
-        if result is None or not result.status.succeeded:
-            raise _CloudError("cloud_game.transition_failed", "scene_handoff_failed")
-        _log_state(state, "handoff", "scene_returned")
-        return True
+        # 已确认进入游戏内部，排队完成；世界和账号等待改用共用的独立预算。
+        state.queue_deadline = None
+        progress = WorldProgress(
+            state.login_timeout, transition_timeout=state.transition_timeout
+        )
+        controller = context.tasker.controller
+
+        def before_step(deadline):
+            if progress.login_started is not None:
+                _operation_deadline(
+                    state,
+                    deadline,
+                    "enter_game.login_timeout",
+                    round(state.login_timeout / 60),
+                )
+            else:
+                _operation_deadline(
+                    state,
+                    deadline,
+                    (
+                        "enter_game.transition_failed"
+                        if progress.pending_node
+                        else "enter_game.world_timeout"
+                    ),
+                )
+            _check_budget(context)
+
+        def capture():
+            frame = _capture(context)
+            _error_check(context, frame)
+            if _owned_dialog_candidates():
+                raise _CloudError(
+                    "cloud_game.overlay_blocked", "owned_overlay_during_world_entry"
+                )
+            return frame
+
+        def wait_input(job):
+            if not job.wait().succeeded:
+                raise EntryError(
+                    "enter_game.input_rejected", "cloud_controller_input_failed"
+                )
+            return True
+
+        def click(x, y):
+            _validate_world_input(context, state, desktop_interactive)
+            result = wait_input(controller.post_click(round(x), round(y)))
+            _check_budget(context)
+            return result
+
+        def key(name):
+            _validate_world_input(context, state, desktop_interactive)
+            result = wait_input(controller.post_click_key(27))
+            _check_budget(context)
+            return result
+
+        _log_state(state, "handoff", "world_entry_started")
+        return run_world_entry(
+            context, capture, click, key, progress=progress, before_step=before_step
+        )
 
 
 @AgentServer.custom_action("cloud_game_confirm_ready")
@@ -1371,8 +1511,17 @@ class CloudGameConfirmReady(CustomAction):
                 return context.override_next(argv.node_name, ["CloudGameDispatch"])
             if _hit(context, "CloudGameLoginScreen", image):
                 raise _CloudError("cloud_game.login_required", "login_expired_before_ready")
+            if _game_modal(context, image):
+                return context.override_next(argv.node_name, ["CloudGameEnterWorld"])
             blocked = _first_hit(context, ("CloudGameQueueScreen", "CloudGameLoading"), image)
             in_world = not blocked and _hit(context, "CloudGameInWorld", image)
+            if in_world and state.queue_deadline is not None:
+                state.queue_deadline = None
+                deadline = _operation_deadline(
+                    state,
+                    time.monotonic() + state.transition_timeout,
+                    "cloud_game.transition_failed",
+                )
             _log_state(state, "ready", blocked or ("CloudGameInWorld" if in_world else "unknown"))
             stable = stable + 1 if in_world else 0
             if stable >= 2:

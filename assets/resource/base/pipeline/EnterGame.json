@@ -1,0 +1,113 @@
+{
+    "EnterGameLoginTimeoutConfig": {
+        "desc": "各控制器共用的账号登录等待上限，单位分钟；与云排队、世界加载分别计时",
+        "enabled": false,
+        "attach": {"minutes": 10},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "EnterGameEntrance": {
+        "desc": "统一进入游戏入口：原生云进入云排队流程，普通客户端直接进入世界流程",
+        "action": {
+            "type": "Custom",
+            "param": {"custom_action": "enter_game_dispatch"}
+        },
+        "next": ["EnterGameWorld"],
+        "on_error": ["EnterGameFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "EnterGameWorld": {
+        "desc": "共用识别节点，人工账号登录、点击进入、公告/月卡/加载，直至两帧确认大世界",
+        "action": {
+            "type": "Custom",
+            "param": {"custom_action": "enter_game_world"}
+        },
+        "next": ["EnterGameDone"],
+        "on_error": ["EnterGameFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "EnterGameDone": {
+        "desc": "进入世界动作已完成两帧确认，不把账号登录、串流或手动等待作为成功",
+        "action": {"type": "DoNothing"},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "EnterGameFailed": {
+        "action": {
+            "type": "Custom",
+            "param": {"custom_action": "enter_game_fail"}
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "EnterGameAccountLogin": {
+        "desc": "单次 OCR 检测已有的账号表单、验证和授权标记，避免逐个 OCR 节点拖慢进入；只等待人工，不提交凭据或代为同意协议",
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    250,
+                    80,
+                    780,
+                    500
+                ],
+                "expected": [
+                    "账号密码登录",
+                    "手机验证码登录",
+                    "扫码登录",
+                    "密码登录",
+                    "使用其他方式登录",
+                    "安全验证",
+                    "请完成验证",
+                    "短信验证",
+                    "身份验证",
+                    "授权登录",
+                    "确认授权",
+                    "请在手机上确认登录",
+                    "验证码错误",
+                    "验证码已失效",
+                    "二维码已过期",
+                    "登录失败",
+                    "登录已过期",
+                    // @i18n-skip：凭据输入提示可能带有不同后缀，只作为人工登录状态标记。
+                    "请输入",
+                    // @i18n-skip：输入框标签，只作为人工登录状态标记。
+                    "手机号",
+                    // @i18n-skip：输入框标签，只作为人工登录状态标记。
+                    "验证码"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "EnterGameScreen": {
+        "desc": "游戏内部登录/开始/加载状态，包含只有完整进入文字、没有退出图标的云端页面",
+        "recognition": {
+            "type": "Or",
+            "param": {
+                "any_of": [
+                    "CloudGameGameLogin",
+                    "CloudWebWorldClickEnter",
+                    "CloudWebWorldAnnouncement",
+                    "CloudWebWorldMonthlyPass",
+                    "CloudWebWorldClickBlank",
+                    "CloudWebWorldCloseButton",
+                    "CloudWebWorldLoading",
+                    "EnterGameAccountLogin"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}
