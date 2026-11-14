@@ -1,0 +1,1150 @@
+{
+    "ClaimEventRewardsEntrance": {
+        "desc": "七日登录领奖入口；每次重置本次导航与领取结果锚点，不持久化日期、账号或领取次数",
+        "recognition": {"type": "DirectHit"},
+        "anchor": {
+            "ClaimEventRewardsNavigation": "ClaimEventRewardsNavigateToEvents",
+            "ClaimEventRewardsWorldNavigation": "",
+            "ClaimEventRewardsOutcome": "ClaimEventRewardsNoReward",
+            "ClaimEventRewardsClaimConfirmation": ""
+        },
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_started"},
+        "next": [
+            "ClaimEventRewardsInMenu",
+            "[JumpBack][Anchor]ClaimEventRewardsNavigation"
+        ],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsNavigateToEvents": {
+        "desc": "本次入口仅调用一次公共场景导航；返回入口后必须正面识别活动菜单，不重复导航",
+        "recognition": {"type": "DirectHit"},
+        "anchor": {"ClaimEventRewardsNavigation": ""},
+        "next": ["SceneAnyEnterEventsMenu"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsInMenu": {
+        "desc": "已在目标页则直接检查七格；否则优先选可见完整名称，目标不可见时才做有限边界扫描",
+        "recognition": {"type": "And", "param": {"all_of": ["InEventsMenu"]}},
+        "next": [
+            "ClaimEventRewardsPageReady",
+            "ClaimEventRewardsEventTab",
+            "ClaimEventRewardsScanSidebar"
+        ],
+        "on_error": ["ClaimEventRewardsUnverifiedList"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsScanSidebar": {
+        "desc": "复用有限侧栏扫描动作；默认只回目标标签，只有动作证明完整扫描无目标才受控改道NoEvent",
+        "recognition": {
+            "type": "And",
+            "param": {"all_of": ["InEventsMenu", "ClaimEventRewardsScanHeader"]}
+        },
+        "action": {"type": "Custom", "param": {"custom_action": "claim_event_rewards_scan"}},
+        "next": ["ClaimEventRewardsEventTab"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsScanHeader": {
+        "recognition": {
+            "type": "OCR",
+            "param": {"roi": [28, 109, 153, 44], "expected": ["限时"], "threshold": 0.8}
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsScanNames": {
+        "desc": "不筛选目标名称；扫描动作必须检查原始all_results，低可信、裁切或疑似目标均失败",
+        "recognition": {
+            "type": "OCR",
+            "param": {"roi": [75, 157, 124, 460], "expected": [], "threshold": 0.8}
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsScanUp": {
+        "desc": "向列表顶部移动：单次向下拖动300px，保留160px重叠；由扫描动作核验前后名单",
+        "recognition": {
+            "type": "And",
+            "param": {"all_of": ["InEventsMenu", "ClaimEventRewardsScanHeader"]}
+        },
+        "action": {
+            "type": "Swipe",
+            "param": {"begin": [140, 248, 12, 12], "end": [140, 548, 12, 12], "duration": 300}
+        },
+        "post_wait_freezes": {"time": 150, "target": [75, 157, 124, 460], "rate_limit": 0},
+        "next": [],
+        "on_error": [],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsScanDown": {
+        "desc": "向列表底部移动：单次向上拖动300px，保留160px重叠；没有识别或动作成功就不能判定边界",
+        "recognition": {
+            "type": "And",
+            "param": {"all_of": ["InEventsMenu", "ClaimEventRewardsScanHeader"]}
+        },
+        "action": {
+            "type": "Swipe",
+            "param": {"begin": [140, 548, 12, 12], "end": [140, 248, 12, 12], "duration": 300}
+        },
+        "post_wait_freezes": {"time": 150, "target": [75, 157, 124, 460], "rate_limit": 0},
+        "next": [],
+        "on_error": [],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsEventTab": {
+        "desc": "在可见侧栏识别完整活动名称后仅点击一次；ROI覆盖当前可见列表，不假设完整列表已扫描",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": ["InEventsMenu", "ClaimEventRewardsEventTabText"],
+                "box_index": 1
+            }
+        },
+        "action": {"type": "Click"},
+        "post_wait_freezes": {
+            "time": 150,
+            "target": [703, 270, 548, 365],
+            "rate_limit": 0
+        },
+        "next": ["ClaimEventRewardsPageReady"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsEventTabText": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [76, 154, 118, 454],
+                "expected": ["环期赠礼"],
+                "threshold": 0.8
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsPageReady": {
+        "desc": "正面验证活动页后初始化本次七格子流程；边界扫描确认目标后也可从此节点进入",
+        "recognition": {
+            "type": "And",
+            "param": {"all_of": ["ClaimEventRewardsPageIdentity"]}
+        },
+        "anchor": {
+            "ClaimEventRewardsOutcome": "ClaimEventRewardsNoReward",
+            "ClaimEventRewardsClaimConfirmation": ""
+        },
+        "next": [
+            "ClaimEventRewardsDay1Available",
+            "ClaimEventRewardsDay1AlreadyClaimed",
+            "ClaimEventRewardsDay1Locked"
+        ],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsPageIdentity": {
+        "desc": "仅依赖活动标题、签到提示和固定七格图标布局；不依赖立绘、倒计时、大号日期数字或DAY1灰态",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "InEventsMenu",
+                    "ClaimEventRewardsTitle",
+                    "ClaimEventRewardsSignInHint",
+                    "ClaimEventRewardsCardLayout"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsTitle": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [1030, 90, 217, 78],
+                "expected": ["环期赠礼"],
+                "threshold": 0.8
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsSignInHint": {
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [1110, 202, 135, 45],
+                "expected": ["签到领取奖励"],
+                "threshold": 0.8
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsCardLayout": {
+        "desc": "真实原图裁剪的同一骰子图标在七个固定位置匹配；奖励数量依次为1/1/2/1/1/1/3，共10",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "ClaimEventRewardsDay1RewardSlot",
+                    "ClaimEventRewardsDay2RewardSlot",
+                    "ClaimEventRewardsDay3RewardSlot",
+                    "ClaimEventRewardsDay4RewardSlot",
+                    "ClaimEventRewardsDay5RewardSlot",
+                    "ClaimEventRewardsDay6RewardSlot",
+                    "ClaimEventRewardsDay7RewardSlot"
+                ]
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1RewardSlot": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [737, 318, 61, 61],
+                "template": "ClaimEventRewards/RewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"reward_count": 1, "source_roi": [865, 328, 41, 42]},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2RewardSlot": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [855, 318, 61, 61],
+                "template": "ClaimEventRewards/RewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"reward_count": 1},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3RewardSlot": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [975, 318, 61, 61],
+                "template": "ClaimEventRewards/RewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"reward_count": 2},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4RewardSlot": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [737, 503, 61, 61],
+                "template": "ClaimEventRewards/RewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"reward_count": 1},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5RewardSlot": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [855, 503, 61, 61],
+                "template": "ClaimEventRewards/RewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"reward_count": 1},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6RewardSlot": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [975, 503, 61, 61],
+                "template": "ClaimEventRewards/RewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"reward_count": 1},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7RewardSlot": {
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [1125, 378, 64, 66],
+                "template": "ClaimEventRewards/RewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"reward_count": 3},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1AvailableText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [709, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态，不接受不可领取等子串
+                "^可领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1ClaimedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [709, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^已领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1LockedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [709, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^未解锁$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1YellowButton": {
+        "desc": "只在同格按钮ROI内检查黄色底；method40为HSV",
+        "recognition": {"type": "ColorMatch", "param": {
+            "roi": [709, 410, 116, 36],
+            "method": 40,
+            "lower": [18, 100, 120],
+            "upper": [36, 255, 255],
+            "count": 600,
+            "connected": true
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1Available": {
+        "desc": "页面身份+同格完整可领取文字+黄底；只输入一次，后继不含同格可领取节点",
+        "recognition": {"type": "And", "param": {"all_of": [
+            "ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay1AvailableText", "ClaimEventRewardsDay1YellowButton"
+        ]}},
+        "action": {"type": "Click", "param": {"target": [709, 410, 116, 36]}},
+        "anchor": {"ClaimEventRewardsClaimConfirmation": "ClaimEventRewardsDay1ClaimConfirmed"},
+        "next": ["ClaimEventRewardsRewardPopup"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1AlreadyClaimed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay1ClaimedText"]}},
+        "next": ["ClaimEventRewardsDay2Available", "ClaimEventRewardsDay2AlreadyClaimed", "ClaimEventRewardsDay2Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1Locked": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay1LockedText"]}},
+        "next": ["ClaimEventRewardsDay2Available", "ClaimEventRewardsDay2AlreadyClaimed", "ClaimEventRewardsDay2Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1ClaimConfirmed": {
+        "desc": "关闭真实奖励弹窗后必须重新识别同格已领取，才能登记本次领取并进入下一格",
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay1ClaimedText"]}},
+        "anchor": {"ClaimEventRewardsOutcome": "ClaimEventRewardsComplete", "ClaimEventRewardsClaimConfirmation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_claimed"},
+        "next": ["ClaimEventRewardsDay2Available", "ClaimEventRewardsDay2AlreadyClaimed", "ClaimEventRewardsDay2Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay1Resolved": {
+        "recognition": {"type": "Or", "param": {"any_of": ["ClaimEventRewardsDay1ClaimedText", "ClaimEventRewardsDay1LockedText"]}},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2AvailableText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [827, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^可领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2ClaimedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [827, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^已领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2LockedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [827, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^未解锁$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2YellowButton": {
+        "recognition": {"type": "ColorMatch", "param": {
+            "roi": [827, 410, 116, 36],
+            "method": 40,
+            "lower": [18, 100, 120],
+            "upper": [36, 255, 255],
+            "count": 600,
+            "connected": true
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2Available": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay2AvailableText", "ClaimEventRewardsDay2YellowButton"]}},
+        "action": {"type": "Click", "param": {"target": [827, 410, 116, 36]}},
+        "anchor": {"ClaimEventRewardsClaimConfirmation": "ClaimEventRewardsDay2ClaimConfirmed"},
+        "next": ["ClaimEventRewardsRewardPopup"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2AlreadyClaimed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay2ClaimedText"]}},
+        "next": ["ClaimEventRewardsDay3Available", "ClaimEventRewardsDay3AlreadyClaimed", "ClaimEventRewardsDay3Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2Locked": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay2LockedText"]}},
+        "next": ["ClaimEventRewardsDay3Available", "ClaimEventRewardsDay3AlreadyClaimed", "ClaimEventRewardsDay3Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2ClaimConfirmed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay2ClaimedText"]}},
+        "anchor": {"ClaimEventRewardsOutcome": "ClaimEventRewardsComplete", "ClaimEventRewardsClaimConfirmation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_claimed"},
+        "next": ["ClaimEventRewardsDay3Available", "ClaimEventRewardsDay3AlreadyClaimed", "ClaimEventRewardsDay3Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay2Resolved": {
+        "recognition": {"type": "Or", "param": {"any_of": ["ClaimEventRewardsDay2ClaimedText", "ClaimEventRewardsDay2LockedText"]}},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3AvailableText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [945, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^可领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3ClaimedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [945, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^已领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3LockedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [945, 410, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^未解锁$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3YellowButton": {
+        "recognition": {"type": "ColorMatch", "param": {
+            "roi": [945, 410, 116, 36],
+            "method": 40,
+            "lower": [18, 100, 120],
+            "upper": [36, 255, 255],
+            "count": 600,
+            "connected": true
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3Available": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay3AvailableText", "ClaimEventRewardsDay3YellowButton"]}},
+        "action": {"type": "Click", "param": {"target": [945, 410, 116, 36]}},
+        "anchor": {"ClaimEventRewardsClaimConfirmation": "ClaimEventRewardsDay3ClaimConfirmed"},
+        "next": ["ClaimEventRewardsRewardPopup"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3AlreadyClaimed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay3ClaimedText"]}},
+        "next": ["ClaimEventRewardsDay4Available", "ClaimEventRewardsDay4AlreadyClaimed", "ClaimEventRewardsDay4Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3Locked": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay3LockedText"]}},
+        "next": ["ClaimEventRewardsDay4Available", "ClaimEventRewardsDay4AlreadyClaimed", "ClaimEventRewardsDay4Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3ClaimConfirmed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay3ClaimedText"]}},
+        "anchor": {"ClaimEventRewardsOutcome": "ClaimEventRewardsComplete", "ClaimEventRewardsClaimConfirmation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_claimed"},
+        "next": ["ClaimEventRewardsDay4Available", "ClaimEventRewardsDay4AlreadyClaimed", "ClaimEventRewardsDay4Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay3Resolved": {
+        "recognition": {"type": "Or", "param": {"any_of": ["ClaimEventRewardsDay3ClaimedText", "ClaimEventRewardsDay3LockedText"]}},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4AvailableText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [709, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^可领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4ClaimedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [709, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^已领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4LockedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [709, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^未解锁$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4YellowButton": {
+        "recognition": {"type": "ColorMatch", "param": {
+            "roi": [709, 595, 116, 36],
+            "method": 40,
+            "lower": [18, 100, 120],
+            "upper": [36, 255, 255],
+            "count": 600,
+            "connected": true
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4Available": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay4AvailableText", "ClaimEventRewardsDay4YellowButton"]}},
+        "action": {"type": "Click", "param": {"target": [709, 595, 116, 36]}},
+        "anchor": {"ClaimEventRewardsClaimConfirmation": "ClaimEventRewardsDay4ClaimConfirmed"},
+        "next": ["ClaimEventRewardsRewardPopup"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4AlreadyClaimed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay4ClaimedText"]}},
+        "next": ["ClaimEventRewardsDay5Available", "ClaimEventRewardsDay5AlreadyClaimed", "ClaimEventRewardsDay5Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4Locked": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay4LockedText"]}},
+        "next": ["ClaimEventRewardsDay5Available", "ClaimEventRewardsDay5AlreadyClaimed", "ClaimEventRewardsDay5Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4ClaimConfirmed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay4ClaimedText"]}},
+        "anchor": {"ClaimEventRewardsOutcome": "ClaimEventRewardsComplete", "ClaimEventRewardsClaimConfirmation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_claimed"},
+        "next": ["ClaimEventRewardsDay5Available", "ClaimEventRewardsDay5AlreadyClaimed", "ClaimEventRewardsDay5Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay4Resolved": {
+        "recognition": {"type": "Or", "param": {"any_of": ["ClaimEventRewardsDay4ClaimedText", "ClaimEventRewardsDay4LockedText"]}},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5AvailableText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [827, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^可领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5ClaimedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [827, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^已领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5LockedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [827, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^未解锁$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5YellowButton": {
+        "recognition": {"type": "ColorMatch", "param": {
+            "roi": [827, 595, 116, 36],
+            "method": 40,
+            "lower": [18, 100, 120],
+            "upper": [36, 255, 255],
+            "count": 600,
+            "connected": true
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5Available": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay5AvailableText", "ClaimEventRewardsDay5YellowButton"]}},
+        "action": {"type": "Click", "param": {"target": [827, 595, 116, 36]}},
+        "anchor": {"ClaimEventRewardsClaimConfirmation": "ClaimEventRewardsDay5ClaimConfirmed"},
+        "next": ["ClaimEventRewardsRewardPopup"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5AlreadyClaimed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay5ClaimedText"]}},
+        "next": ["ClaimEventRewardsDay6Available", "ClaimEventRewardsDay6AlreadyClaimed", "ClaimEventRewardsDay6Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5Locked": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay5LockedText"]}},
+        "next": ["ClaimEventRewardsDay6Available", "ClaimEventRewardsDay6AlreadyClaimed", "ClaimEventRewardsDay6Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5ClaimConfirmed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay5ClaimedText"]}},
+        "anchor": {"ClaimEventRewardsOutcome": "ClaimEventRewardsComplete", "ClaimEventRewardsClaimConfirmation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_claimed"},
+        "next": ["ClaimEventRewardsDay6Available", "ClaimEventRewardsDay6AlreadyClaimed", "ClaimEventRewardsDay6Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay5Resolved": {
+        "recognition": {"type": "Or", "param": {"any_of": ["ClaimEventRewardsDay5ClaimedText", "ClaimEventRewardsDay5LockedText"]}},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6AvailableText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [945, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^可领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6ClaimedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [945, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^已领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6LockedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [945, 595, 116, 36],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^未解锁$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6YellowButton": {
+        "recognition": {"type": "ColorMatch", "param": {
+            "roi": [945, 595, 116, 36],
+            "method": 40,
+            "lower": [18, 100, 120],
+            "upper": [36, 255, 255],
+            "count": 600,
+            "connected": true
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6Available": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay6AvailableText", "ClaimEventRewardsDay6YellowButton"]}},
+        "action": {"type": "Click", "param": {"target": [945, 595, 116, 36]}},
+        "anchor": {"ClaimEventRewardsClaimConfirmation": "ClaimEventRewardsDay6ClaimConfirmed"},
+        "next": ["ClaimEventRewardsRewardPopup"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6AlreadyClaimed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay6ClaimedText"]}},
+        "next": ["ClaimEventRewardsDay7Available", "ClaimEventRewardsDay7AlreadyClaimed", "ClaimEventRewardsDay7Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6Locked": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay6LockedText"]}},
+        "next": ["ClaimEventRewardsDay7Available", "ClaimEventRewardsDay7AlreadyClaimed", "ClaimEventRewardsDay7Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6ClaimConfirmed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay6ClaimedText"]}},
+        "anchor": {"ClaimEventRewardsOutcome": "ClaimEventRewardsComplete", "ClaimEventRewardsClaimConfirmation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_claimed"},
+        "next": ["ClaimEventRewardsDay7Available", "ClaimEventRewardsDay7AlreadyClaimed", "ClaimEventRewardsDay7Locked"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay6Resolved": {
+        "recognition": {"type": "Or", "param": {"any_of": ["ClaimEventRewardsDay6ClaimedText", "ClaimEventRewardsDay6LockedText"]}},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7AvailableText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [1067, 574, 177, 57],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^可领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7ClaimedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [1067, 574, 177, 57],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^已领取$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7LockedText": {
+        "recognition": {"type": "OCR", "param": {
+            "roi": [1067, 574, 177, 57],
+            "expected": [
+                // @i18n-skip 精确全词状态
+                "^未解锁$"
+            ],
+            "threshold": 0.8
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7YellowButton": {
+        "desc": "ROI严格限制第7格底部按钮，排除上方永久黄色的DAY7奖励卡",
+        "recognition": {"type": "ColorMatch", "param": {
+            "roi": [1067, 574, 177, 57],
+            "method": 40,
+            "lower": [18, 100, 120],
+            "upper": [36, 255, 255],
+            "count": 600,
+            "connected": true
+        }},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7Available": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay7AvailableText", "ClaimEventRewardsDay7YellowButton"]}},
+        "action": {"type": "Click", "param": {"target": [1067, 574, 177, 57]}},
+        "anchor": {"ClaimEventRewardsClaimConfirmation": "ClaimEventRewardsDay7ClaimConfirmed"},
+        "next": ["ClaimEventRewardsRewardPopup"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7AlreadyClaimed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay7ClaimedText"]}},
+        "next": ["ClaimEventRewardsCheckedAllDays"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7Locked": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay7LockedText"]}},
+        "next": ["ClaimEventRewardsCheckedAllDays"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7ClaimConfirmed": {
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsPageIdentity", "ClaimEventRewardsDay7ClaimedText"]}},
+        "anchor": {"ClaimEventRewardsOutcome": "ClaimEventRewardsComplete", "ClaimEventRewardsClaimConfirmation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_claimed"},
+        "next": ["ClaimEventRewardsCheckedAllDays"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsDay7Resolved": {
+        "recognition": {"type": "Or", "param": {"any_of": ["ClaimEventRewardsDay7ClaimedText", "ClaimEventRewardsDay7LockedText"]}},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsRewardPopup": {
+        "desc": "实际获得物品弹窗：完整标题、完整关闭提示和中心骰子图标共同命中后，仅关闭一次并确认原领取格",
+        "recognition": {
+            "type": "And",
+            "param": {"all_of": [
+                "ClaimEventRewardsRewardPopupTitle",
+                "ClaimEventRewardsRewardPopupHint",
+                "ClaimEventRewardsRewardPopupIcon"
+            ]}
+        },
+        "action": {"type": "Click", "param": {"target": [550, 616, 184, 42]}},
+        "post_wait_freezes": {"time": 150, "target": [703, 270, 548, 365], "rate_limit": 0},
+        "next": ["[Anchor]ClaimEventRewardsClaimConfirmation"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsRewardPopupTitle": {
+        "recognition": {
+            "type": "OCR",
+            "param": {"roi": [585, 289, 111, 45], "expected": ["获得物品"], "threshold": 0.8}
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsRewardPopupHint": {
+        "recognition": {
+            "type": "OCR",
+            "param": {"roi": [550, 616, 184, 42], "expected": ["点击空白区域关闭"], "threshold": 0.8}
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsRewardPopupIcon": {
+        "desc": "真实领奖弹窗原图裁剪，不含右下数量徽记，其他日奖励数量变化不影响匹配",
+        "recognition": {
+            "type": "TemplateMatch",
+            "param": {
+                "roi": [603, 356, 75, 74],
+                "template": "ClaimEventRewards/PopupRewardDie.png",
+                "threshold": 0.8
+            }
+        },
+        "attach": {"source_roi": [617, 370, 46, 47]},
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsCheckedAllDays": {
+        "desc": "七格遍历后再次正面确认所有按钮均已领取或未解锁；中途变化、漏识别与未知状态不得成功",
+        "recognition": {
+            "type": "And",
+            "param": {
+                "all_of": [
+                    "ClaimEventRewardsPageIdentity",
+                    "ClaimEventRewardsDay1Resolved",
+                    "ClaimEventRewardsDay2Resolved",
+                    "ClaimEventRewardsDay3Resolved",
+                    "ClaimEventRewardsDay4Resolved",
+                    "ClaimEventRewardsDay5Resolved",
+                    "ClaimEventRewardsDay6Resolved",
+                    "ClaimEventRewardsDay7Resolved"
+                ]
+            }
+        },
+        "next": ["[Anchor]ClaimEventRewardsOutcome"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsNoReward": {
+        "desc": "仅完整七格正面遍历且本次没有确认领取时报告无可领奖励；不是识别失败兜底",
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsCheckedAllDays"]}},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_no_reward"},
+        "next": ["ClaimEventRewardsComplete"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsComplete": {
+        "desc": "已正面检查七格后进入统一退出阶段；未确认回到大世界前不报告完成",
+        "recognition": {"type": "And", "param": {"all_of": ["ClaimEventRewardsCheckedAllDays"]}},
+        "next": ["ClaimEventRewardsReturnWorld"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsNoEvent": {
+        "desc": "仅供有限扫描动作已证明完整列表无目标后的受控override_next回调；不得挂入默认兜底或错误分支",
+        "recognition": {
+            "type": "And",
+            "param": {"all_of": ["InEventsMenu", "ClaimEventRewardsScanHeader"]}
+        },
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_no_event"},
+        "next": ["ClaimEventRewardsReturnWorld"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsReturnWorld": {
+        "desc": "三种已验证正常结果共用退出；仅初始化一次导航锚点，实际完成必须正面识别InWorld",
+        "recognition": {"type": "Or", "param": {"any_of": ["InWorld", "InEventsMenu"]}},
+        "anchor": {"ClaimEventRewardsWorldNavigation": "ClaimEventRewardsNavigateToWorld"},
+        "next": [
+            "ClaimEventRewardsWorldConfirmed",
+            "[JumpBack][Anchor]ClaimEventRewardsWorldNavigation"
+        ],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsNavigateToWorld": {
+        "desc": "仅一次调用公开大世界接口；清除导航锚点，返回后若无法确认InWorld则失败而非重试",
+        "recognition": {"type": "DirectHit"},
+        "anchor": {"ClaimEventRewardsWorldNavigation": ""},
+        "next": ["SceneAnyEnterWorld"],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsWorldConfirmed": {
+        "recognition": {"type": "And", "param": {"all_of": ["InWorld"]}},
+        "anchor": {"ClaimEventRewardsWorldNavigation": ""},
+        "focus": {"Node.Action.Succeeded": "$claim_event_rewards_complete"},
+        "next": [],
+        "on_error": ["ClaimEventRewardsFailed"],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsUnverifiedList": {
+        "desc": "目标不在可见列表：未证明滚动列表已扫描完整，明确失败，不报告活动不存在",
+        "recognition": {"type": "DirectHit"},
+        "action": {"type": "Custom", "param": {"custom_action": "claim_event_rewards_fail"}},
+        "focus": {"Node.Action.Failed": "$claim_event_rewards_failed"},
+        "next": [],
+        "on_error": [],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "ClaimEventRewardsFailed": {
+        "desc": "识别未知、输入失败、弹窗未关闭或同格未变已领取均失败；返回失败结果",
+        "recognition": {"type": "DirectHit"},
+        "action": {"type": "Custom", "param": {"custom_action": "claim_event_rewards_fail"}},
+        "focus": {"Node.Action.Failed": "$claim_event_rewards_failed"},
+        "next": [],
+        "on_error": [],
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}

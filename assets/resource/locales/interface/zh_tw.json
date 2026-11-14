@@ -1,4 +1,12 @@
 {
+    "task_claim_event_rewards_label": "領取活動獎勵",
+    "task_claim_event_rewards_desc": "領取版本七日登入活動中已解鎖的免費獎勵。請在活動期間每天執行，累計七天獲得活動贈送的十抽；今日已領取或活動結束時跳過。僅領取獎勵，不抽卡、不購買。",
+    "claim_event_rewards_started": "正在檢查七日登入活動",
+    "claim_event_rewards_claimed": "已領取目前可領取的活動獎勵",
+    "claim_event_rewards_no_reward": "目前沒有已解鎖且未領取的活動獎勵",
+    "claim_event_rewards_no_event": "七日登入活動尚未開放或已結束",
+    "claim_event_rewards_complete": "活動獎勵檢查完成",
+    "claim_event_rewards_failed": "無法確認活動頁面或領獎狀態，已停止；請查看日誌。",
     "description": "異環小助手，由MaaFramework強力驅動！",
     "scene_check_osd_failed_focus": "<span style=\"color: red; font-weight: bold;\">螢幕存在遮擋，請嘗試關閉幀率顯示</span>",
     "contact": "GitHub 倉庫: [1bananachicken/MaaNTE](https://github.com/1bananachicken/MaaNTE/)<br>官方網站: https://maante.org/<br>QQ群: [點擊前往官網獲取](https://maante.org/zh_cn/qq-group/)或1103323319<br>Discord: https://discord.com/invite/e6mPMRYQpR",

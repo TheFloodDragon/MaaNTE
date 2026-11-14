@@ -1,4 +1,12 @@
 {
+    "task_claim_event_rewards_label": "Claim Event Rewards",
+    "task_claim_event_rewards_desc": "Claim unlocked free rewards from the version's 7-day login event. Run this task each day during the event to receive a total of 10 pulls over seven login days. Skip rewards already claimed or an event that has ended. Claims rewards only; never summons or purchases.",
+    "claim_event_rewards_started": "Checking the 7-day login event",
+    "claim_event_rewards_claimed": "Claimed the currently available event rewards",
+    "claim_event_rewards_no_reward": "No unlocked, unclaimed event rewards are available",
+    "claim_event_rewards_no_event": "The 7-day login event is unavailable or has ended",
+    "claim_event_rewards_complete": "Event reward check completed",
+    "claim_event_rewards_failed": "Stopped because the event page or reward state could not be verified. Please check the logs.",
     "description": "NTE Assistant, powered by MaaFramework!",
     "scene_check_osd_failed_focus": "<span style=\"color: red; font-weight: bold;\">Screen obstructed, please disable FPS overlay</span>",
     "contact": "GitHub Repo: [1bananachicken/MaaNTE](https://github.com/1bananachicken/MaaNTE/)<br>Official Website: https://maante.org/<br>QQ Group: [Get info from official site](https://maante.org/zh_cn/qq-group/) or 1103323319<br>Discord: https://discord.com/invite/e6mPMRYQpR",

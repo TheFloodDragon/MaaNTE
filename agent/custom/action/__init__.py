@@ -10,6 +10,7 @@ from .rhythm.feats.select_song import *
 from .Common.click import *
 from .Common.enable_node import *
 from .Common.resize_game_window import *
+from .claim_event_rewards_scan import ClaimEventRewardsFail, ClaimEventRewardsScan
 from .realtime_task import *
 from .Navi import *
 from .MapTeleport import *
@@ -49,6 +50,8 @@ __all__ = [
     "ClickOverride",
     "EnableNode",
     "ResizeGameWindow",
+    "ClaimEventRewardsScan",
+    "ClaimEventRewardsFail",
     "AutoTetris",
     "AutoRhythmPlay",
     "AutoRhythmRepeatDecision",

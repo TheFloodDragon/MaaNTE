@@ -1,0 +1,17 @@
+{
+    "task": [
+        {
+            "name": "ClaimEventRewards",
+            "label": "$task_claim_event_rewards_label",
+            "entry": "ClaimEventRewardsEntrance",
+            "description": "$task_claim_event_rewards_desc",
+            "controller": [
+                "Win32-Front"
+            ],
+            "default_check": false,
+            "group": [
+                "Daily"
+            ]
+        }
+    ]
+}
